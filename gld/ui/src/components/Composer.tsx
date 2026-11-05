@@ -838,9 +838,11 @@ function TerminalPanel({ id, onAsk, onSent, extra }: { id: string; onAsk?: (aski
   const asking = !!prompt
   const [questionCollapsed, setQuestionCollapsed] = useState(false)
   const questionKey = prompt?.question ?? ""
-  useEffect(() => {
+  const [lastQuestionKey, setLastQuestionKey] = useState(questionKey)
+  if (lastQuestionKey !== questionKey) {
+    setLastQuestionKey(questionKey)
     setQuestionCollapsed(false)
-  }, [questionKey])
+  }
   const ask = useRef(onAsk) // le parent passe une flèche neuve à chaque rendu : l'effet ne doit suivre que asking
   useEffect(() => {
     ask.current = onAsk
