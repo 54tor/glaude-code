@@ -150,6 +150,8 @@
       "btwForkTitle": "Ouvre cette question dans une nouvelle session (touche f du terminal)",
       "btwClose": "Fermer",
       "escape": "Échap",
+      "collapseQuestion": "Replier la question",
+      "expandQuestion": "Déplier la question",
       "rawScreen": "Écran brut",
       "rawScreenTitle": "Écran du terminal tel que gld le lit, et ce que le détecteur en tire",
       "screenAria": "Écran du terminal",

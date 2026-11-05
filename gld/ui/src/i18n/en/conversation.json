@@ -150,6 +150,8 @@
       "btwForkTitle": "Opens this question in a new session (terminal key f)",
       "btwClose": "Close",
       "escape": "Esc",
+      "collapseQuestion": "Collapse the question",
+      "expandQuestion": "Expand the question",
       "rawScreen": "Raw screen",
       "rawScreenTitle": "The terminal screen as gld reads it, and what the detector makes of it",
       "screenAria": "Terminal screen",
