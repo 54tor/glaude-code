@@ -268,3 +268,6 @@ html, body, [data-slot="scroll-area-viewport"] { overscroll-behavior: none; }
 /* Trait du spinner en pixels d'écran, quelle que soit la taille de l'icône. */
 .lucide-fan { stroke-width: 1px; }
 .lucide-fan * { vector-effect: non-scaling-stroke; }
+
+/* Tableaux ASCII (cadres ┌─┬┐│└┘) : polices à jeu de cadres complet, une seule police pour tous les glyphes, interligne qui joint les traits. */
+.ascii-table { font-family: "DejaVu Sans Mono", Menlo, Consolas, "Liberation Mono", monospace; line-height: normal; font-variant-ligatures: none; font-kerning: none; }
