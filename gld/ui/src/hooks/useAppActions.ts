@@ -510,6 +510,7 @@ export function useAppActions(context: {
       setTimeout(reloadQuietly, TOUCH_RELOAD_DELAY_MS) // le transcript a enregistré le prompt : on prend l'heure réelle
     },
     read,
+    openMany: (rows) => openMany(rows.filter((row) => !row.g.missing && !live.has(row.s.id))),
     open: (item) => act(() => api.open({ ...item, args }), i18n.t("shell.act.openingTerminal"), "last", "open"),
     // Un fournisseur inconnu ou une réponse ancienne : aucune fonction optionnelle (l'interface reste sobre plutôt que fausse).
     caps: (session) => data?.providers?.find((provider) => provider.id === (session.provider ?? "claude"))?.caps ?? NO_CAPS,

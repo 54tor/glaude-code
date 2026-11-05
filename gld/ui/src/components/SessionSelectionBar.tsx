@@ -1,19 +1,23 @@
-import { X } from "lucide-react"
+import { SquareTerminal, X } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import type { Row } from "./actions"
+import { type Row, useActions } from "./actions"
 import { DD, SessionItems } from "./SessionMenu"
 
 // Barre de sélection multiple : tout sélectionner, actions sur la sélection, vider.
 export function SessionSelectionBar({ selected, onSelectAll, onClear }: { selected: Row[]; onSelectAll: () => void; onClear: () => void }) {
   const { t } = useTranslation()
+  const actions = useActions()
   return (
     <div className="absolute inset-x-0 bottom-4 z-30 flex justify-center px-4">
       <div className="flex items-center gap-1 rounded-xl border bg-popover p-1.5 pl-4 text-sm shadow-lg">
         <span className="mr-2 font-medium">{t("shell.selection.count", { count: selected.length })}</span>
         <Button variant="ghost" size="sm" onClick={() => onSelectAll()}>
           {t("shell.selection.selectAll")}
+        </Button>
+        <Button variant="ghost" size="sm" onClick={() => actions.openMany(selected)}>
+          <SquareTerminal /> {t("shell.selection.reopen")}
         </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

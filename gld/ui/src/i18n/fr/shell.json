@@ -149,6 +149,7 @@
       "count_one": "{{count}} session sélectionnée",
       "count_other": "{{count}} sessions sélectionnées",
       "selectAll": "Tout sélectionner",
+      "reopen": "Rouvrir",
       "actions": "Actions",
       "clear": "Vider la sélection",
       "clearHint": "Vider la sélection (Échap)"
