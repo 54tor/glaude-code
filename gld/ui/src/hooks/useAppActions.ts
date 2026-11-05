@@ -596,36 +596,29 @@ export function useAppActions(context: {
       saveGroups(vgroups.map((candidate) => (isSameGroup(candidate, group) ? { ...candidate, ids: candidate.ids.filter((sessionId) => !ids.includes(sessionId)) } : candidate)))
     },
     pickDir,
-    stop: (ids, onDone) =>
-      setAsk({
-        title: ids.length > 1 ? i18n.t("shell.act.closeMany", { n: ids.length }) : i18n.t("shell.act.closeOne"),
-        rows: ids,
-        body: i18n.t("shell.act.closeBody"),
-        confirm: i18n.t("common.close"),
-        run: async () => {
-          const results = await Promise.allSettled(ids.map((id) => api.sessionClose(id)))
-          const firstFailure = results.find((result): result is PromiseRejectedResult => result.status === "rejected")
-          if (firstFailure) toast.error(errMsg(firstFailure.reason))
-          else toast.success(ids.length > 1 ? i18n.t("shell.act.closedMany") : i18n.t("shell.act.closedOne"))
-          // Le processus met un instant à finir : on retire les sessions tout de suite, puis on relit jusqu'à confirmation.
-          const closedIds = new Set(ids.filter((_, index) => results[index].status === "fulfilled"))
-          markClosing([...closedIds])
-          onSessionsClosed?.(closedIds)
-          if (!firstFailure) onDone?.()
-          setData(
-            (currentData) =>
-              currentData && {
-                ...currentData,
-                live: currentData.live.filter((sessionId) => !closedIds.has(sessionId)),
-                waiting: currentData.waiting.filter((sessionId) => !closedIds.has(sessionId)),
-              }
-          )
-          for (let attempt = 0; attempt < CLOSE_RELOAD_ATTEMPTS; attempt++) {
-            await wait(CLOSE_RELOAD_DELAY_MS)
-            await reload()
+    stop: async (ids, onDone) => {
+      const results = await Promise.allSettled(ids.map((id) => api.sessionClose(id)))
+      const firstFailure = results.find((result): result is PromiseRejectedResult => result.status === "rejected")
+      if (firstFailure) toast.error(errMsg(firstFailure.reason))
+      else toast.success(ids.length > 1 ? i18n.t("shell.act.closedMany") : i18n.t("shell.act.closedOne"))
+      // Le processus met un instant à finir : on retire les sessions tout de suite, puis on relit jusqu'à confirmation.
+      const closedIds = new Set(ids.filter((_, index) => results[index].status === "fulfilled"))
+      markClosing([...closedIds])
+      onSessionsClosed?.(closedIds)
+      if (!firstFailure) onDone?.()
+      setData(
+        (currentData) =>
+          currentData && {
+            ...currentData,
+            live: currentData.live.filter((sessionId) => !closedIds.has(sessionId)),
+            waiting: currentData.waiting.filter((sessionId) => !closedIds.has(sessionId)),
           }
-        },
-      }),
+      )
+      for (let attempt = 0; attempt < CLOSE_RELOAD_ATTEMPTS; attempt++) {
+        await wait(CLOSE_RELOAD_DELAY_MS)
+        await reload()
+      }
+    },
     remove: (items, what, after) => {
       const someAreOpen = items.some((item) => live.has(item.id))
       const closingNotice = someAreOpen ? "\n\n" + i18n.t("shell.act.trashClosing") : ""
