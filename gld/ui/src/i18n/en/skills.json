@@ -129,6 +129,7 @@
       "none": "No commands.",
       "copyContent": "Copy content",
       "copyCommand": "Copy command",
+      "download": "Download",
       "copyPath": "Copy path",
       "list": "List",
       "pickA": "Pick a command, or create one. It can also be used as",

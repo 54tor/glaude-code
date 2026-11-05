@@ -6,6 +6,7 @@ import { api, type SnipScope, type Snippet } from "@/lib/api"
 import { ago, size, tilde } from "@/lib/format"
 import { cn, copyText } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { downloadText } from "@/lib/download"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -115,6 +116,10 @@ export function Snippets({
   const copyContent = async (snippet: Snippet) => {
     const snippetResponse = await readOf(snippet)
     if (snippetResponse) copyAs(snippetResponse.text, "Content")
+  }
+  const downloadSnippet = async (snippet: Snippet) => {
+    const snippetResponse = await readOf(snippet)
+    if (snippetResponse) downloadText(`${snippet.command.replace(/^\//, "")}.md`, snippetResponse.text)
   }
   const launchOf = async (snippet: Snippet) => {
     const snippetResponse = await readOf(snippet)
@@ -379,6 +384,9 @@ export function Snippets({
                             </ContextMenuItem>
                             <ContextMenuItem onSelect={() => copyAs(listedSnippet.path, "Path")}>
                               <Copy /> {t("skills.snippets.copyPath")}
+                            </ContextMenuItem>
+                            <ContextMenuItem onSelect={() => downloadSnippet(listedSnippet)}>
+                              <Download /> {t("skills.snippets.download")}
                             </ContextMenuItem>
                             <ContextMenuSeparator />
                             <ContextMenuItem onSelect={() => launchOf(listedSnippet)}>
