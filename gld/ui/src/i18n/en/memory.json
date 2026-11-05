@@ -128,6 +128,7 @@
       "type": "Type",
       "noType": "No type",
       "copyContent": "Copy content",
+      "download": "Download",
       "copyPath": "Copy path",
       "unmerge": "Remove from merge",
       "merge": "Select for a merge",

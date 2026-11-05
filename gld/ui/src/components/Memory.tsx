@@ -20,6 +20,7 @@ import { downloadPack, packDir, projectLabel } from "@/lib/memoryPack"
 import { MemoryImport } from "./MemoryImport"
 import { Toolbar, SelectionBar } from "./MemoryBars"
 import { FileBar } from "./MemoryFileBar"
+import { downloadText } from "@/lib/download"
 import { FileMenu } from "./MemoryFileMenu"
 import { Section } from "./MemorySection"
 import { HealthDialog } from "./MemoryHealth"
@@ -323,6 +324,13 @@ export function Memory({
         refresh()
       },
     })
+  const downloadFile = async (memFile: MemFile) => {
+    try {
+      downloadText(memFile.name.replace(/^rules\//, ""), (await api.memoryFile(memFile.key)).text)
+    } catch (error) {
+      toast.error(errMsg(error))
+    }
+  }
   const copyContent = async (memFile: MemFile) => {
     try {
       copy((await api.memoryFile(memFile.key)).text, "memory.lib.copiedContent")
@@ -488,6 +496,7 @@ export function Memory({
         toggleRule,
         setType,
         remove,
+        download: downloadFile,
         exportOne: (fileToExport) => exportKeys([fileToExport.key]),
       }}
     />

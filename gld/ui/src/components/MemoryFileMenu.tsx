@@ -25,6 +25,7 @@ export type FileActions = {
   setType: (key: string, type: string) => void
   remove: (x: MemFile) => void
   exportOne: (x: MemFile) => void
+  download: (x: MemFile) => void
 }
 
 const MEMORY_INDEX_SUFFIX = "/MEMORY.md"
@@ -100,6 +101,9 @@ export function FileMenu({ x: file, picked, targets, homeDir, a: actions }: { x:
       </ContextMenuItem>
       <ContextMenuItem onSelect={() => copy(file.path, "memory.lib.copiedPath")}>
         <Copy /> {t("memory.fileMenu.copyPath")}
+      </ContextMenuItem>
+      <ContextMenuItem onSelect={() => actions.download(file)}>
+        <Download /> {t("memory.fileMenu.download")}
       </ContextMenuItem>
       {!isReadOnly && (
         <>
