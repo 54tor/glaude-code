@@ -61,3 +61,15 @@ func TestFlushTitlesWaitsForSessionEnd(t *testing.T) {
 		t.Fatal("titre non posé à la fin de la session")
 	}
 }
+
+func TestLineMsgsShowsHumanQueuedCommandOnly(t *testing.T) {
+	humanLine := []byte(`{"type":"attachment","timestamp":"2026-11-05T08:50:36.975Z","attachment":{"type":"queued_command","prompt":"un message tapé en cours de tour","origin":{"kind":"human"}}}`)
+	messagesObtenus := lineMsgs(humanLine, false)
+	if len(messagesObtenus) != 1 || messagesObtenus[0].R != "user" || messagesObtenus[0].T != "un message tapé en cours de tour" {
+		t.Fatalf("message humain en file attendu, obtenu %+v", messagesObtenus)
+	}
+	notificationLine := []byte(`{"type":"attachment","attachment":{"type":"queued_command","prompt":"<task-notification>x</task-notification>","origin":{"kind":"task-notification"}}}`)
+	if messagesObtenus := lineMsgs(notificationLine, false); len(messagesObtenus) != 0 {
+		t.Fatalf("une notification de tâche ne doit pas s'afficher, obtenu %+v", messagesObtenus)
+	}
+}
