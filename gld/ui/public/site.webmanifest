@@ -1,6 +1,7 @@
 {
   "name": "Glaude Code",
   "short_name": "Glaude",
+  "start_url": "/",
   "icons": [
     {
       "src": "/icons/gld-192.png",

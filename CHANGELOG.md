@@ -14,6 +14,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 ### Corrigé
 - Connexion par jeton généré (hors localhost, sans `GLD_WEB_TOKEN`) : le jeton est conservé dans le dossier d'authentification, donc la PWA et les appareils jumelés ne demandent plus de se reconnecter après chaque mise à jour.
 - PWA iPhone : l'écran du jeton ne réapparaît plus au lancement alors que l'appareil est jumelé ; les cookies d'appareil et de jeton passent de `SameSite=Strict` à `Lax`, car WebKit n'envoie pas un cookie Strict à la première navigation d'une PWA. Les appareils déjà jumelés doivent être rejumelés une fois pour recevoir le nouvel attribut.
+- PWA iPhone : le manifeste déclare `start_url: "/"`. Sans lui, l'icône de l'écran d'accueil relançait l'adresse où elle avait été ajoutée (la page de jumelage `/pair`), ce qui montrait l'écran du code à 8 chiffres à chaque lancement à froid. Les PWA déjà installées doivent être supprimées de l'écran d'accueil puis rajoutées depuis la page d'accueil de gld.
 
 ## [0.10.2] - 2026-11-03
 
