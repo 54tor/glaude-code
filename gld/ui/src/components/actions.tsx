@@ -63,6 +63,7 @@ export type Actions = {
   info: (r: Row) => void // fiche de la session
   share: (r: Row) => void // fenêtre de partage par lien invité
   open: (body: { dir: string; id?: string }) => void
+  openMany: (rows: Row[]) => void // rouvrir ces sessions fermées dans des onglets de terminal
   resumeWith: (r: Row) => void // reprendre en envoyant un message
   resumeSend: (r: Row, text: string) => Promise<boolean> // reprendre une session fermée avec ce texte, sans fenêtre de saisie
   caps: (s: Session) => Caps // ce que sait faire le fournisseur de cette session

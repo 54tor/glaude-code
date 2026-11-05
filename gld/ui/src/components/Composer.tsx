@@ -188,6 +188,7 @@ export function Composer({
   const { text } = useDraft(id)
   const queue = usePending(id)
   const setText = (newText: string) => setDraft(id, { text: newText })
+  const actions = useActions()
   const mention = useMention(text, setText, id)
   const [mode, setMode] = useLocal("ccChatMode", "")
   const [choice, setChoice] = useState(defaultChoice)
@@ -265,6 +266,7 @@ export function Composer({
     setOwn(true)
     setTurn(() => ({ id, msgs: [{ r: "user", t: prompt }], running: true }))
     onStart?.()
+    const wasClosed = !live
     const fail = (error: string) => {
       setOwn(false)
       setTurn((previousTurn) => previousTurn && { ...previousTurn, running: false, error })
@@ -310,6 +312,8 @@ export function Composer({
     setTimeout(() => setOwn(false), OWN_TURN_GRACE_MS)
     return delivered
   }
+    // Écrire dans une session fermée (tiède) la rouvre : elle repasse dans les sessions actives.
+    if (delivered && wasClosed) api.open({ dir, id, args }).then(() => actions.touch(id), () => {})
   const stop = () => {
     stopped.current = true
     void api.chatStop(id).catch(() => {})

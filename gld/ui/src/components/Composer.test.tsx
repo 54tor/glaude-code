@@ -10,7 +10,8 @@ import { draftOf, setDraft } from "@/hooks/useDraft"
 import { setWaitIdle } from "@/hooks/useWaitIdle"
 import { Composer } from "./Composer"
 
-vi.mock("./actions", () => ({ useActions: () => ({ background: new Set(), live: new Set() }) }))
+const touchMock = vi.hoisted(() => vi.fn())
+vi.mock("./actions", () => ({ useActions: () => ({ background: new Set(), live: new Set(), touch: touchMock }) }))
 vi.mock("@/lib/auth", async (orig) => ({ ...(await orig<typeof import("@/lib/auth")>()), useCan: () => () => true }))
 
 const item = (qItem: Partial<QItem>): QItem => ({ id: "i1", text: "bonjour", author: "host", state: "queued", at: 1, ...qItem })
@@ -125,6 +126,16 @@ function mountPlain(items: QItem[]) {
 describe("Composer claude -p, file serveur", () => {
   beforeEach(() => setAuth({ state: "open", csrf: "" }))
   afterEach(() => vi.unstubAllGlobals())
+  it("écrire dans une session fermée la rouvre une fois le message délivré", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => chatOk()))
+    const open = vi.spyOn(api, "open").mockResolvedValue({} as never)
+    mountPlain([])
+    const field = await screen.findByPlaceholderText(/Écrire à Claude|Write to Claude/i)
+    fireEvent.change(field, { target: { value: "salut" } })
+    fireEvent.keyDown(field, { key: "Enter", ctrlKey: true })
+    await waitFor(() => expect(open).toHaveBeenCalledWith({ dir: "/d", id: "s1", args: "" }))
+    await waitFor(() => expect(touchMock).toHaveBeenCalledWith("s1"))
+  })
   it("ne part pas tout seul après un tour : la file reste suspendue", async () => {
     const localMock = vi.fn(async () => chatOk())
     vi.stubGlobal("fetch", localMock)
