@@ -188,10 +188,10 @@ export function Composer({
 }) {
   const { t } = useTranslation()
   const exec = useCan()("exec")
+  const actions = useActions()
   const { text } = useDraft(id)
   const queue = usePending(id)
   const setText = (newText: string) => setDraft(id, { text: newText })
-  const actions = useActions()
   const mention = useMention(text, setText, id)
   const [mode, setMode] = useLocal("ccChatMode", "")
   const [choice, setChoice] = useState(defaultChoice)
@@ -266,10 +266,10 @@ export function Composer({
     if (delivered && draftOf(id).text === merged) setText(before)
   }
   const submit = async (prompt: string): Promise<boolean> => {
+    const wasClosed = !live
     setOwn(true)
     setTurn(() => ({ id, msgs: [{ r: "user", t: prompt }], running: true }))
     onStart?.()
-    const wasClosed = !live
     const fail = (error: string) => {
       setOwn(false)
       setTurn((previousTurn) => previousTurn && { ...previousTurn, running: false, error })
@@ -312,11 +312,11 @@ export function Composer({
     setTurn((previousTurn) => previousTurn && { ...previousTurn, running: false })
     await onDone() // le transcript est relu avant le tour suivant, qui efface sinon son propre affichage
     if (delivered) api.rename({ dir, id }, { auto: true, keep: true }).then(() => onDone(), () => {}) // échec (session ouverte, IA indisponible) : le titre par défaut reste
+    // Écrire dans une session fermée (tiède) la rouvre : elle repasse dans les sessions actives.
+    if (delivered && wasClosed) api.open({ dir, id, args }).then(() => actions.touch(id), () => {})
     setTimeout(() => setOwn(false), OWN_TURN_GRACE_MS)
     return delivered
   }
-    // Écrire dans une session fermée (tiède) la rouvre : elle repasse dans les sessions actives.
-    if (delivered && wasClosed) api.open({ dir, id, args }).then(() => actions.touch(id), () => {})
   const stop = () => {
     stopped.current = true
     void api.chatStop(id).catch(() => {})
