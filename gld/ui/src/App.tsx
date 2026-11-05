@@ -547,7 +547,7 @@ function Shell() {
 
   return (
     <ActionsCtx.Provider value={actions}>
-      <div className="safe-t safe-x flex h-dvh flex-col md:flex-row">
+      <div className="safe-t safe-x flex h-[var(--app-h,100dvh)] flex-col md:flex-row">
         <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:bg-background focus:px-3 focus:py-2 focus:text-sm focus:ring-3 focus:ring-ring/80">
           {t("shell.header.skipToContent")}
         </a>
