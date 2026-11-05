@@ -6,7 +6,7 @@ import { cn, copyText, isSend, keyHint } from "@/lib/utils"
 import { modeOfScreen, parseBtw, parsePrompt, type Opt } from "@/lib/prompt"
 import { type Live } from "./LiveStatus"
 import { toast } from "sonner"
-import { ArrowDownToLine, Bug, ChevronDown, Copy, GitFork, Minimize2, Snowflake, Send, SendHorizontal, Square, SquareCheck, X } from "lucide-react"
+import { ArrowDownToLine, Bug, ChevronDown, ChevronUp, Copy, GitFork, Minimize2, Snowflake, Send, SendHorizontal, Square, SquareCheck, X } from "lucide-react"
 import { useLocal } from "@/hooks/useLocal"
 import { draftOf, setDraft, useDraft } from "@/hooks/useDraft"
 import { setWaitIdle, useWaitIdle } from "@/hooks/useWaitIdle"
@@ -836,6 +836,11 @@ function TerminalPanel({ id, onAsk, onSent, extra }: { id: string; onAsk?: (aski
       () => toast.error(t("conversation.composer.copyFailed")),
     )
   const asking = !!prompt
+  const [questionCollapsed, setQuestionCollapsed] = useState(false)
+  const questionKey = prompt?.question ?? ""
+  useEffect(() => {
+    setQuestionCollapsed(false)
+  }, [questionKey])
   const ask = useRef(onAsk) // le parent passe une flèche neuve à chaque rendu : l'effet ne doit suivre que asking
   useEffect(() => {
     ask.current = onAsk
@@ -846,7 +851,19 @@ function TerminalPanel({ id, onAsk, onSent, extra }: { id: string; onAsk?: (aski
   }, [asking])
   return (
     <div className="space-y-2">
-      {prompt && (
+      {prompt && questionCollapsed && (
+        <button
+          type="button"
+          onClick={() => setQuestionCollapsed(false)}
+          className="flex w-full items-center gap-2 rounded-lg border border-warning/50 bg-warning/10 px-3 py-1.5 text-left text-sm"
+          title={t("conversation.composer.expandQuestion")}
+          aria-label={t("conversation.composer.expandQuestion")}
+        >
+          <ChevronUp className="size-4 shrink-0" />
+          <span className="min-w-0 truncate font-medium">{prompt.question || t("conversation.composer.answerExpected")}</span>
+        </button>
+      )}
+      {prompt && !questionCollapsed && (
         <div className="max-h-[min(65dvh,36rem)] overflow-y-auto overscroll-contain rounded-lg border border-warning/50 bg-warning/10 px-3 py-2 text-sm">
           {prompt.tabs && prompt.tabs.length > 1 && (
             <p className="mb-1.5 flex flex-wrap items-center gap-1 text-xs" aria-label={t("conversation.composer.tabsAria")}>
@@ -865,7 +882,12 @@ function TerminalPanel({ id, onAsk, onSent, extra }: { id: string; onAsk?: (aski
           )}
           {prompt.context && <pre className={cn("mb-2 max-h-60 overflow-auto rounded-md border bg-background/70 p-2 font-mono text-xs", BOX_DRAWING.test(prompt.context) ? "ascii-table whitespace-pre" : "break-words whitespace-pre-wrap")}>{prompt.context}</pre>}
           {prompt.preview && <pre className="mb-2 max-h-60 overflow-auto rounded-md border bg-background/70 p-2 font-mono text-xs leading-tight whitespace-pre">{prompt.preview}</pre>}
-          <p className="mb-1.5 font-medium">{prompt.question || t("conversation.composer.answerExpected")}</p>
+          <div className="mb-1.5 flex items-start justify-between gap-2">
+            <p className="font-medium">{prompt.question || t("conversation.composer.answerExpected")}</p>
+            <Button size="xs" variant="ghost" className="shrink-0" onClick={() => setQuestionCollapsed(true)} title={t("conversation.composer.collapseQuestion")} aria-label={t("conversation.composer.collapseQuestion")}>
+              <ChevronDown />
+            </Button>
+          </div>
           <div className="flex flex-col items-stretch gap-1.5">
             {prompt.options.map((option) => (
               <div key={option.label} className="contents">
