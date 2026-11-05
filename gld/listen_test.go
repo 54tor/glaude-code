@@ -38,7 +38,7 @@ func TestWithToken(t *testing.T) {
 		t.Fatal("amorçage :", localRecorder.Code, localRecorder.Header().Get("Location"))
 	}
 	cookies := localRecorder.Result().Cookies()
-	if len(cookies) != 1 || !cookies[0].HttpOnly || cookies[0].SameSite != http.SameSiteStrictMode {
+	if len(cookies) != 1 || !cookies[0].HttpOnly || cookies[0].SameSite != http.SameSiteLaxMode {
 		t.Fatalf("cookie : %+v", cookies)
 	}
 	localRequest := httptest.NewRequest("GET", "/v1/state", nil)

@@ -144,7 +144,7 @@ func withToken(token string, next http.Handler) http.Handler {
 			return
 		}
 		if query := request.URL.Query(); sameToken(query.Get("token"), token) && query.Has("token") {
-			http.SetCookie(responseWriter, &http.Cookie{Name: tokenCookie, Value: token, Path: "/", MaxAge: 30 * 24 * 3600, HttpOnly: true, Secure: requestHTTPS(request), SameSite: http.SameSiteStrictMode})
+			http.SetCookie(responseWriter, &http.Cookie{Name: tokenCookie, Value: token, Path: "/", MaxAge: 30 * 24 * 3600, HttpOnly: true, Secure: requestHTTPS(request), SameSite: http.SameSiteLaxMode})
 			query.Del("token")
 			redirectURL := url.URL{Path: "/" + strings.TrimLeft(request.URL.Path, "/"), RawQuery: query.Encode()} // jamais « //hôte » : redirection locale seulement
 			http.Redirect(responseWriter, request, redirectURL.String(), http.StatusSeeOther)
@@ -153,7 +153,7 @@ func withToken(token string, next http.Handler) http.Handler {
 		if _, staleCookieErr := request.Cookie(tokenCookie); staleCookieErr == nil {
 			// Jeton changé depuis : sans effacement, chaque requête de l'interface rouvrirait un essai et bloquerait l'adresse,
 			// /token-login compris.
-			http.SetCookie(responseWriter, &http.Cookie{Name: tokenCookie, Value: "", Path: "/", MaxAge: -1, HttpOnly: true, Secure: requestHTTPS(request), SameSite: http.SameSiteStrictMode})
+			http.SetCookie(responseWriter, &http.Cookie{Name: tokenCookie, Value: "", Path: "/", MaxAge: -1, HttpOnly: true, Secure: requestHTTPS(request), SameSite: http.SameSiteLaxMode})
 		}
 		if wrongTokenPresented(request) && !tokenTry(clientIP(request)) { // chaque jeton faux présenté compte, comme au formulaire
 			responseWriter.Header().Set("Retry-After", "60")
