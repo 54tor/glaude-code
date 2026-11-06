@@ -65,7 +65,7 @@ export function PageHeader({
             <Menu />
           </Button>
           <div className="min-w-0 flex-1">
-            <h2 className="truncate text-xl font-semibold tracking-tight">{title}</h2>
+            <h1 className="truncate text-xl font-semibold tracking-tight">{title}</h1>
             <p className="truncate text-sm text-muted-foreground">
               {sub}
               {qt && isSearchableRoute && t("shell.header.search", { q: qt })}
