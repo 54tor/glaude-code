@@ -193,7 +193,7 @@ const Row = memo(function Row({
               onClick={onToggle}
               aria-expanded={open}
               aria-label={t("shell.list.subSessions", { count: kids })}
-              className="relative z-10 flex h-6 shrink-0 items-center gap-0.5 rounded-sm px-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+              className="relative z-10 flex h-6 shrink-0 items-center gap-0.5 rounded-sm px-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground pointer-coarse:h-10 pointer-coarse:px-2"
             >
               <ChevronRight className={cn("size-3.5 transition-transform", open && "rotate-90")} />
               <span className="tabular-nums">{kids}</span>
