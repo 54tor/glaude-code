@@ -20,7 +20,7 @@ import { errMsg, qs, readResponse, seg, v1 } from "@/lib/apiError"
 import { useActions } from "./actions"
 import { AttachButton, ImageChips, useImages } from "@/hooks/useImages"
 import { Button } from "@/components/ui/button"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { readNdjson } from "@/lib/ndjson"
 import { authFetch, useCan } from "@/lib/auth"
 
@@ -685,7 +685,7 @@ function LiveSend({ id, dir, onSent, liveState, onAsk, bar, compactHint, coldHin
                 <ArrowDownToLine /> <span className="max-md:sr-only">{t("conversation.composer.background")}</span>
               </Button>
             )}
-            <label className="flex items-center gap-1.5" title={t("conversation.composer.waitIdleTitle")}>
+            <label className="flex items-center gap-1.5 max-md:pointer-coarse:hidden" title={t("conversation.composer.waitIdleTitle")}>
               <Checkbox checked={waitIdle} onCheckedChange={(checked) => setWaitIdle(id, checked === true)} />
               {t("conversation.composer.waitIdle")}
             </label>
@@ -704,6 +704,15 @@ function LiveSend({ id, dir, onSent, liveState, onAsk, bar, compactHint, coldHin
                   <DropdownMenuItem onSelect={() => void send(true)}>
                     <Square /> {t("conversation.composer.sendInterrupting")}
                   </DropdownMenuItem>
+                  <DropdownMenuCheckboxItem
+                    className="hidden max-md:pointer-coarse:flex"
+                    checked={waitIdle}
+                    onCheckedChange={(checked) => setWaitIdle(id, checked === true)}
+                    onSelect={(selectEvent) => selectEvent.preventDefault()}
+                    title={t("conversation.composer.waitIdleTitle")}
+                  >
+                    {t("conversation.composer.waitIdle")}
+                  </DropdownMenuCheckboxItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
@@ -968,7 +977,7 @@ function TerminalPanel({ id, onAsk, onSent, extra }: { id: string; onAsk?: (aski
       )}
       <div className="flex items-center justify-end gap-1">
         {extra}
-        <Button size="xs" variant="ghost" className="text-muted-foreground max-md:[&>svg]:hidden" onClick={() => setDebug(!debug)} aria-pressed={debug} title={t("conversation.composer.rawScreenTitle")}>
+        <Button size="xs" variant="ghost" className="text-muted-foreground max-md:pointer-coarse:hidden max-md:[&>svg]:hidden" onClick={() => setDebug(!debug)} aria-pressed={debug} title={t("conversation.composer.rawScreenTitle")}>
           <Bug /> {t("conversation.composer.rawScreen")}
         </Button>
       </div>

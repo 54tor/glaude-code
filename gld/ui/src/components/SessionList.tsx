@@ -155,7 +155,7 @@ const Row = memo(function Row({
               {tokenTotal > 0 && (
                 <>
                   <span
-                    className="shrink-0 tabular-nums"
+                    className="shrink-0 tabular-nums max-md:pointer-coarse:hidden"
                     title={t("shell.list.tokensDetail", {
                       in: session.tok.in.toLocaleString(loc()),
                       out: session.tok.out.toLocaleString(loc()),
@@ -204,7 +204,7 @@ const Row = memo(function Row({
             {!group.missing && (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon-sm" onClick={() => actions.open({ dir: session.dir, id: session.id })} aria-label={t("shell.list.resume")}>
+                  <Button variant="ghost" size="icon-sm" className="max-md:pointer-coarse:hidden" onClick={() => actions.open({ dir: session.dir, id: session.id })} aria-label={t("shell.list.resume")}>
                     <SquareTerminal />
                   </Button>
                 </TooltipTrigger>
