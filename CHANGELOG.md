@@ -45,6 +45,13 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Notifications push : l'abonnement d'un appareil suit la session qui l'a créé (déconnexion, révocation, expiration, changement de mot de passe : plus rien n'est envoyé), et un compte a au plus 10 appareils abonnés ; un compte ne peut plus remplir à lui seul les 200 places.
 - Notifications push et notifications de bureau : un échec passager de `claude agents` ou de tmux ne renvoie plus une notification pour chaque session déjà en attente.
 - Équipes d'agents : seuls les panneaux tmux de la même session que le chef sont lus ou reçoivent un message ; un `config.json` d'équipe ne peut plus désigner un panneau quelconque du serveur tmux.
+- Dossiers de configuration : un fichier des homes illisible n'est plus réécrit, ce qui régénérait tous les identifiants et faisait perdre les droits attachés.
+- Mémoire et skills : l'écriture passe par un fichier temporaire au nom aléatoire, créé en exclusivité ; un lien posé sous l'ancien nom fixe ne détourne plus l'écriture. Les fichiers trop gros sont refusés sans être lus en entier.
+- Espace de travail : un fichier envoyé est écrit sur le disque au fil de l'eau (plus de tampon de 64 Mio par envoi) et n'écrase jamais un fichier apparu entre-temps ; la copie d'un skill ne fusionne plus dans un dossier existant.
+- Fichiers servis (images envoyées, espace de travail) : un FIFO ne bloque plus la requête.
+- Partage invité : un lien `/invite/<home>/…` au jeton inconnu est refusé sans démarrer le processus de ce home.
+- Notifications push : les envois partent en parallèle (8 au plus), un service push lent ne bloque plus la veille ; notification de bureau bornée à 10 s, titre traduit.
+- Commandes `claude`, `git` et `claude plugin` : un processus petit-enfant qui garde la sortie ouverte ne retient plus la requête au-delà de son délai.
 
 ## [0.10.2] - 2026-11-03
 
