@@ -169,7 +169,11 @@ func chatHandler(responseWriter http.ResponseWriter, request *http.Request) {
 		writeErr(responseWriter, status, "bad_request", err.Error())
 		return
 	}
-	transcriptInfo, _ := os.Stat(transcriptPath)
+	transcriptInfo, transcriptStatErr := os.Stat(transcriptPath)
+	if transcriptStatErr != nil {
+		writeErr(responseWriter, http.StatusNotFound, "not_found", L("srv.chat.sessionInvalide"))
+		return
+	}
 	cwd := info(transcriptPath, transcriptInfo).Cwd
 	cwdInfo, statErr := os.Stat(cwd)
 	cwdMissing := cwd == "" || statErr != nil || !cwdInfo.IsDir()
@@ -296,7 +300,11 @@ func newSessionHandler(responseWriter http.ResponseWriter, request *http.Request
 	}
 	cwd := filepath.Clean(payload.Cwd)
 	if payload.Cwd == "" {
-		transcriptInfo, _ := os.Stat(transcriptPath)
+		transcriptInfo, transcriptStatErr := os.Stat(transcriptPath)
+		if transcriptStatErr != nil {
+			writeErr(responseWriter, http.StatusNotFound, "not_found", L("srv.chat.sessionInvalide"))
+			return
+		}
 		cwd = info(transcriptPath, transcriptInfo).Cwd
 	}
 	cwdInfo, statErr := os.Stat(cwd)
