@@ -410,3 +410,15 @@ func TestTakenNamesHasLeadAndCatalog(t *testing.T) {
 		}
 	}
 }
+
+// Un prompt égal à « --resume » est la valeur de --prompt, pas une demande de restauration d'onglets.
+func TestCliMatinNePrendPasLaValeurDuPromptPourUnDrapeau(t *testing.T) {
+	var sortieObtenue strings.Builder
+	dossierDeTravail := t.TempDir()
+	if matinErr := cliMatin(context.Background(), []string{"--dry-run", "--prompt", "--resume", dossierDeTravail}, &sortieObtenue); matinErr != nil {
+		t.Fatalf("%v : %s", matinErr, sortieObtenue.String())
+	}
+	if !strings.Contains(sortieObtenue.String(), dossierDeTravail) {
+		t.Fatalf("le dossier n'a pas été pris comme dossier de travail : %s", sortieObtenue.String())
+	}
+}
