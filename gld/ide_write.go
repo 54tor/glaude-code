@@ -186,6 +186,43 @@ func ideAtomicWrite(root *os.Root, rel string, data []byte, mode fs.FileMode, ve
 	return err
 }
 
+// ideCreateExclusive écrit le flux dans un temporaire puis le relie sous rel par un lien dur, qui échoue si rel existe déjà :
+// aucun fichier apparu entre-temps n'est écrasé. Le flux n'est jamais gardé en mémoire. Sans liens durs (FAT, certains montages
+// réseau), retour au contrôle d'existence suivi d'un renommage.
+func ideCreateExclusive(root *os.Root, rel string, body io.Reader, mode fs.FileMode) (int64, error) {
+	tempPath := path.Join(path.Dir(rel), ".gld-tmp-"+strconv.FormatInt(time.Now().UnixNano(), 36))
+	file, err := root.OpenFile(tempPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode)
+	if err != nil {
+		return 0, err
+	}
+	defer root.Remove(tempPath)
+	writtenBytes, err := io.Copy(file, body)
+	if err == nil {
+		err = file.Chmod(mode)
+	}
+	if err == nil {
+		err = file.Sync()
+	}
+	if closeErr := file.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		return writtenBytes, err
+	}
+	ideBeforeRename()
+	linkErr := root.Link(tempPath, rel)
+	if errors.Is(linkErr, fs.ErrExist) {
+		return writtenBytes, errIdeExists
+	}
+	if linkErr == nil {
+		return writtenBytes, nil
+	}
+	if ideExists(root, rel) {
+		return writtenBytes, errIdeExists
+	}
+	return writtenBytes, root.Rename(tempPath, rel)
+}
+
 // ideTrashDir renvoie l'état du dossier corbeille : errIdeNotFound s'il n'existe pas encore.
 func ideTrashDir(root *os.Root) error {
 	fileInfo, err := ideLstat(root, ideTrash)
