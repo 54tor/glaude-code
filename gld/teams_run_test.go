@@ -35,6 +35,8 @@ type fakeIO struct {
 	order    []string
 	busy     int32
 	overlap  bool
+	// tmuxSessions : session tmux de chaque pane (absent : « $1 », celle du chef)
+	tmuxSessions map[string]string
 }
 
 func (localFakeIO *fakeIO) Panes() (map[string]string, error) {
@@ -84,6 +86,16 @@ func (localFakeIO *fakeIO) Key(path, key string) error {
 	localFakeIO.keys = append(localFakeIO.keys, [2]string{path, key})
 	localFakeIO.mu.Unlock()
 	return nil
+}
+
+// SessionOf : sans table explicite, tous les panes sont dans la même session tmux que le chef.
+func (localFakeIO *fakeIO) SessionOf(pane string) (string, error) {
+	localFakeIO.mu.Lock()
+	defer localFakeIO.mu.Unlock()
+	if tmuxSession, isKnown := localFakeIO.tmuxSessions[pane]; isKnown {
+		return tmuxSession, nil
+	}
+	return "$1", nil
 }
 func (localFakeIO *fakeIO) Close(id string) error {
 	localFakeIO.mu.Lock()
@@ -708,5 +720,22 @@ func TestTeamKeyRefusesApprovalWhenTruncated(t *testing.T) {
 	}
 	if err := teamKey(root, trName, "team-lead", "Escape", ""); err != nil || len(fakeIO.keys) != 1 {
 		t.Fatal(err, fakeIO.keys)
+	}
+}
+
+// config.json désigne pour « ada » un pane qui vit dans une autre session tmux que le chef (shell de l'opérateur, session
+// d'un autre home) : ni l'écran ne doit s'y lire, ni un message s'y coller.
+func TestPaneDEquipierHorsDeLaSessionTmuxDuChefRefuse(t *testing.T) {
+	root, fakeIO := setup(t)
+	fakeIO.tmuxSessions = map[string]string{trLPane: "$1", "%67": "$9"}
+
+	if _, screenErr := teamScreen(root, trName, "ada"); !isMsg(screenErr, "srv.teams_run.paneAbsent") {
+		t.Fatalf("écran d'un pane étranger lu : %v", screenErr)
+	}
+	if _, sendErr := teamSend(root, trName, "max", "ada", "salut"); sendErr == nil && len(fakeIO.pastes) > 0 {
+		t.Fatalf("message collé dans un pane étranger : %v", fakeIO.pastes)
+	}
+	if len(fakeIO.pastes) != 0 {
+		t.Fatalf("collages : %v", fakeIO.pastes)
 	}
 }
