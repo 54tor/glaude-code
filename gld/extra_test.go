@@ -591,3 +591,18 @@ func TestSnippetMergePrompt(t *testing.T) {
 		}
 	}
 }
+
+// L'occurrence peut chevaucher deux blocs de lecture : elle doit être trouvée, et une absence ne doit pas être inventée.
+func TestReaderContainsTrouveUneOccurrenceACheval(t *testing.T) {
+	aiguille := []byte(`"custom-title"`)
+	const tailleDUnBloc = 64 << 10
+	for decalageAvantLaFinDuBloc := 0; decalageAvantLaFinDuBloc <= len(aiguille); decalageAvantLaFinDuBloc++ {
+		contenu := append(bytes.Repeat([]byte("x"), tailleDUnBloc-decalageAvantLaFinDuBloc), aiguille...)
+		if !readerContains(bytes.NewReader(contenu), aiguille) {
+			t.Fatalf("occurrence à %d octets de la fin du bloc non trouvée", decalageAvantLaFinDuBloc)
+		}
+	}
+	if readerContains(bytes.NewReader(bytes.Repeat([]byte("x"), 3*tailleDUnBloc)), aiguille) {
+		t.Fatal("occurrence inventée")
+	}
+}
