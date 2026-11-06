@@ -5,7 +5,9 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"syscall"
 	"testing"
+	"time"
 )
 
 // fakeRunAs active le mode GLD_RUN_AS pour la durée du test, sans compte réel : seules les lectures confinées en dépendent ici.
@@ -114,5 +116,37 @@ func TestMemSaveNeSuitPasUnLienPoseAuNomDuTemporaire(t *testing.T) {
 	}
 	if infoClaudeMD, statErr := os.Lstat(filepath.Join(cfg, "CLAUDE.md")); statErr != nil || !infoClaudeMD.Mode().IsRegular() {
 		t.Fatalf("CLAUDE.md n'est pas un fichier ordinaire : %v", statErr)
+	}
+}
+
+// Un FIFO déposé sous un nom d'image valide ne doit pas suspendre la requête : l'ouverture non bloquante le refuse aussitôt.
+func TestUploadImageNeBloquePasSurUnFIFO(t *testing.T) {
+	cfg := t.TempDir()
+	previousRoot := root
+	t.Cleanup(func() { root = previousRoot })
+	use(cfg)
+	os.MkdirAll(imagesDir(), 0o700)
+	nomDuFIFO := "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6.png"
+	if !uploadName.MatchString(nomDuFIFO) {
+		t.Skip("nom de test refusé par uploadName : à ajuster au motif courant")
+	}
+	if mkfifoErr := syscall.Mkfifo(filepath.Join(imagesDir(), nomDuFIFO), 0o600); mkfifoErr != nil {
+		t.Skip("mkfifo indisponible :", mkfifoErr)
+	}
+	resultat := make(chan error, 1)
+	go func() {
+		openedFile, _, uploadErr := uploadImage(nomDuFIFO)
+		if openedFile != nil {
+			openedFile.Close()
+		}
+		resultat <- uploadErr
+	}()
+	select {
+	case uploadErr := <-resultat:
+		if uploadErr == nil {
+			t.Fatal("un FIFO a été servi comme image")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("uploadImage bloquée sur un FIFO")
 	}
 }

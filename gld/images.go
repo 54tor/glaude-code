@@ -208,7 +208,7 @@ func uploadImage(name string) (*os.File, string, error) {
 		return nil, "", imageNotFound
 	}
 	defer imagesRoot.Close()
-	file, err := imagesRoot.Open(name)
+	file, err := imagesRoot.OpenFile(name, os.O_RDONLY|oNonBlock, 0)
 	if err != nil {
 		return nil, "", imageNotFound
 	}
