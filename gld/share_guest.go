@@ -202,6 +202,21 @@ func guestKnown(home, secret string) (Share, Invite, bool, bool) {
 	return share, invitation, found, true
 }
 
+// guestTokenKnown : le jeton d'invitation existe dans le fichier des partages du home enfant ; la passerelle le juge avant de
+// démarrer cet enfant, sans quoi n'importe qui lancerait un processus par home connu et en déduirait les noms des homes.
+func guestTokenKnown(home, token string) bool {
+	homes, readable := guestHomes()
+	if !readable {
+		return false
+	}
+	homeIndex := slices.IndexFunc(homes, func(candidate Home) bool { return candidate.Name == home })
+	if homeIndex < 0 {
+		return false
+	}
+	store, err := guestOpenShares(homes[homeIndex].Dir)
+	return err == nil && store.KnowsToken(token)
+}
+
 // guestPre : le cookie de la poignée handle, jugé par la passerelle (home enfant : d'après son fichier). Le partage trouvé doit
 // avoir cette poignée : un secret recopié sous le nom d'un autre cookie ne vaut rien.
 // touch : seule une requête invitée gardée met LastSeen à jour.
@@ -597,6 +612,10 @@ func guestInvite(responseWriter http.ResponseWriter, request *http.Request) {
 			return
 		}
 		if home != mainHomeID {
+			if !guestTokenKnown(home, token) {
+				refused(403, "srv.share_guest.lienInvalide")
+				return
+			}
 			proxy, err := homeProxy(home)
 			if err != nil {
 				refused(403, "srv.share_guest.lienInvalide")

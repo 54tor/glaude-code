@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"html"
 	"net/http"
 	"net/http/httptest"
@@ -1257,5 +1258,33 @@ func TestGuestInside(t *testing.T) {
 		if guestInside(dir, rel) != want {
 			t.Errorf("%q: want %v", rel, want)
 		}
+	}
+}
+
+// Passerelle : un jeton inconnu du fichier des partages d'un home enfant est refusé sans démarrer cet enfant (pas de processus
+// lancé par un anonyme, pas de différence de temps de réponse qui révélerait les noms des homes).
+func TestGuestInviteNeDemarrePasLEnfantPourUnJetonInconnu(t *testing.T) {
+	handler := guestWeb(t, nil, modeTok)
+	addHomes(t, "perso")
+	homeDuPartage, _ := homeByName("perso")
+	magasinDesPartages, _ := openShares(homeDuPartage.Dir)
+	jetonValide, _, _ := magasinDesPartages.CreateInvite(id1, "-p", "", "")
+	demarragesDEnfant := 0
+	demarrageInitial := homeStart
+	t.Cleanup(func() { homeStart = demarrageInitial; stopHomes() })
+	homeStart = func(Home) (*homeProc, error) {
+		demarragesDEnfant++
+		return nil, errors.New("démarrage refusé par le test")
+	}
+
+	if recorder := (gReq{method: "POST", path: "/invite/perso/jeton-inconnu"}).do(handler); recorder.Code != 403 {
+		t.Fatalf("jeton inconnu : %d", recorder.Code)
+	}
+	if demarragesDEnfant != 0 {
+		t.Fatal("l'enfant a été démarré pour un jeton inconnu")
+	}
+	(gReq{method: "POST", path: "/invite/perso/" + jetonValide}).do(handler)
+	if demarragesDEnfant != 1 {
+		t.Fatalf("un jeton valide doit relayer vers l'enfant : %d démarrage(s)", demarragesDEnfant)
 	}
 }

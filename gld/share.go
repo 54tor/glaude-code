@@ -299,6 +299,21 @@ func (store *shareStore) Redeem(token string) (string, Share, Invite, bool) {
 }
 
 // Reopened : le jeton déjà échangé, présenté avec le cookie de son invitation (même navigateur), rend la session partagée.
+// KnowsToken : une invitation porte ce jeton, échangée ou non ; lecture seule, rien n'est consommé.
+func (store *shareStore) KnowsToken(token string) bool {
+	tokenHash := hashSecret(token)
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	for _, share := range store.m {
+		for _, invitation := range share.Invites {
+			if hashEq(invitation.TokenHash, tokenHash) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (store *shareStore) Reopened(token, cookie string) (string, bool) {
 	tokenHash, cookieHash := hashSecret(token), hashSecret(cookie)
 	store.mu.Lock()
