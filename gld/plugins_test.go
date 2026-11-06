@@ -25,7 +25,7 @@ func TestListPlugins(t *testing.T) {
 }
 
 func TestPluginActRefuse(t *testing.T) {
-	for _, values := range [][4]string{{"rm", "a@m", "user", ""}, {"install", "a b", "user", ""}, {"install", "a@m", "global", ""}, {"install", "a@m", "project", ""}, {"install", "a@m", "project", "../x"}} {
+	for _, values := range [][4]string{{"rm", "a@m", "user", ""}, {"install", "a b", "user", ""}, {"install", "a@m", "global", ""}, {"install", "a@m", "project", ""}, {"install", "a@m", "project", "../x"}, {"install", "--help", "user", ""}, {"uninstall", "-x@m", "user", ""}} {
 		if _, err := pluginAct(values[0], values[1], values[2], values[3]); err == nil {
 			t.Errorf("accepté : %v", values)
 		}
@@ -33,7 +33,7 @@ func TestPluginActRefuse(t *testing.T) {
 }
 
 func TestMarketplaceActRefuse(t *testing.T) {
-	for _, values := range [][3]string{{"add", "/etc", ""}, {"add", "../x", ""}, {"add", "http://a.b/c", ""}, {"add", "a/b;rm", ""}, {"add", "https://127.0.0.1/x", ""}, {"add", "https://localhost:8080/x", ""}, {"add", "https://10.0.0.5/r", ""}, {"add", "https://169.254.169.254/latest", ""}, {"add", "https://api.localhost/x", ""}, {"add", "https://0.0.0.0/x", ""}, {"remove", "", "a b"}, {"drop", "", "x"}} {
+	for _, values := range [][3]string{{"add", "/etc", ""}, {"add", "../x", ""}, {"add", "http://a.b/c", ""}, {"add", "a/b;rm", ""}, {"add", "https://127.0.0.1/x", ""}, {"add", "https://localhost:8080/x", ""}, {"add", "https://10.0.0.5/r", ""}, {"add", "https://169.254.169.254/latest", ""}, {"add", "https://api.localhost/x", ""}, {"add", "https://0.0.0.0/x", ""}, {"remove", "", "a b"}, {"drop", "", "x"}, {"remove", "", "-x"}, {"update", "", "--all"}, {"add", "-x/y", ""}} {
 		if _, err := marketplaceAct(values[0], values[1], values[2]); err == nil {
 			t.Errorf("accepté : %v", values)
 		}

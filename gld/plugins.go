@@ -16,7 +16,7 @@ import (
 // Plugins de Claude Code (skills, commandes, agents…) : lecture et gestion par `claude plugin`, qui reste seul à écrire dans ~/.claude.
 
 var (
-	pluginRefRe = regexp.MustCompile(`^[\w.-]{1,100}(@[\w.-]{1,100})?$`)
+	pluginRefRe = regexp.MustCompile(`^[\w.][\w.-]{0,99}(@[\w.-]{1,100})?$`)
 	pluginActs  = map[string]bool{"install": true, "uninstall": true, "enable": true, "disable": true, "update": true}
 	pluginScope = map[string]bool{"user": true, "project": true, "local": true}
 )
@@ -158,8 +158,8 @@ type Marketplace struct {
 }
 
 var (
-	marketNameRe = regexp.MustCompile(`^[\w.-]{1,100}$`)
-	marketSrcRe  = regexp.MustCompile(`^([\w.-]{1,100}/[\w.-]{1,100}|https://[\w.-]+(:\d+)?/[\w./~%+-]{1,300})$`) // dépôt GitHub ou URL https ; jamais un chemin local
+	marketNameRe = regexp.MustCompile(`^[\w.][\w.-]{0,99}$`)
+	marketSrcRe  = regexp.MustCompile(`^([\w.][\w.-]{0,99}/[\w.-]{1,100}|https://[\w.-]+(:\d+)?/[\w./~%+-]{1,300})$`) // dépôt GitHub ou URL https ; jamais un chemin local
 )
 
 var marketRaw = func() ([]byte, error) {
