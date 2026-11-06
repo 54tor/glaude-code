@@ -34,7 +34,8 @@
       "deleteConfirm": "Delete"
     },
     "center": {
-      "none": "No file selected"
+      "none": "No file selected",
+      "backToFiles": "Files"
     },
     "bottom": {
       "show": "Show the bottom panel",

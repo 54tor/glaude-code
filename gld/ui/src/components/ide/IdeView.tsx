@@ -2,6 +2,8 @@ import { Suspense, useEffect, useLayoutEffect, useReducer, useRef, useState, typ
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { cn } from "cn"
+import { ChevronLeft } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import { api, type FsFile } from "@/lib/api"
 import { ApiError } from "@/lib/apiError"
 import { useCan } from "@/lib/auth"
@@ -96,6 +98,7 @@ function Workspace({ dir }: { dir: string }) {
   const rootEl = useRef<HTMLDivElement>(null)
   const picked = useRef("")
   const [focusRequest, setFocusRequest] = useState({ path: "", count: 0 })
+  const [phonePane, setPhonePane] = useState<"tree" | "editor">("tree")
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
   const later = (timerKey: string, delayMs: number, callback: () => void) => {
     clearTimeout(timers.current.get(timerKey))
@@ -116,6 +119,7 @@ function Workspace({ dir }: { dir: string }) {
   const read = (path: string): Promise<Read> => api.fsFile(dir, path).then((file) => ({ file }), (err) => ({ err }))
 
   const open = async (path: string) => {
+    setPhonePane("editor")
     if (tabOf(path)) return dispatch({ t: "focus", path })
     show(path, await read(path))
   }
@@ -382,7 +386,7 @@ function Workspace({ dir }: { dir: string }) {
       <div className="flex min-h-0 flex-1">
         {prefs.showTree && (
           <>
-            <aside className="flex min-h-0 shrink-0 flex-col" style={{ width }}>
+            <aside className={cn("flex min-h-0 shrink-0 flex-col max-md:w-full!", phonePane === "editor" && "max-md:hidden")} style={{ width }}>
               <TreeToolbar dir={dir} tree={tree} ctx={ctx} filter={filter} onFilter={setFilter} onRestored={tree.refreshAll} />
               {git.marks.size > 0 && (
                 <div className="flex shrink-0 flex-col items-start px-1 pt-1">
@@ -392,10 +396,17 @@ function Workspace({ dir }: { dir: string }) {
               )}
               <FileTree dir={dir} tree={tree} marks={git.marks} dirs={git.dirs} canWrite={can("fs_write")} selected={ide.active} filter={filter} actionsRef={treeActions} onOpen={open} onRenamed={(from, to) => dispatch({ t: "renamed", from, to })} />
             </aside>
-            <Handle label={t("ide.resize.tree")} start={() => width} onMove={(size) => setDrag({ width: clampTreeWidth(size) })} onEnd={endTreeResize} />
+            <div className="contents max-md:hidden">
+              <Handle label={t("ide.resize.tree")} start={() => width} onMove={(size) => setDrag({ width: clampTreeWidth(size) })} onEnd={endTreeResize} />
+            </div>
           </>
         )}
-        <div className="flex min-w-0 flex-1 flex-col">
+        <div className={cn("flex min-w-0 flex-1 flex-col", prefs.showTree && phonePane === "tree" && "max-md:hidden")}>
+          {prefs.showTree && (
+            <Button variant="ghost" size="sm" className="shrink-0 self-start md:hidden" onClick={() => setPhonePane("tree")}>
+              <ChevronLeft /> {t("ide.center.backToFiles")}
+            </Button>
+          )}
           <EditorToolbar ctx={ctx} />
           {ide.tabs.length > 0 && <Tabs tabs={ide.tabs} active={ide.active} onFocus={(path) => dispatch({ t: "focus", path })} onClose={close} />}
           {active?.conflict && (

@@ -34,7 +34,8 @@
       "deleteConfirm": "Supprimer"
     },
     "center": {
-      "none": "Aucun fichier sélectionné"
+      "none": "Aucun fichier sélectionné",
+      "backToFiles": "Fichiers"
     },
     "bottom": {
       "show": "Afficher le panneau du bas",

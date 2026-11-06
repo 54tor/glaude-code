@@ -54,3 +54,24 @@ it("un déplacement du curseur redessine la barre d'état, pas l'espace", async 
   expect(within(bar).getByText("Ligne 8, colonne 1")).toBeTruthy()
   expect(counts.tabs).toBe(before)
 })
+
+// Sur téléphone (classes max-md, jsdom n'applique pas les media queries : on lit donc les classes posées),
+// l'espace montre un seul volet : l'arbre d'abord, l'éditeur dès qu'un fichier est ouvert, et le bouton
+// « Fichiers » ramène à l'arbre. Sur bureau ces classes n'ont aucun effet et les deux volets restent côte à côte.
+it("sur téléphone, ouvrir un fichier bascule de l'arbre vers l'éditeur et « Fichiers » y revient", async () => {
+  render(<IdeView dir="/p" />)
+  const elementArbre = (await screen.findByText("a.txt", { selector: "[role=treeitem] span" })).closest("aside")!
+  const boutonRetourAuxFichiers = screen.getByRole("button", { name: "Fichiers" })
+  const colonneEditeur = boutonRetourAuxFichiers.parentElement!
+  expect(elementArbre.className).not.toContain("max-md:hidden")
+  expect(colonneEditeur.className).toContain("max-md:hidden")
+
+  fireEvent.click(screen.getByText("a.txt", { selector: "[role=treeitem] span" }))
+  await screen.findByRole("tab", { name: /a\.txt/ })
+  expect(elementArbre.className).toContain("max-md:hidden")
+  expect(colonneEditeur.className).not.toContain("max-md:hidden")
+
+  fireEvent.click(boutonRetourAuxFichiers)
+  expect(elementArbre.className).not.toContain("max-md:hidden")
+  expect(colonneEditeur.className).toContain("max-md:hidden")
+})
