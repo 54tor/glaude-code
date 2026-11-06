@@ -201,6 +201,7 @@
   "srv.ide.erreur": "File access error",
   "srv.homes.dossierDeConfigurationInconnu": "unknown configuration folder",
   "srv.homes.dossierIntrouvable": "\"{{.A1}}\": folder not found",
+  "srv.homes.fichierIllisible": "unreadable configuration folders file ({{.A1}}): nothing is rewritten",
   "srv.homes.indisponible": "configuration folder unavailable: see the gld log",
   "srv.homes.leProcessusEnfantNe": "the child process is not responding",
   "srv.homes.leProcessusEnfantS": "the child process stopped",
