@@ -137,7 +137,7 @@ func TestGuestReloadWorksOtherBrowserRefused(t *testing.T) {
 		recorder := gReq{method: "GET", path: "/v1/guest/me", cookie: localCookie.Value}.do(handler)
 		var me map[string]any
 		json.Unmarshal(recorder.Body.Bytes(), &me)
-		if recorder.Code != 200 || me["id"] != id1 || me["dir"] != "-p" || me["mode"] != "rw" || recorder.Header().Get("Cache-Control") != "no-store" {
+		if recorder.Code != 200 || me["id"] != id1 || me["dir"] != guestOpaqueDir || me["mode"] != "rw" || recorder.Header().Get("Cache-Control") != "no-store" {
 			t.Fatalf("rechargement : %d %s", recorder.Code, recorder.Body)
 		}
 	}
@@ -1232,7 +1232,7 @@ func TestGuestTreeFilter(t *testing.T) {
 		recorder := httptest.NewRecorder()
 		gt := &guestTree{ResponseWriter: recorder, code: code}
 		gt.buf.WriteString(body)
-		gt.flush(recorder, cited, dir)
+		gt.flush(recorder, cited, dir, nil)
 		return recorder
 	}
 	localRecorder := run("", `{"entries":[{"name":"src","type":"dir"},{"name":"lib","type":"dir"},{"name":"b.md","type":"file"},{"name":"c.go","type":"file"}],"truncated":false}`, 200)
@@ -1286,5 +1286,17 @@ func TestGuestInviteNeDemarrePasLEnfantPourUnJetonInconnu(t *testing.T) {
 	(gReq{method: "POST", path: "/invite/perso/" + jetonValide}).do(handler)
 	if demarragesDEnfant != 1 {
 		t.Fatalf("un jeton valide doit relayer vers l'enfant : %d démarrage(s)", demarragesDEnfant)
+	}
+}
+
+// Un fichier cité dont le nom porte l'identité de l'hôte n'apparaît pas dans l'arbre de l'invité ; les autres restent visibles.
+func TestGuestTreeMasqueLesNomsQuiReveleLIdentite(t *testing.T) {
+	masqueur := newPathRedactor("/home/bobby", "/home/bobby/Projets/app", "guest-ab12")
+	recorder := httptest.NewRecorder()
+	arbre := &guestTree{ResponseWriter: recorder, code: 200}
+	arbre.buf.WriteString(`{"entries":[{"name":"bobby-notes.md","type":"file"},{"name":"b.md","type":"file"}],"truncated":false}`)
+	arbre.flush(recorder, map[string]bool{"bobby-notes.md": true, "b.md": true}, "", masqueur)
+	if strings.Contains(recorder.Body.String(), "bobby") || !strings.Contains(recorder.Body.String(), "b.md") {
+		t.Fatalf("arbre invité : %s", recorder.Body)
 	}
 }

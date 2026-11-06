@@ -446,7 +446,7 @@ func guestServe(mux *http.ServeMux, share Share, invitation Invite, secret, hand
 		}
 		if pattern == "GET /v1/guest/me" {
 			responseWriter.Header().Set("Cache-Control", "no-store")
-			writeJSON(responseWriter, 200, map[string]any{"id": share.Session, "dir": redactor.applyString(share.Dir), "mode": invitation.Mode, "csrf": guestCSRF(secret), "handle": handle, "title": share.Title,
+			writeJSON(responseWriter, 200, map[string]any{"id": share.Session, "dir": guestOpaqueDir, "mode": invitation.Mode, "csrf": guestCSRF(secret), "handle": handle, "title": share.Title,
 				"invite": invitation.ID, "label": invitation.label()})
 			return
 		}
@@ -483,7 +483,7 @@ func guestServe(mux *http.ServeMux, share Share, invitation Invite, secret, hand
 		if pattern == "GET /v1/fs/tree" {
 			filteredTree := &guestTree{ResponseWriter: responseWriter}
 			mux.ServeHTTP(filteredTree, forwarded)
-			filteredTree.flush(&noStoreWriter{ResponseWriter: responseWriter}, guestCited(share), strings.Trim(path.Clean("/"+request.URL.Query().Get("path")), "/"))
+			filteredTree.flush(&noStoreWriter{ResponseWriter: responseWriter}, guestCited(share), strings.Trim(path.Clean("/"+request.URL.Query().Get("path")), "/"), redactor)
 			return
 		}
 		switch pattern {
@@ -786,12 +786,52 @@ func guestSecretPath(requestPath string) bool {
 // guestCited : les chemins (relatifs au dossier du partage) que le transcript cite en absolu (lus, écrits ou mentionnés par la
 // session), donc déjà visibles dans la conversation. Un invité ne lit que ceux-là ; l'arbre n'affiche qu'eux et leurs dossiers.
 // Un chemin avec espace n'est pas reconnu : le refus est le bon défaut.
+// guestOpaqueDir : le dossier renvoyé à l'invité ; la garde impose de toute façon celui du partage à chaque requête relayée.
+const guestOpaqueDir = "-"
+
+type guestCitedEntry struct {
+	size    int64
+	modTime time.Time
+	cited   map[string]bool
+}
+
+var (
+	guestCitedMu    sync.Mutex
+	guestCitedCache = map[string]guestCitedEntry{}
+)
+
+const guestCitedCacheMax = 64
+
+// guestCited : chemins cités, relus seulement quand le transcript change (taille ou date) : un invité qui enchaîne les requêtes
+// sur les fichiers ne fait pas rebalayer tout le transcript à chacune.
 func guestCited(share Share) map[string]bool {
-	cited := map[string]bool{}
 	transcriptPath, found := transcript(share.Dir, share.Session)
 	if !found {
-		return cited
+		return map[string]bool{}
 	}
+	transcriptInfo, statErr := os.Stat(transcriptPath)
+	if statErr != nil {
+		return map[string]bool{}
+	}
+	cacheKey := transcriptPath + "\x00" + share.Dir
+	guestCitedMu.Lock()
+	cachedEntry, isCached := guestCitedCache[cacheKey]
+	guestCitedMu.Unlock()
+	if isCached && cachedEntry.size == transcriptInfo.Size() && cachedEntry.modTime.Equal(transcriptInfo.ModTime()) {
+		return cachedEntry.cited
+	}
+	cited := scanGuestCited(share, transcriptPath)
+	guestCitedMu.Lock()
+	if len(guestCitedCache) >= guestCitedCacheMax {
+		clear(guestCitedCache)
+	}
+	guestCitedCache[cacheKey] = guestCitedEntry{size: transcriptInfo.Size(), modTime: transcriptInfo.ModTime(), cited: cited}
+	guestCitedMu.Unlock()
+	return cited
+}
+
+func scanGuestCited(share Share, transcriptPath string) map[string]bool {
+	cited := map[string]bool{}
 	absoluteDir := decodeDir(share.Dir)
 	if absoluteDir == "" {
 		return cited
@@ -828,7 +868,9 @@ type guestTree struct {
 func (tree *guestTree) WriteHeader(status int)            { tree.code = status }
 func (tree *guestTree) Write(content []byte) (int, error) { return tree.buf.Write(content) }
 
-func (tree *guestTree) flush(responseWriter http.ResponseWriter, cited map[string]bool, dir string) {
+// flush ne garde que les chemins cités ; un nom que le masqueur changerait (compte, identité git) n'est pas listé, car le renommer
+// empêcherait de l'ouvrir.
+func (tree *guestTree) flush(responseWriter http.ResponseWriter, cited map[string]bool, dir string, redactor *pathRedactor) {
 	var listing struct {
 		Entries   []ideEntry `json:"entries"`
 		Truncated bool       `json:"truncated"`
@@ -843,6 +885,10 @@ func (tree *guestTree) flush(responseWriter http.ResponseWriter, cited map[strin
 	keep := listing.Entries[:0]
 	for _, entry := range listing.Entries {
 		entryPath := path.Join(dir, entry.Name)
+		revealsIdentity := redactor != nil && redactor.applyString(entry.Name) != entry.Name
+		if revealsIdentity {
+			continue
+		}
 		if entry.Type == "dir" && citedDir(cited, entryPath) || entry.Type == "file" && cited[entryPath] && !guestSecretPath(entryPath) {
 			keep = append(keep, entry)
 		}
