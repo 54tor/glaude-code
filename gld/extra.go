@@ -174,8 +174,28 @@ func hasTitle(path string) bool {
 		return false
 	}
 	defer transcriptFile.Close()
-	content, _ := io.ReadAll(transcriptFile)
-	return bytes.Contains(content, []byte(`"custom-title"`))
+	return readerContains(transcriptFile, []byte(`"custom-title"`))
+}
+
+// readerContains cherche needle par blocs, en gardant la fin de chaque bloc pour une occurrence à cheval : un transcript de
+// plusieurs centaines de Mio n'est jamais chargé entier.
+func readerContains(reader io.Reader, needle []byte) bool {
+	const chunkSize = 64 << 10
+	carriedMax := len(needle) - 1
+	buffer := make([]byte, carriedMax+chunkSize)
+	carried := 0
+	for {
+		readCount, readErr := reader.Read(buffer[carried:])
+		window := buffer[:carried+readCount]
+		if bytes.Contains(window, needle) {
+			return true
+		}
+		if readErr != nil {
+			return false
+		}
+		carried = min(carriedMax, len(window))
+		copy(buffer, window[len(window)-carried:])
+	}
 }
 
 // setTitle ajoute une ligne custom-title au transcript (la dernière fait foi), sans changer sa date.
