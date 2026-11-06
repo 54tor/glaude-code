@@ -18,6 +18,7 @@ type paneIO interface {
 	Paste(pane, text string) error
 	Key(pane, key string) error
 	Close(sessionID string) error
+	SessionOf(pane string) (string, error) // session tmux qui porte le pane
 }
 
 type realPanes struct{}
@@ -32,6 +33,10 @@ func (realPanes) Idle() []string                      { return waiting() }
 func (realPanes) Capture(pane string) (string, error) { return capturePane(pane) }
 func (realPanes) Paste(pane, text string) error       { return sendToPane(pane, text) }
 func (realPanes) Close(sessionID string) error        { return closeSession(sessionID) }
+func (realPanes) SessionOf(pane string) (string, error) {
+	tmuxSession, err := tmuxRun("", "display-message", "-p", "-t", pane, "#{session_id}")
+	return strings.TrimSpace(tmuxSession), err
+}
 func (realPanes) Key(pane, key string) error {
 	tmuxKey, isAllowed := allowedKeys[key]
 	if !isAllowed {
@@ -105,8 +110,30 @@ func teamLoad(cfgRoot, name string) (teamCtx, error) {
 		return teamCtx{}, err
 	}
 	panes, panesErr := teamPanes.Panes()
+	leadPane := panes[teamFiles.LeadSessionID]
+	keepTeamPanesOnly(teamFiles.Members, leadPane)
 	logInbox(teamFiles)
-	return teamCtx{tf: teamFiles, leadPane: panes[teamFiles.LeadSessionID], panesErr: panesErr}, nil
+	return teamCtx{tf: teamFiles, leadPane: leadPane, panesErr: panesErr}, nil
+}
+
+// keepTeamPanesOnly : config.json est écrit par une session Claude, donc pilotable par une donnée non fiable ; un pane d'équipier
+// n'est gardé que s'il vit dans la même session tmux que le chef, jamais un pane quelconque du serveur tmux.
+func keepTeamPanesOnly(members []TeamMember, leadPane string) {
+	leadTmuxSession := ""
+	if leadPane != "" {
+		leadTmuxSession, _ = teamPanes.SessionOf(leadPane)
+	}
+	for memberIndex := range members {
+		member := &members[memberIndex]
+		if member.Lead || member.Pane == "" {
+			continue
+		}
+		memberTmuxSession, sessionErr := teamPanes.SessionOf(member.Pane)
+		isSameTmuxSession := leadTmuxSession != "" && sessionErr == nil && memberTmuxSession == leadTmuxSession
+		if !isSameTmuxSession {
+			member.Pane = ""
+		}
+	}
 }
 
 // needLive : erreur si la team n'est pas pilotable ; tmux injoignable se distingue d'une team terminée.
