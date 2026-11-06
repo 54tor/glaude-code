@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -93,5 +94,36 @@ func TestNotesSent(t *testing.T) {
 	}
 	if _, out = do("GET", "/v1/notes/sent?key=p/B", ""); !strings.Contains(out, `"sent":[]`) {
 		t.Fatal("historique vide attendu :", out)
+	}
+}
+
+// Un fichier de notes existant mais illisible (droits 0000) ne doit jamais être remplacé par une seule note :
+// l'erreur de lecture n'est pas une absence.
+func TestNotesRefuseDEcraserUnFichierIllisible(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root lit un fichier 0000")
+	}
+	previousRoot := root
+	t.Cleanup(func() { root = previousRoot })
+	root = t.TempDir() + "/projects"
+	contenuAttendu := []byte(`{"p/Alpha":"à garder"}`)
+	if writeErr := os.WriteFile(notesFile(), contenuAttendu, 0o600); writeErr != nil {
+		t.Fatal(writeErr)
+	}
+	if chmodErr := os.Chmod(notesFile(), 0); chmodErr != nil {
+		t.Fatal(chmodErr)
+	}
+	t.Cleanup(func() { os.Chmod(notesFile(), 0o600) })
+	mux := http.NewServeMux()
+	routesNotes(mux)
+	recorder := httptest.NewRecorder()
+	mux.ServeHTTP(recorder, httptest.NewRequest("PUT", "/v1/notes", strings.NewReader(`{"key":"p/Beta","text":"nouvelle"}`)))
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf("écriture acceptée sur un fichier illisible : %d %s", recorder.Code, recorder.Body.String())
+	}
+	os.Chmod(notesFile(), 0o600)
+	contenuObtenu, _ := os.ReadFile(notesFile())
+	if string(contenuObtenu) != string(contenuAttendu) {
+		t.Fatalf("fichier de notes réécrit : %s", contenuObtenu)
 	}
 }
