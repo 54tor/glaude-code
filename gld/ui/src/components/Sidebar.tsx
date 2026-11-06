@@ -347,7 +347,7 @@ export function Sidebar({ searchRef, ...props }: SidebarProps) {
         <div className="flex items-center gap-2.5 px-1 pt-1">
           <img src="/icons/icon-192.png" alt="" className="size-10 shrink-0" />
           <div className="leading-tight">
-            <h1 className="text-md font-semibold tracking-tight">Glaude Code</h1>
+            <p className="text-md font-semibold tracking-tight">Glaude Code</p>
             <p className="text-xs text-muted-foreground tabular-nums">{props.loading ? t("common.loading") : t("shell.count.sessions", { count: props.total })}</p>
           </div>
           <div className="ml-auto flex items-center gap-0.5">
