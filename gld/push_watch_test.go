@@ -108,3 +108,15 @@ func TestPushWatchNotifieSeulementLesNouveautesApresLePremierPassage(t *testing.
 		t.Fatalf("%d envois au lieu de 1 (s1 vu au premier passage, seul s2 est nouveau)", nombreEnvoisPush(envois))
 	}
 }
+
+// claude ou tmux injoignable : le home principal est absent du relevé, son état précédent reste celui de référence
+// (sinon toutes ses sessions en attente paraîtraient nouvelles au passage suivant).
+func TestCollectPushStatesOmetLeHomePrincipalQuandClaudeNeRepondPas(t *testing.T) {
+	fonctionInitiale := waitingKnown
+	t.Cleanup(func() { waitingKnown = fonctionInitiale })
+	waitingKnown = func() ([]string, bool) { return []string{}, false }
+
+	if _, estPresent := collectPushStates()[mainHomeID]; estPresent {
+		t.Fatal("un relevé inconnu ne doit pas remplacer l'état précédent du home principal")
+	}
+}

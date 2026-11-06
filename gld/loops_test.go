@@ -158,10 +158,10 @@ func captureNotifications(t *testing.T) (*sync.Mutex, *[]string) {
 func TestWatchWaitingNotifiesNewWaiter(t *testing.T) {
 	fakeNotifySend(t)
 	mu, received := captureNotifications(t)
-	previousWaiting, previousRoot := waiting, root
-	t.Cleanup(func() { waiting, root = previousWaiting, previousRoot })
+	previousWaitingKnown, previousRoot := waitingKnown, root
+	t.Cleanup(func() { waitingKnown, root = previousWaitingKnown, previousRoot })
 	root = filepath.Join(t.TempDir(), "projects")
-	waiting = func() []string { return []string{id1} }
+	waitingKnown = func() ([]string, bool) { return []string{id1}, true }
 	previousLastAPI := lastAPI.Load()
 	t.Cleanup(func() { lastAPI.Store(previousLastAPI) })
 	lastAPI.Store(0)
@@ -191,19 +191,66 @@ func TestWatchWaitingNotifiesNewWaiter(t *testing.T) {
 	}
 }
 
+// Un échec passager de `claude agents` (known faux) ne doit pas faire croire que plus personne n'attend : au passage suivant,
+// la session déjà signalée serait notifiée une seconde fois.
+func TestWatchWaitingNeRenotifiePasApresUnEchecPassager(t *testing.T) {
+	fakeNotifySend(t)
+	mu, received := captureNotifications(t)
+	previousWaitingKnown, previousRoot := waitingKnown, root
+	t.Cleanup(func() { waitingKnown, root = previousWaitingKnown, previousRoot })
+	root = filepath.Join(t.TempDir(), "projects")
+	var passagesMu sync.Mutex
+	numeroDuPassage := 0
+	waitingKnown = func() ([]string, bool) {
+		passagesMu.Lock()
+		defer passagesMu.Unlock()
+		numeroDuPassage++
+		if numeroDuPassage%2 == 0 {
+			return []string{}, false
+		}
+		return []string{id1}, true
+	}
+	previousLastAPI := lastAPI.Load()
+	t.Cleanup(func() { lastAPI.Store(previousLastAPI) })
+	lastAPI.Store(0)
+
+	cancel := withHomeCtx(t)
+	finished := runLoop(func() { watchWaiting(5 * time.Millisecond) })
+	deadline := time.Now().Add(loopWait)
+	for {
+		passagesMu.Lock()
+		passagesFaits := numeroDuPassage
+		passagesMu.Unlock()
+		if passagesFaits >= 8 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("la boucle de veille ne tourne pas")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	cancel()
+	expectReturn(t, finished, "watchWaiting")
+	mu.Lock()
+	defer mu.Unlock()
+	if len(*received) != 1 {
+		t.Fatalf("notifications après des échecs passagers : %v", *received)
+	}
+}
+
 func TestWatchWaitingSilentWhenTabOpen(t *testing.T) {
 	fakeNotifySend(t)
 	mu, received := captureNotifications(t)
-	previousWaiting := waiting
+	previousWaitingKnown := waitingKnown
 	ticked := make(chan struct{}, 64)
-	waiting = func() []string {
+	waitingKnown = func() ([]string, bool) {
 		select {
 		case ticked <- struct{}{}:
 		default:
 		}
-		return []string{id1}
+		return []string{id1}, true
 	}
-	t.Cleanup(func() { waiting = previousWaiting })
+	t.Cleanup(func() { waitingKnown = previousWaitingKnown })
 	previousLastAPI := lastAPI.Load()
 	t.Cleanup(func() { lastAPI.Store(previousLastAPI) })
 	lastAPI.Store(time.Now().Add(time.Hour).UnixNano())

@@ -17,14 +17,21 @@ type pushHomeState struct {
 	Titles  map[string]string `json:"titles"`
 }
 
-func localPushState() pushHomeState {
+// localPushState : known faux quand claude ou tmux n'a pas répondu ; le passage est alors sauté, sinon chaque session en attente
+// paraîtrait nouvelle au passage suivant et serait notifiée de nouveau.
+func localPushState() (state pushHomeState, known bool) {
+	waitingIDs, waitingIsKnown := waitingKnown()
+	askingIDs, askingIsKnown := askingSessionsKnown()
+	if !waitingIsKnown || !askingIsKnown {
+		return pushHomeState{}, false
+	}
 	titles := map[string]string{}
 	for _, group := range sessions() {
 		for _, session := range group.Sessions {
 			titles[session.ID] = session.Title
 		}
 	}
-	return pushHomeState{Waiting: waiting(), Asking: askingSessions(), Titles: titles}
+	return pushHomeState{Waiting: waitingIDs, Asking: askingIDs, Titles: titles}, true
 }
 
 func routesPushState(mux *http.ServeMux) {
@@ -33,7 +40,12 @@ func routesPushState(mux *http.ServeMux) {
 			writeErr(responseWriter, http.StatusForbidden, "forbidden", "forbidden")
 			return
 		}
-		writeJSON(responseWriter, http.StatusOK, localPushState())
+		state, known := localPushState()
+		if !known {
+			writeErr(responseWriter, http.StatusServiceUnavailable, "unavailable", L("srv.homes.indisponible"))
+			return
+		}
+		writeJSON(responseWriter, http.StatusOK, state)
 	})
 }
 
@@ -107,7 +119,10 @@ func fetchChildPushState(child runningChild) (pushHomeState, bool) {
 
 // collectPushStates : un home enfant injoignable est simplement absent du résultat, son état précédent est conservé.
 func collectPushStates() map[string]pushHomeState {
-	states := map[string]pushHomeState{mainHomeID: localPushState()}
+	states := map[string]pushHomeState{}
+	if mainState, known := localPushState(); known {
+		states[mainHomeID] = mainState
+	}
 	for _, child := range runningChildren() {
 		if state, fetched := fetchChildPushState(child); fetched {
 			states[child.homeID] = state

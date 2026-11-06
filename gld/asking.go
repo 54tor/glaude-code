@@ -55,26 +55,34 @@ func screenAsks(screen string) bool {
 // askingSessions : les ids des sessions ouvertes dans tmux qui attendent une réponse. Résultat gardé 3 s : la liste des sessions
 // est relue souvent et chaque session coûte un capture-pane.
 func askingSessions() []string {
+	askingIDs, _ := askingSessionsKnown()
+	return askingIDs
+}
+
+// askingSessionsKnown : known faux si tmux n'a pas pu lister les panneaux ; cet échec n'est pas gardé en cache.
+var askingSessionsKnown = func() (askingIDs []string, known bool) {
 	askMu.Lock()
 	defer askMu.Unlock()
 	if askCache != nil && time.Since(askAt) < askCacheLifetime {
-		return askCache
+		return askCache, true
 	}
-	askingIDs := []string{}
-	if panes, panesErr := sendable(); panesErr == nil {
-		inspectedPanes := 0
-		for sessionID, paneTarget := range panes {
-			inspectedPanes++
-			if inspectedPanes > askMaxPanesInspected {
-				break
-			}
-			screen, captureErr := tmuxRun("", "capture-pane", "-p", "-t", paneTarget)
-			if captureErr == nil && screenAsks(screen) {
-				askingIDs = append(askingIDs, sessionID)
-			}
+	askingIDs = []string{}
+	panes, panesErr := sendable()
+	if panesErr != nil {
+		return askingIDs, false
+	}
+	inspectedPanes := 0
+	for sessionID, paneTarget := range panes {
+		inspectedPanes++
+		if inspectedPanes > askMaxPanesInspected {
+			break
+		}
+		screen, captureErr := tmuxRun("", "capture-pane", "-p", "-t", paneTarget)
+		if captureErr == nil && screenAsks(screen) {
+			askingIDs = append(askingIDs, sessionID)
 		}
 	}
 	sort.Strings(askingIDs)
 	askCache, askAt = askingIDs, time.Now()
-	return askingIDs
+	return askingIDs, true
 }
