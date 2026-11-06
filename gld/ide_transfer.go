@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"io"
 	"mime"
 	"net/http"
 	"os"
@@ -68,7 +67,7 @@ func ideUpload(responseWriter http.ResponseWriter, request *http.Request) {
 		ideFail(responseWriter, errIdeExists)
 		return
 	}
-	content, err := io.ReadAll(http.MaxBytesReader(responseWriter, request.Body, ideMaxUpload))
+	writtenBytes, err := ideCreateExclusive(root, rel, http.MaxBytesReader(responseWriter, request.Body, ideMaxUpload), 0o644)
 	if err != nil {
 		var tooLarge *http.MaxBytesError
 		if errors.As(err, &tooLarge) {
@@ -77,16 +76,6 @@ func ideUpload(responseWriter http.ResponseWriter, request *http.Request) {
 		ideFail(responseWriter, err)
 		return
 	}
-	refuseIfAppeared := func() error {
-		if ideExists(root, rel) {
-			return errIdeExists
-		}
-		return nil
-	}
-	if writeErr := ideAtomicWrite(root, rel, content, 0o644, refuseIfAppeared); writeErr != nil {
-		ideFail(responseWriter, writeErr)
-		return
-	}
-	ideAudit(responseWriter, request, "upload", dir, rel, int64(len(content)))
+	ideAudit(responseWriter, request, "upload", dir, rel, writtenBytes)
 	writeJSON(responseWriter, 201, map[string]any{"path": rel})
 }
