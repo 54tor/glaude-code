@@ -391,7 +391,7 @@ func gateCheck(gate *gateInfo, request *http.Request, pattern string, neededRigh
 	}
 	// Les brouillons lisent côté serveur les fichiers désignés par l'appelant et renvoient la sortie du modèle : sans mem_read,
 	// ils contourneraient le droit de lecture.
-	if pattern == "POST /v1/memory/drafts" || pattern == "POST /v1/skills/drafts" {
+	if pattern == "POST /v1/memory/drafts" || pattern == "POST /v1/skills/drafts" || pattern == "POST /v1/memory/lints" {
 		return rightsErr(gate, homeID, func(grantedRights map[Right]bool) bool {
 			return grantedRights[neededRight] && grantedRights[RightMemRead]
 		})

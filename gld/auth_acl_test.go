@@ -751,6 +751,7 @@ func TestGateDraftsNeedMemRead(t *testing.T) {
 	}{
 		{&localGateUser, "/v1/memory/drafts", 403}, {&localGateUser, "/v1/skills/drafts", 403},
 		{&anotherGateUser, "/v1/memory/drafts", 200}, {&anotherGateUser, "/v1/skills/drafts", 200},
+		{&localGateUser, "/v1/memory/lints", 403}, {&anotherGateUser, "/v1/memory/lints", 200},
 	} {
 		if got := gateRig.do("POST", record.path, record.u, "", `{}`).Code; got != record.code {
 			t.Errorf("%s : %d, attendu %d", record.path, got, record.code)
