@@ -56,6 +56,12 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Chat : un tour arrêté (délai de 30 min, « Arrêter », session révoquée, droit retiré) arrête aussi les commandes et serveurs MCP que claude a lancés, y compris en tâche de fond (Unix).
 - Onglets Konsole : le titre de session est assaini, il ne peut plus ajouter de propriété de profil.
 - Skills npx en portée projet : ni scripts d'installation, ni shell choisi par le `.npmrc` du dépôt ; le paquet est d'abord mis en cache depuis un dossier neutre.
+- Sécurité : la CSP de l'interface interdit `object` et n'envoie de formulaire qu'à gld ; les réponses JSON portent `nosniff` et `no-store` par défaut (un proxy ou un tunnel ne les garde pas).
+- PWA : un clic sur une notification n'ouvre qu'une adresse de gld, jamais une autre origine.
+- Partage invité : un fichier cité dont le nom porte l'identité de l'hôte n'apparaît plus dans l'arbre, le dossier renvoyé à l'invité est opaque, et les chemins cités ne sont relus que si la transcription change.
+- Brouillons de lint de la mémoire : `mem_read` est exigé, comme pour les autres brouillons.
+- Chat : une option permise sans valeur (`--effort` seul) est ignorée au lieu de faire échouer le tour ; `gld-matin` ne prend plus la valeur de `--prompt` pour `--resume` ou `--env`.
+- État git : plusieurs requêtes simultanées sur un même dossier ne lancent plus qu'un `git status`.
 - Dépendances : `modernc.org/sqlite` 1.61.1 avec `modernc.org/libc` 1.79.0 (la version qu'il exige) ; interface : vite 8.3.6, vitest 5.1.0, @vitejs/plugin-react 6.2.1, tailwindcss 4.3.4, i18next 26.7.2, react-i18next 17.1.13, lucide-react 1.69, cn 0.5.2.
 
 ## [0.10.2] - 2026-11-03
