@@ -441,6 +441,7 @@ var mcpStatus = func() (map[string]string, error) {
 	commandContext, cancel := context.WithTimeout(context.Background(), mcpListTimeout)
 	defer cancel()
 	cmd := withPath(exec.CommandContext(commandContext, "claude", "mcp", "list"))
+	cmd.WaitDelay = time.Second
 	cmd.Dir = workDir()
 	listOutput, err := cmd.Output()
 	if err != nil && len(listOutput) == 0 {

@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -103,5 +104,28 @@ func TestMcpParDossier(t *testing.T) {
 	data, _ := os.ReadFile(count)
 	if count := strings.Count(string(data), "x"); count != 3 {
 		t.Fatalf("%d lancements de claude, attendu 3 (lent, vite, echec une seule fois)", count)
+	}
+}
+
+// Un faux « claude » rend la main mais laisse un petit-enfant qui garde la sortie ouverte (comme git lancé par
+// `claude plugin install`) : runPlugin ne doit pas attendre la fin de ce petit-enfant.
+func TestRunPluginNAttendPasUnPetitEnfantQuiGardeLaSortie(t *testing.T) {
+	if _, shErr := exec.LookPath("sh"); shErr != nil {
+		t.Skip("sh introuvable")
+	}
+	dossierPersonnel := t.TempDir()
+	t.Setenv("HOME", dossierPersonnel)
+	dossierDesBinaires := filepath.Join(dossierPersonnel, ".local", "bin")
+	os.MkdirAll(dossierDesBinaires, 0o755)
+	const dureeDuPetitEnfant = 5 * time.Second
+	if writeErr := os.WriteFile(filepath.Join(dossierDesBinaires, "claude"), []byte("#!/bin/sh\nsleep 5 &\nexit 0\n"), 0o755); writeErr != nil {
+		t.Fatal(writeErr)
+	}
+	t.Setenv("PATH", dossierDesBinaires+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	debut := time.Now()
+	runPlugin(t.TempDir(), 10*time.Second, "list")
+	if dureeObtenue := time.Since(debut); dureeObtenue >= dureeDuPetitEnfant-time.Second {
+		t.Fatalf("runPlugin a attendu le petit-enfant : %v", dureeObtenue)
 	}
 }

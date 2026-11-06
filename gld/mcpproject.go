@@ -60,6 +60,7 @@ func mcpList(cwd string) ([]McpState, error) {
 	commandContext, cancel := context.WithTimeout(context.Background(), mcpListTimeout)
 	defer cancel()
 	cmd := withPath(exec.CommandContext(commandContext, "claude", "mcp", "list"))
+	cmd.WaitDelay = time.Second
 	cmd.Dir = cwd
 	output, err := cmd.Output()
 	if err != nil && len(output) == 0 {
