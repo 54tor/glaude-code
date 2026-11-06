@@ -301,6 +301,7 @@
   "srv.notes.noteEnregistree": "Note enregistrée",
   "srv.notes.tropDeNotes": "trop de notes",
   "srv.notes.fusionTropLongue": "les deux notes réunies dépassent la taille maximale",
+  "srv.notify.attend": "Claude attend",
   "srv.push.fichierIllisible": "abonnements push illisibles ({{.A1}}) : rien n'est réécrit",
   "srv.push.trop": "trop d'abonnements push",
   "srv.push.asking": "Claude attend votre réponse",

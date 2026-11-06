@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"os/exec"
 	"sync/atomic"
 	"time"
@@ -23,7 +24,16 @@ func newWaiting(previousWaiting map[string]bool, currentWaiting []string) (fresh
 	return
 }
 
-var notifySend = func(title, body string) { _ = exec.Command("notify-send", "-a", "gld", title, body).Run() }
+// notifySendTimeout : un démon de notifications figé ne bloque pas la boucle de veille.
+const notifySendTimeout = 10 * time.Second
+
+var notifySend = func(title, body string) {
+	commandContext, cancel := context.WithTimeout(context.Background(), notifySendTimeout)
+	defer cancel()
+	command := exec.CommandContext(commandContext, "notify-send", "-a", "gld", title, body)
+	command.WaitDelay = time.Second
+	_ = command.Run()
+}
 
 // watchWaiting : toutes les every, notifie les sessions qui viennent de passer à « attend » si aucun onglet n'est ouvert.
 func watchWaiting(every time.Duration) {
@@ -63,7 +73,7 @@ func watchWaiting(every time.Duration) {
 			if title == "" {
 				title = sessionID
 			}
-			notifySend("Claude attend", title)
+			notifySend(L("srv.notify.attend"), title)
 		}
 	}
 }
