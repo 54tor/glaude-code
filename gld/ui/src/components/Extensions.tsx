@@ -352,8 +352,8 @@ export function Extensions({
         className="flex min-h-0 flex-1 flex-col gap-0"
       >
         <div className="mx-auto w-full max-w-page px-3 pt-3 md:px-6">
-          <ScrollArea className="w-full [mask-image:linear-gradient(to_right,black_calc(100%-2.5rem),transparent)]">
-            <div className="pb-2">
+          <div className="w-full overflow-x-auto [mask-image:linear-gradient(to_right,black_calc(100%-2.5rem),transparent)]">
+            <div className="w-max pr-10 pb-2">
               <TabsList className="w-max justify-start">
                 <TabsTrigger value="plugins">
                   {t("extensions.plugins")}{" "}
@@ -387,7 +387,7 @@ export function Extensions({
                 </TabsTrigger>
               </TabsList>
             </div>
-          </ScrollArea>
+          </div>
         </div>
         {pane(
           "plugins",
