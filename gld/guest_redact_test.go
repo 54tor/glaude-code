@@ -27,6 +27,8 @@ func TestPathRedactorMasqueLHote(t *testing.T) {
 		`[/srv/clients/a/b.txt]`:                              `[…/b.txt]`,
 		`ligne\r/srv/clients/a/b.txt`:                         `ligne\r…/b.txt`,
 		`file%3A%2F%2F%2Fhome%2Fbobby%2Fx`:                    `file%3A%2F%2F%2Fhome%2Fguest-ab12%2Fx`,
+		`KEY=/srv/clients/a/b.txt`:                            `KEY=…/b.txt`,
+		`x@/srv/clients/a/b.txt`:                              `x@…/b.txt`,
 		`src/clients/a/b.txt et ./a/b et ~/a/b`:               `src/clients/a/b.txt et ./a/b et ~/a/b`,
 	}
 	for input, expected := range testCases {
