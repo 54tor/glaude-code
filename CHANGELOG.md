@@ -52,6 +52,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Partage invité : un lien `/invite/<home>/…` au jeton inconnu est refusé sans démarrer le processus de ce home.
 - Notifications push : les envois partent en parallèle (8 au plus), un service push lent ne bloque plus la veille ; notification de bureau bornée à 10 s, titre traduit.
 - Commandes `claude`, `git` et `claude plugin` : un processus petit-enfant qui garde la sortie ouverte ne retient plus la requête au-delà de son délai.
+- Dépendances : `modernc.org/sqlite` 1.61.1 avec `modernc.org/libc` 1.79.0 (la version qu'il exige) ; interface : vite 8.3.6, vitest 5.1.0, @vitejs/plugin-react 6.2.1, tailwindcss 4.3.4, i18next 26.7.2, react-i18next 17.1.13, lucide-react 1.69, cn 0.5.2.
 
 ## [0.10.2] - 2026-11-03
 
