@@ -7,6 +7,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 ## [0.11.0] - 2026-11-06
 
 ### Ajouté
+- Configuration > Réglages > Attribution : une valeur vide peut être enregistrée explicitement (aucune ligne ajoutée), distincte du réglage par défaut.
 - Configuration > Réglages : un groupe « Attribution » pour choisir le texte ajouté par Claude aux commits et aux pull requests (vide : aucune ligne ajoutée).
 - Configuration > Projets : les règles d'un dossier sont regroupées par fichier (global en lecture seule, partagé, perso) et chaque règle indique les hooks et skills du projet qui touchent le même outil ; les dossiers supplémentaires du global s'affichent aussi.
 - Configuration > Projets : ajouter une règle de permission directement dans un dossier (type de règle, fichier partagé ou perso) et voir les plugins installés pour ce dossier.
@@ -18,6 +19,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Listes de sessions : chaque ligne est un vrai lien ; Ctrl+clic ou clic milieu ouvre la session dans un nouvel onglet, et le lien se copie.
 
 ### Corrigé
+- Barre de navigation : recliquer sur la vue déjà active efface la recherche au lieu de la reporter.
 - Accueil : les cartes ne débordent plus sur téléphone et le titre des sessions reste visible sur tablette ; elles passent sur deux colonnes seulement quand la place réelle le permet. Le sous-titre « 0 session » laisse la place au nombre de sessions ouvertes et au cache chaud.
 - Workspaces sauvegardés et Teams : plus de texte écrasé ni de carte coupée sur petit écran ; « Fermer toutes les sessions » est marqué comme action destructive. Teams n'affiche plus « 0 session » sous son titre.
 - Configuration et Skills, Extensions et Plugins : les barres d'onglets défilent sur petit écran au lieu d'être coupées ; les derniers onglets étaient hors d'atteinte.
