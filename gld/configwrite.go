@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -303,6 +304,9 @@ func configEdit(edit CfgEdit) (before, after string, err error) {
 		return
 	}
 	original, readErr := readTrusted(path)
+	if readErr != nil && !errors.Is(readErr, fs.ErrNotExist) {
+		return "", "", terr("srv.configwrite.fichierIllisible", "A1", readErr.Error())
+	}
 	exists := readErr == nil
 	text := string(original)
 	if !exists || strings.TrimSpace(text) == "" {
@@ -381,7 +385,11 @@ func restoreBackup(name string) error {
 	if _, parseErr := parseOrdered(content); parseErr != nil {
 		return terr("srv.configwrite.laSauvegardeNEst")
 	}
-	if current, readErr := readTrusted(path); readErr == nil {
+	current, readErr := readTrusted(path)
+	if readErr != nil && !errors.Is(readErr, fs.ErrNotExist) {
+		return terr("srv.configwrite.fichierIllisible", "A1", readErr.Error())
+	}
+	if readErr == nil {
 		if saveErr := saveBackup(id, current); saveErr != nil {
 			return saveErr
 		}
