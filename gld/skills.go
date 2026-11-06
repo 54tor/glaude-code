@@ -374,7 +374,7 @@ func readSkill(key string) (string, []SkillFile, error) {
 	if err != nil {
 		return "", nil, err
 	}
-	skillRoot, err := os.OpenRoot(filepath.Join(base, name))
+	skillRoot, err := openRootTrusted(filepath.Join(base, name))
 	if err != nil {
 		return "", nil, err
 	}
@@ -443,7 +443,7 @@ func saveSkill(key, text string, create bool) error {
 	if mkdirErr := mkdirTrusted(dir, 0o755); mkdirErr != nil {
 		return mkdirErr
 	}
-	skillRoot, err := os.OpenRoot(dir)
+	skillRoot, err := openRootTrusted(dir)
 	if err != nil {
 		return err
 	}
@@ -522,7 +522,7 @@ func copySkill(key, to string) (string, error) {
 	if _, lstatErr := os.Lstat(target); lstatErr == nil {
 		return "", terr("srv.skills.unSkillDeCe2")
 	}
-	sourceRoot, err := os.OpenRoot(filepath.Join(base, name))
+	sourceRoot, err := openRootTrusted(filepath.Join(base, name))
 	if err != nil {
 		return "", err
 	}
@@ -561,7 +561,7 @@ func copySkill(key, to string) (string, error) {
 	if mkdirErr := mkdirTrusted(target, 0o755); mkdirErr != nil {
 		return "", mkdirErr
 	}
-	destinationRoot, err := os.OpenRoot(target)
+	destinationRoot, err := openRootTrusted(target)
 	if err != nil {
 		return "", err
 	}

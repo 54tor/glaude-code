@@ -156,6 +156,21 @@ func trustBase(path string) string {
 
 func readTrusted(path string) ([]byte, error) { return readTrustedIn(trustBase(path), path) }
 
+// openRootTrusted : os.OpenRoot suit un lien sur le dossier lui-même ; sous GLD_RUN_AS, le dossier s'ouvre depuis sa racine de
+// confiance (cfgDir(), ou son parent ailleurs), qui refuse un lien sortant posé par le compte cible.
+func openRootTrusted(path string) (*os.Root, error) {
+	base := trustBase(path)
+	if !runAsOn() || filepath.Clean(base) == filepath.Clean(path) {
+		return os.OpenRoot(path)
+	}
+	trustedRoot, rel, err := confine(base, path)
+	if err != nil {
+		return nil, err
+	}
+	defer trustedRoot.Close()
+	return trustedRoot.OpenRoot(rel)
+}
+
 // readTrustedIn : readTrusted avec une racine explicite (le dossier d'un home, qui n'est pas forcément cfgDir()).
 func readTrustedIn(base, path string) ([]byte, error) {
 	if !runAsOn() {

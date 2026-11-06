@@ -62,3 +62,35 @@ func TestGardeTrashRestoreNeSuitPasLesLiens(t *testing.T) {
 		t.Fatal("meta.json lu hors du home")
 	}
 }
+
+// Sous GLD_RUN_AS, un dossier de cfgDir() remplacé par un lien sortant (rules, skills/<nom>) ne doit être ni lu, ni vidé :
+// os.OpenRoot suivrait le lien, openRootTrusted ouvre depuis cfgDir() et le refuse. Hors GLD_RUN_AS, un skill lié (npx) reste lisible.
+func TestDossiersLiesDeCfgDirRefusesSousRunAs(t *testing.T) {
+	cfg, dossierExterieur := t.TempDir(), t.TempDir()
+	previousRoot := root
+	t.Cleanup(func() { root = previousRoot })
+	use(cfg)
+	regleExterieure := filepath.Join(dossierExterieur, "a.md")
+	os.WriteFile(regleExterieure, []byte("règle de root"), 0o600)
+	os.WriteFile(filepath.Join(dossierExterieur, "SKILL.md"), []byte("---\ndescription: de root\n---\n"), 0o600)
+	os.Symlink(dossierExterieur, filepath.Join(cfg, "rules"))
+	os.MkdirAll(filepath.Join(cfg, "skills"), 0o700)
+	os.Symlink(dossierExterieur, filepath.Join(cfg, "skills", "lie"))
+
+	if _, _, readErr := readSkill("u/lie"); readErr != nil {
+		t.Fatalf("hors GLD_RUN_AS, un skill lié doit rester lisible : %v", readErr)
+	}
+	fakeRunAs(t)
+	if contenu, readErr := memRead("g/rules/a.md"); readErr == nil {
+		t.Errorf("règle lue à travers un lien : %q", contenu)
+	}
+	if contenu, _, readErr := readSkill("u/lie"); readErr == nil {
+		t.Errorf("SKILL.md lu à travers un lien : %q", contenu)
+	}
+	if deleteErr := memDelete("g/rules/a.md", false); deleteErr == nil {
+		t.Error("règle supprimée à travers un lien")
+	}
+	if _, statErr := os.Stat(regleExterieure); statErr != nil {
+		t.Fatalf("le fichier visé par le lien a disparu : %v", statErr)
+	}
+}

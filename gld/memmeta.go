@@ -617,7 +617,7 @@ func memToggle(key string) (string, error) {
 	if strings.HasSuffix(rel, ".off") {
 		target = strings.TrimSuffix(rel, ".off")
 	}
-	rulesRoot, err := os.OpenRoot(base)
+	rulesRoot, err := openRootTrusted(base)
 	if err != nil {
 		return "", err
 	}
