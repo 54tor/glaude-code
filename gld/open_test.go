@@ -22,3 +22,16 @@ func TestSafeTitle(t *testing.T) {
 		t.Errorf("titre limité à 40 caractères, obtenu %d", count)
 	}
 }
+
+// Le titre d'une session (donnée non fiable) ne doit pas ajouter de propriété de profil Konsole (« ; » sépare les propriétés de -p).
+func TestLauncherCmdAssainitLeTitrePourKonsole(t *testing.T) {
+	commandeObtenue, launchErr := launcherCmd("konsole", "projet;Command=/bin/sh", []string{"claude"})
+	if launchErr != nil {
+		t.Fatal(launchErr)
+	}
+	for _, argumentCourant := range commandeObtenue.Args {
+		if strings.HasPrefix(argumentCourant, "tabtitle=") && strings.ContainsAny(strings.TrimPrefix(argumentCourant, "tabtitle="), ";=") {
+			t.Fatalf("titre non assaini : %q", argumentCourant)
+		}
+	}
+}

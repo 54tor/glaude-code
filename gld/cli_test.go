@@ -280,7 +280,7 @@ func TestLanceurEmulateurTmux(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := `konsole --new-tab -p tabtitle=T #(x) -e tmux new-session -n T ##(x) '/b/gld' '_run' '/tmp/a b.json' ; set-option set-titles on ; set-option set-titles-string #T`
+	want := `konsole --new-tab -p tabtitle=T  x -e tmux new-session -n T ##(x) '/b/gld' '_run' '/tmp/a b.json' ; set-option set-titles on ; set-option set-titles-string #T`
 	if got := strings.Join(cmd.Args, " "); got != want {
 		t.Errorf("\n%s\n%s", got, want)
 	}
