@@ -7,6 +7,7 @@ package main
 // de cette copie (`claude mcp add` s'en charge).
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"maps"
@@ -351,8 +352,11 @@ func syncPlanDirs(fromDir, toDir string, skipPlugin bool) ([]SyncItem, error) {
 // syncBackup copie le fichier existant dans <cible>/gld-web-sync-backups/<horodatage>/<chemin relatif> avant de le remplacer.
 func syncBackup(dir, stamp, rel string) error {
 	content, err := readTrusted(filepath.Join(dir, rel))
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
 	if err != nil {
-		return nil // rien à sauvegarder : le fichier n'existe pas
+		return err
 	}
 	return writeConfig(filepath.Join(dir, "gld-web-sync-backups", stamp, rel), content)
 }
