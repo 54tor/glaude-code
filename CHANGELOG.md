@@ -10,8 +10,17 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Notifications push : le bouton 🔔 en bas de la barre latérale envoie à l'appareil une notification, application fermée (iPhone compris en HTTPS), quand une session pose une question ou attend votre message, réglable par type ; en mode multi-utilisateur, seules les sessions que l'abonné a le droit de lire sont notifiées.
 
 - Écran « Nouvelle version disponible » : quand gld a été mis à jour pendant que la page restait ouverte (PWA comprise), un écran propose de recharger.
+- Barre latérale : un clic milieu sur une session ouverte la ferme, sans ouvrir de menu.
+- Listes de sessions : chaque ligne est un vrai lien ; Ctrl+clic ou clic milieu ouvre la session dans un nouvel onglet, et le lien se copie.
 
 ### Corrigé
+- Accueil : les cartes ne débordent plus sur téléphone et le titre des sessions reste visible sur tablette ; elles passent sur deux colonnes seulement quand la place réelle le permet. Le sous-titre « 0 session » laisse la place au nombre de sessions ouvertes et au cache chaud.
+- Workspaces sauvegardés et Teams : plus de texte écrasé ni de carte coupée sur petit écran ; « Fermer toutes les sessions » est marqué comme action destructive. Teams n'affiche plus « 0 session » sous son titre.
+- Configuration : les groupes d'onglets défilent sur petit écran au lieu d'être coupés.
+- Liste des sessions : les titres restent alignés, le bouton des sous-sessions passe en fin de ligne.
+- Mémoire : les budgets de tokens suivent le format de la langue (« 11,4 k ») ; le sous-titre de Snippets abrège le dossier personnel en `~` ; « au cache chauds » devient « au cache chaud ».
+- Accessibilité : contour de focus clavier plein de 2 px, titre de page en `h1`, nom du bouton de compte incluant le pourcentage affiché, titres des cartes de l'Accueil séparés de leurs boutons.
+- Page de connexion et de jumelage : elle reprend l'accent cyan de l'application au lieu du vert.
 - Connexion par jeton généré (hors localhost, sans `GLD_WEB_TOKEN`) : le jeton est conservé dans le dossier d'authentification, donc la PWA et les appareils jumelés ne demandent plus de se reconnecter après chaque mise à jour.
 - PWA iPhone : l'écran du jeton ne réapparaît plus au lancement alors que l'appareil est jumelé ; les cookies d'appareil et de jeton passent de `SameSite=Strict` à `Lax`, car WebKit n'envoie pas un cookie Strict à la première navigation d'une PWA. Les appareils déjà jumelés doivent être rejumelés une fois pour recevoir le nouvel attribut.
 - PWA iPhone : le manifeste déclare `start_url: "/"`. Sans lui, l'icône de l'écran d'accueil relançait l'adresse où elle avait été ajoutée (la page de jumelage `/pair`), ce qui montrait l'écran du code à 8 chiffres à chaque lancement à froid. Les PWA déjà installées doivent être supprimées de l'écran d'accueil puis rajoutées depuis la page d'accueil de gld.
