@@ -85,6 +85,7 @@ func gitOut1(dir string, args ...string) (string, error) {
 	defer cancel()
 	cmd := exec.CommandContext(commandContext, "git", append([]string{"-C", dir}, args...)...) // #nosec G702 -- exécutable fixe, arguments en tableau, sans shell
 	cmd.WaitDelay = time.Second
+	cmd.Env = environNoAuth()
 	applyRunAs(cmd)
 	output, err := cmd.Output()
 	return strings.TrimSpace(string(output)), err

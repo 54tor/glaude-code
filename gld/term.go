@@ -149,6 +149,7 @@ var openTab = func(launcher, title string, spec tabSpec) error {
 	}
 	command, err := launcherCmd(launcher, title, []string{self, "_run", specFile})
 	if err == nil {
+		command.Env = environNoAuth()
 		applyRunAs(command)
 		err = command.Start()
 	}
