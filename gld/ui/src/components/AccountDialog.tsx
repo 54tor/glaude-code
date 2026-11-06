@@ -137,8 +137,9 @@ export function AccountButton() {
   return (
     <>
       <Tip label={t("config.account.buttonTitle")}>
-        <Button variant="ghost" size="sm" onClick={() => setOpen(true)} aria-label={t("config.account.title")}>
+        <Button variant="ghost" size="sm" onClick={() => setOpen(true)}>
           <Gauge />
+          <span className="sr-only">{t("config.account.title")}</span>
           {shownLimits.map((limit) =>
             stale(limit, now) ? (
               <Fan key={limit.key} className="size-3 animate-spin text-muted-foreground" aria-label={t("config.account.updating")} />
