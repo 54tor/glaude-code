@@ -167,15 +167,11 @@ func saveDevices(devices []device) error {
 	if err != nil {
 		return err
 	}
-	if mkdirErr := os.MkdirAll(filepath.Dir(path), 0o700); mkdirErr != nil {
+	if mkdirErr := mkdirTrusted(filepath.Dir(path), 0o700); mkdirErr != nil {
 		return mkdirErr
 	}
 	content, _ := json.MarshalIndent(devices, "", "  ")
-	tempPath := path + ".tmp"
-	if fileWriteErr := os.WriteFile(tempPath, content, 0o600); fileWriteErr != nil {
-		return fileWriteErr
-	}
-	return os.Rename(tempPath, path)
+	return rWriteAtomic(filepath.Dir(path), path, content, 0o600)
 }
 
 // liveDevices : les appareils du jeton courant vus depuis moins de devIdle (devMu tenu).
