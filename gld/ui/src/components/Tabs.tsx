@@ -91,7 +91,7 @@ export function Tabs({ args, onAsk, onPrompt }: { args: string; onAsk: (ask: Ask
     <ScrollArea className="min-h-0 flex-1">
       <div className="mx-auto max-w-page space-y-4 px-3 py-4 pb-24 md:px-6">
         <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-muted/30 px-4 py-3 text-sm">
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-[1_1_16rem]">
             <p className="font-medium">
               {actions.live.size ? t("shell.tabs.openNow", { count: actions.live.size }) : t("shell.tabs.noneOpen")}
             </p>
@@ -100,15 +100,17 @@ export function Tabs({ args, onAsk, onPrompt }: { args: string; onAsk: (ask: Ask
               <code className="rounded-sm bg-muted px-1">gld-matin --resume</code>
             </p>
           </div>
-          <Button size="sm" onClick={save} disabled={!actions.live.size}>
-            <Save /> {t("shell.tabs.saveNow")}
-          </Button>
-          <Button size="sm" variant="outline" onClick={closeAll} disabled={!actions.live.size}>
-            <Power /> {t("shell.tabs.closeAll")}
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => saves?.[0] && reopen(saves[0].sessions)} disabled={!saves?.length} title={t("shell.tabs.reopenLastTitle")}>
-            <SquareTerminal /> {t("shell.tabs.reopenLast")}
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button size="sm" onClick={save} disabled={!actions.live.size}>
+              <Save /> {t("shell.tabs.saveNow")}
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => saves?.[0] && reopen(saves[0].sessions)} disabled={!saves?.length} title={t("shell.tabs.reopenLastTitle")}>
+              <SquareTerminal /> {t("shell.tabs.reopenLast")}
+            </Button>
+            <Button size="sm" variant="destructive" onClick={closeAll} disabled={!actions.live.size}>
+              <Power /> {t("shell.tabs.closeAll")}
+            </Button>
+          </div>
         </div>
 
         {saves === null && <Skeleton className="h-24 w-full" />}
@@ -117,9 +119,9 @@ export function Tabs({ args, onAsk, onPrompt }: { args: string; onAsk: (ask: Ask
           <section key={tabSave.at} className="rounded-lg border">
             <div className="flex items-center gap-2 border-b px-4 py-2.5">
               <History className="size-4 shrink-0 text-muted-foreground" />
-              <span className="truncate text-sm font-medium">{tabSave.name || t("shell.tabs.auto")}</span>
+              <span className="min-w-0 truncate text-sm font-medium">{tabSave.name || t("shell.tabs.auto")}</span>
               {!tabSave.auto && <Badge variant="secondary">{t("shell.tabs.manual")}</Badge>}
-              <span className="shrink-0 text-xs text-muted-foreground" title={full(tabSave.at)}>
+              <span className="min-w-0 truncate text-xs text-muted-foreground" title={full(tabSave.at)}>
                 {ago(Date.parse(tabSave.at) / 1000)} · {t("shell.count.sessions", { count: tabSave.sessions.length })}
               </span>
               <Button variant="outline" size="xs" className="ml-auto" onClick={() => reopen(tabSave.sessions)}>
