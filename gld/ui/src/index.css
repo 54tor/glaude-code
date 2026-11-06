@@ -146,7 +146,12 @@
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border outline-ring;
+    }
+  /* Contour intérieur : les lignes pleine largeur des zones défilantes (overflow: hidden) le couperaient à l'extérieur. */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: -2px;
     }
   body {
     @apply bg-background text-foreground;
