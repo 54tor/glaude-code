@@ -350,7 +350,7 @@ func memRead(key string) (string, error) {
 		return "", err
 	}
 	defer memoryRoot.Close()
-	content, err := memoryRoot.ReadFile(rel)
+	content, err := rootReadAtMost(memoryRoot, rel, memMax)
 	if err == nil && (len(content) > memMax || !utf8.Valid(content)) {
 		err = terr("srv.memory.fichierTropGrosOu")
 	}
@@ -427,9 +427,9 @@ func memDelete(key string, trash bool) error {
 	if !strings.HasPrefix(key, "m/") || rel == "MEMORY.md" {
 		return nil
 	}
-	indexContent, err := memoryRoot.ReadFile("MEMORY.md")
-	if err != nil {
-		return nil // pas d'index : rien à nettoyer
+	indexContent, err := rootReadAtMost(memoryRoot, "MEMORY.md", memMax)
+	if err != nil || len(indexContent) > memMax {
+		return nil // pas d'index lisible : rien à nettoyer
 	}
 	var keep []string
 	for _, indexLine := range strings.SplitAfter(string(indexContent), "\n") {

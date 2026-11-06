@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -132,5 +133,32 @@ func TestMatchesNamesNeedFsRead(t *testing.T) {
 	authStore.Grant(id, mainHomeID, RightFsRead)
 	if body := call(anotherGateInfo); !strings.Contains(body, "a.ts") {
 		t.Errorf("avec fs_read : %s", body)
+	}
+}
+
+// Un fichier de mémoire démesuré (ici 64 Mio creux) est refusé sans être chargé : la lecture s'arrête à memMax+1 octets.
+func TestMemReadNeChargePasUnFichierDemesure(t *testing.T) {
+	cfg := t.TempDir()
+	previousRoot := root
+	t.Cleanup(func() { root = previousRoot })
+	use(cfg)
+	const tailleDuFichierCreux = 64 << 20
+	fichierDemesure, createErr := os.Create(filepath.Join(cfg, "CLAUDE.md"))
+	if createErr != nil {
+		t.Fatal(createErr)
+	}
+	fichierDemesure.Truncate(tailleDuFichierCreux)
+	fichierDemesure.Close()
+
+	var memoireAvant, memoireApres runtime.MemStats
+	runtime.ReadMemStats(&memoireAvant)
+	_, readErr := memRead("g/CLAUDE.md")
+	runtime.ReadMemStats(&memoireApres)
+
+	if readErr == nil {
+		t.Fatal("fichier démesuré accepté")
+	}
+	if allocationObtenue := memoireApres.TotalAlloc - memoireAvant.TotalAlloc; allocationObtenue > 8<<20 {
+		t.Fatalf("%d octets alloués pour refuser le fichier", allocationObtenue)
 	}
 }
