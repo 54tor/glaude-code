@@ -102,8 +102,14 @@ func rWriteAtomic(base, path string, content []byte, mode os.FileMode) error {
 		return err
 	}
 	defer trustedRoot.Close()
+	return rootWriteAtomic(trustedRoot, rel, content, mode)
+}
+
+// rootWriteAtomic : rWriteAtomic dans une racine déjà ouverte (un nom de temporaire fixe suivrait un lien posé à sa place).
+func rootWriteAtomic(trustedRoot *os.Root, rel string, content []byte, mode os.FileMode) error {
 	var tempFile *os.File
 	var tempName string
+	var err error
 	for {
 		tempName = filepath.Join(filepath.Dir(rel), ".gld-web-"+strconv.FormatUint(rand.Uint64(), 36)+".tmp") // #nosec G404 -- simple nom de fichier temporaire, ouvert en O_EXCL
 		if tempFile, err = trustedRoot.OpenFile(tempName, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600); !os.IsExist(err) {

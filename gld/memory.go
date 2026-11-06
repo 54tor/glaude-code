@@ -399,15 +399,7 @@ func memWrite(key, text string, keep bool) error {
 			return mkdirAllErr
 		}
 	}
-	tempName := rel + ".gld-web.tmp"
-	if tempWriteErr := memoryRoot.WriteFile(tempName, []byte(text), mode); tempWriteErr != nil {
-		return tempWriteErr
-	}
-	if renameErr := memoryRoot.Rename(tempName, rel); renameErr != nil {
-		memoryRoot.Remove(tempName)
-		return renameErr
-	}
-	return nil
+	return rootWriteAtomic(memoryRoot, rel, []byte(text), mode)
 }
 
 // memRemove met le fichier à la corbeille puis le supprime ; pour une entrée de mémoire de projet,
