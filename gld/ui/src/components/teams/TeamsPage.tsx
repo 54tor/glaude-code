@@ -99,8 +99,8 @@ export function TeamsPage({ home }: { home: string }) {
             <ul className="divide-y rounded-lg border text-sm">
               {catalog.agents.map((agent) => (
                 <li key={agent.ID} className="flex items-center gap-2 px-3 py-2">
-                  <span className="font-medium">{agent.Name}</span>
-                  <span className="text-muted-foreground">
+                  <span className="shrink-0 font-medium">{agent.Name}</span>
+                  <span className="min-w-0 truncate text-muted-foreground">
                     {!sameLabel(agent.Name, agent.Role) && `${agent.Role} · `}
                     {accessLabel(agent)}
                   </span>
