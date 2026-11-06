@@ -194,3 +194,29 @@ func TestPushSendTitreLocaliseEnAnglaisPourUneLangueAutre(t *testing.T) {
 		t.Fatalf("titre = %q", corpsDecode.Title)
 	}
 }
+
+// Un compte désactivé ne reçoit plus de notification, même si ses droits sur le home sont restés en place :
+// la désactivation ne supprime pas ses abonnements.
+func TestPushSendUserMayReadRefuseUnCompteDesactive(t *testing.T) {
+	magasinDesComptes := testStore(t)
+	identifiantCompte, ajoutErr := magasinDesComptes.AddUser("alice", "un mot de passe assez long", false)
+	if ajoutErr != nil {
+		t.Fatal(ajoutErr)
+	}
+	if grantErr := magasinDesComptes.Grant(identifiantCompte, mainHomeID, RightSessionsRead); grantErr != nil {
+		t.Fatal(grantErr)
+	}
+	fonctionInitiale := authStateFn
+	t.Cleanup(func() { authStateFn = fonctionInitiale })
+	authStateFn = func() (*authStore, bool, error) { return magasinDesComptes, true, nil }
+
+	if !pushUserMayRead(identifiantCompte, mainHomeID) {
+		t.Fatal("un compte actif avec sessions_read doit recevoir l'envoi")
+	}
+	if disableErr := magasinDesComptes.SetDisabled(identifiantCompte, true); disableErr != nil {
+		t.Fatal(disableErr)
+	}
+	if pushUserMayRead(identifiantCompte, mainHomeID) {
+		t.Fatal("un compte désactivé ne doit plus recevoir d'envoi")
+	}
+}

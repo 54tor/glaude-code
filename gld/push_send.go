@@ -63,7 +63,7 @@ func webpushSend(subscription pushSubscription, payload []byte) (int, error) {
 	return response.StatusCode, nil
 }
 
-// pushUserMayRead : sans comptes tout home est permis ; avec comptes, le droit est relu à chaque envoi.
+// pushUserMayRead : sans comptes tout home est permis ; avec comptes, le compte (actif, intact) et le droit sont relus à chaque envoi.
 func pushUserMayRead(userID int64, homeID string) bool {
 	accountStore, accountsOn, stateErr := authStateFn()
 	if stateErr != nil {
@@ -71,6 +71,10 @@ func pushUserMayRead(userID int64, homeID string) bool {
 	}
 	if !accountsOn {
 		return true
+	}
+	user, userErr := accountStore.userByID(accountStore.db, userID)
+	if userErr != nil || user.Disabled {
+		return false
 	}
 	grantedRights, rightsErr := accountStore.Rights(userID, homeID)
 	return rightsErr == nil && grantedRights[RightSessionsRead]
