@@ -16,6 +16,15 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - PWA iPhone : l'écran du jeton ne réapparaît plus au lancement alors que l'appareil est jumelé ; les cookies d'appareil et de jeton passent de `SameSite=Strict` à `Lax`, car WebKit n'envoie pas un cookie Strict à la première navigation d'une PWA. Les appareils déjà jumelés doivent être rejumelés une fois pour recevoir le nouvel attribut.
 - PWA iPhone : le manifeste déclare `start_url: "/"`. Sans lui, l'icône de l'écran d'accueil relançait l'adresse où elle avait été ajoutée (la page de jumelage `/pair`), ce qui montrait l'écran du code à 8 chiffres à chaque lancement à froid. Les PWA déjà installées doivent être supprimées de l'écran d'accueil puis rajoutées depuis la page d'accueil de gld.
 - Page de jumelage (`/pair`) : le code est envoyé dès le 8ᵉ chiffre saisi, sans toucher au bouton ; un code faux recharge la page avec un champ vide et le message d'erreur.
+- Notes, réglages (`settings.json`), skills et synchronisation entre homes : un fichier existant mais illisible (droits, erreur disque) n'est plus pris pour un fichier absent ; l'enregistrement échoue au lieu de le remplacer (toutes les notes perdues, réglages repartis de `{}`, SKILL.md de plus de 256 Kio écrasé sans corbeille).
+- Chat : une session dont la transcription disparaît pendant l'envoi répond 404 au lieu d'interrompre la requête.
+- Renommage d'une session : le titre est ajouté en fin de transcription, sans risque d'écraser une ligne que Claude Code écrit au même moment.
+- Notifications push : un compte désactivé ou altéré ne reçoit plus de notification, même si ses abonnements et ses droits restent en place.
+- Jumelage : une session ouverte par un code se ferme dès que la session émettrice a expiré, comme le promet la documentation, au lieu d'attendre la purge quotidienne.
+- Sécurité : `GLD_AUTH_KEY` n'est plus transmise aux émulateurs de terminal, au serveur tmux ni à git, qui pouvaient l'exposer aux sessions (environnement global de tmux, `/proc/<pid>/environ`).
+- Sécurité (`GLD_RUN_AS`) : les dossiers de skills, de règles, de mémoire, de snippets et d'images s'ouvrent depuis le dossier de configuration de confiance ; un lien posé par le compte cible ne fait plus lire, copier ni supprimer un fichier de root.
+- Partage invité : les chemins absolus de l'hôte sont aussi masqués après une balise, un numéro de ligne de l'outil Read, du Markdown (`**`, `[`) ou un retour chariot, et le nom du compte dans un chemin encodé pour une URL (`%2Fhome%2F…`).
+- Plugins et marketplaces : un nom qui commence par « - » est refusé, il ne peut plus passer pour une option de `claude plugin`.
 
 ## [0.10.2] - 2026-11-03
 

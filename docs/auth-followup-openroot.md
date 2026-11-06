@@ -65,7 +65,7 @@ Liste d'origine :
 
 ### Lectures et parcours (fuite de fichiers de la passerelle par un lien posé par la cible) : faites
 
-Migrées le 2026-10-27 vers `readTrusted`, `openTrusted`, `readDirTrusted` et `readTrustedIn` (`gld/rootfs.go`), actives sous `GLD_RUN_AS` seulement : hors de ce mode, un `CLAUDE.md` ou des commandes liés à un dépôt de dotfiles restent lisibles. Sous `cfgDir()`, tout le chemin est confiné ; dans le dossier d'un home (gardes de `auth_acl.go`), le home sert de racine ; ailleurs (dossier de projet), le dossier du fichier. Les parcours (`WalkDir`) ne suivent pas les liens, leur racine n'est jamais résolue sous `GLD_RUN_AS` (`walkRoot`). Tests : `gld/rootfs_unix_test.go`.
+Migrées le 2026-10-27 vers `readTrusted`, `openTrusted`, `readDirTrusted` et `readTrustedIn` (`gld/rootfs.go`), actives sous `GLD_RUN_AS` seulement : hors de ce mode, un `CLAUDE.md` ou des commandes liés à un dépôt de dotfiles restent lisibles. Sous `cfgDir()`, tout le chemin est confiné ; dans le dossier d'un home (gardes de `auth_acl.go`), le home sert de racine ; ailleurs (dossier de projet), le dossier du fichier. Les parcours (`WalkDir`) ne suivent pas les liens, leur racine n'est jamais résolue sous `GLD_RUN_AS` (`walkRoot`). Les dossiers ouverts comme racine (skills, règles, mémoire de projet, snippets, images) passent par `openRootTrusted` : sous `GLD_RUN_AS`, un tel dossier remplacé par un lien sortant est refusé, y compris un skill installé par `npx` sous forme de lien hors de `cfgDir()`. Tests : `gld/rootfs_unix_test.go`.
 
 Restes connus :
 
