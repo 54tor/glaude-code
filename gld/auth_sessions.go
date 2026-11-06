@@ -130,8 +130,9 @@ func (store *authStore) session(cookie string, touch bool) (*Principal, error) {
 	sessionHash := store.sessHash(rawValue)
 	var userID, created, lastSeen, expiresAt int64
 	var mfa sql.NullInt64
-	var sig []byte
-	err = store.db.QueryRow(`SELECT user_id,created_at,last_seen_at,expires_at,mfa_at,sig FROM sessions WHERE id_hash=?`, sessionHash).Scan(&userID, &created, &lastSeen, &expiresAt, &mfa, &sig)
+	var sig, parentHash []byte
+	var parentExpiresAt sql.NullInt64
+	err = store.db.QueryRow(`SELECT s.user_id,s.created_at,s.last_seen_at,s.expires_at,s.mfa_at,s.sig,s.parent_hash,p.expires_at FROM sessions s LEFT JOIN sessions p ON p.id_hash=s.parent_hash WHERE s.id_hash=?`, sessionHash).Scan(&userID, &created, &lastSeen, &expiresAt, &mfa, &sig, &parentHash, &parentExpiresAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, errNoSession
 	}
@@ -148,6 +149,14 @@ func (store *authStore) session(cookie string, touch bool) (*Principal, error) {
 	absoluteExpiry := created + int64(sessAbsolute/time.Second)
 	if now >= expiresAt || now >= absoluteExpiry || (!mfa.Valid && now >= created+int64(thMFAWindow/time.Second)) {
 		if _, purgeErr := store.db.Exec(`DELETE FROM sessions WHERE id_hash=?`, sessionHash); purgeErr != nil {
+			journal("auth: purge session: %v", purgeErr)
+		}
+		return nil, errNoSession
+	}
+	isPairedWithEndedParent := parentHash != nil && (!parentExpiresAt.Valid || now >= parentExpiresAt.Int64)
+	if isPairedWithEndedParent {
+		// L'émettrice expirée n'est purgée qu'une fois par 24 h : la supprimer ici ferme aussitôt ses sessions jumelées (sessions_cascade).
+		if _, purgeErr := store.db.Exec(`DELETE FROM sessions WHERE id_hash IN (?,?)`, parentHash, sessionHash); purgeErr != nil {
 			journal("auth: purge session: %v", purgeErr)
 		}
 		return nil, errNoSession
