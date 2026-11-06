@@ -39,11 +39,6 @@ func ideIgnored(name string) bool {
 	return strings.HasPrefix(name, ".") || name == "vendor" || name == "node_modules"
 }
 
-func ideBuildIndex(root *os.Root, limits ideLimits) ([]ideIndexEntry, bool) {
-	entries, _, partial := ideWalk(root, limits)
-	return entries, partial
-}
-
 // ideWalk parcourt l'arbre sans lire le contenu des fichiers ni suivre de lien ; une borne
 // atteinte rend ce qui est déjà collecté avec partial=true. dirs sert à la veille du disque.
 func ideWalk(root *os.Root, limits ideLimits) (entries []ideIndexEntry, dirs []string, partial bool) {

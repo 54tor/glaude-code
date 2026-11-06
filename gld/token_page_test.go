@@ -127,3 +127,9 @@ func TestPageDeJumelageEnvoieLeCodeAuHuitiemeChiffreSansOuvrirLaCSP(testing *tes
 		testing.Fatalf("la page du jeton ne doit porter aucun script")
 	}
 }
+
+func resetTokenTries() {
+	tokenTries.Lock()
+	tokenTries.all, tokenTries.by = tryWin{}, map[string]*tryWin{}
+	tokenTries.Unlock()
+}
