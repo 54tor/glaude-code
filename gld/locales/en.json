@@ -301,6 +301,7 @@
   "srv.notes.noteEnregistree": "Note saved",
   "srv.notes.tropDeNotes": "too many notes",
   "srv.notes.fusionTropLongue": "the merged notes exceed the maximum size",
+  "srv.notify.attend": "Claude is waiting",
   "srv.push.fichierIllisible": "unreadable push subscriptions ({{.A1}}): nothing is rewritten",
   "srv.push.trop": "too many push subscriptions",
   "srv.push.asking": "Claude needs your answer",
