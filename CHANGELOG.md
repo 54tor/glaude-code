@@ -23,6 +23,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Mémoire : les budgets de tokens suivent le format de la langue (« 11,4 k ») ; le sous-titre de Snippets abrège le dossier personnel en `~` ; « au cache chauds » devient « au cache chaud ».
 - Accessibilité : contour de focus clavier plein de 2 px, titre de page en `h1`, nom du bouton de compte incluant le pourcentage affiché, titres des cartes de l'Accueil séparés de leurs boutons.
 - Page de connexion et de jumelage : elle reprend l'accent cyan de l'application au lieu du vert.
+- Teams : les compteurs s'accordent (« 1 agent », « 2 teams · 1 coéquipier ») au lieu de « 1 agents » et « team(s) ».
 - Connexion par jeton généré (hors localhost, sans `GLD_WEB_TOKEN`) : le jeton est conservé dans le dossier d'authentification, donc la PWA et les appareils jumelés ne demandent plus de se reconnecter après chaque mise à jour.
 - PWA iPhone : l'écran du jeton ne réapparaît plus au lancement alors que l'appareil est jumelé ; les cookies d'appareil et de jeton passent de `SameSite=Strict` à `Lax`, car WebKit n'envoie pas un cookie Strict à la première navigation d'une PWA. Les appareils déjà jumelés doivent être rejumelés une fois pour recevoir le nouvel attribut.
 - PWA iPhone : le manifeste déclare `start_url: "/"`. Sans lui, l'icône de l'écran d'accueil relançait l'adresse où elle avait été ajoutée (la page de jumelage `/pair`), ce qui montrait l'écran du code à 8 chiffres à chaque lancement à froid. Les PWA déjà installées doivent être supprimées de l'écran d'accueil puis rajoutées depuis la page d'accueil de gld.
@@ -36,6 +37,9 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Sécurité (`GLD_RUN_AS`) : les dossiers de skills, de règles, de mémoire, de snippets et d'images s'ouvrent depuis le dossier de configuration de confiance ; un lien posé par le compte cible ne fait plus lire, copier ni supprimer un fichier de root.
 - Partage invité : les chemins absolus de l'hôte sont aussi masqués après une balise, un numéro de ligne de l'outil Read, du Markdown (`**`, `[`) ou un retour chariot, et le nom du compte dans un chemin encodé pour une URL (`%2Fhome%2F…`).
 - Plugins et marketplaces : un nom qui commence par « - » est refusé, il ne peut plus passer pour une option de `claude plugin`.
+- Notifications push : l'abonnement d'un appareil suit la session qui l'a créé (déconnexion, révocation, expiration, changement de mot de passe : plus rien n'est envoyé), et un compte a au plus 10 appareils abonnés ; un compte ne peut plus remplir à lui seul les 200 places.
+- Notifications push et notifications de bureau : un échec passager de `claude agents` ou de tmux ne renvoie plus une notification pour chaque session déjà en attente.
+- Équipes d'agents : seuls les panneaux tmux de la même session que le chef sont lus ou reçoivent un message ; un `config.json` d'équipe ne peut plus désigner un panneau quelconque du serveur tmux.
 
 ## [0.10.2] - 2026-11-03
 
