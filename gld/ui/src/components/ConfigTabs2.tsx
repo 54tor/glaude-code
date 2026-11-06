@@ -338,9 +338,9 @@ function Row({ field, value, file, propose }: { field: Field; value: unknown; fi
   const path = field.path ?? [field.key]
   const set = (newValue: unknown) => propose({ file, op: "set", path, value: newValue })
   const isText = field.kind === "text"
+  const current = value === undefined ? "" : String(value)
   const applyText = () => set(isText ? text : Number(text))
   const canApply = isText ? text !== current : !!text.trim() && text !== current
-  const current = value === undefined ? "" : String(value)
   const options = enumOptions(field, current, t)
   const changeEnum = (selectedValue: string) => {
     if (selectedValue === "") {
