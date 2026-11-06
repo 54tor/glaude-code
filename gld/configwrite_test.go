@@ -124,6 +124,29 @@ func TestEcritureRefuseFormatParticulier(t *testing.T) {
 	}
 }
 
+// Un réglage existant mais illisible (droits 0000) n'est pas pris pour un fichier absent : rien n'est réécrit.
+func TestEcritureRefuseUnFichierIllisible(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root lit un fichier 0000")
+	}
+	cfg := t.TempDir()
+	use(cfg)
+	cheminReglages := filepath.Join(cfg, "settings.json")
+	contenuAttendu := "{\n  \"model\": \"opus\"\n}\n"
+	put(t, cheminReglages, contenuAttendu, old)
+	if chmodErr := os.Chmod(cheminReglages, 0); chmodErr != nil {
+		t.Fatal(chmodErr)
+	}
+	t.Cleanup(func() { os.Chmod(cheminReglages, 0o600) })
+	if _, _, editErr := configEdit(CfgEdit{File: "u", Op: "set", Path: []string{"theme"}, Value: "dark"}); editErr == nil {
+		t.Fatal("réglage illisible réécrit")
+	}
+	os.Chmod(cheminReglages, 0o600)
+	if contenuObtenu, _ := os.ReadFile(cheminReglages); string(contenuObtenu) != contenuAttendu {
+		t.Fatalf("réglage modifié : %q", contenuObtenu)
+	}
+}
+
 // Un fichier absent est créé, avec ses dossiers.
 func TestEcritureCreeLeFichier(t *testing.T) {
 	cfg := t.TempDir()
