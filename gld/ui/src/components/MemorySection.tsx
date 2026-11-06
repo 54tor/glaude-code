@@ -1,7 +1,7 @@
 import { type LucideIcon, AlertTriangle, MoreHorizontal, ChevronRight, Calculator, ArrowDownWideNarrow, ArrowUpNarrowWide, CheckSquare, EyeOff, Filter, FileStack, FileText, Plus, BotMessageSquare, Trash2 } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import type { MemFile } from "@/lib/api"
-import { ago } from "@/lib/format"
+import { ago, compact } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { useLocal } from "@/hooks/useLocal"
 import { Button } from "@/components/ui/button"
@@ -10,10 +10,6 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { SORTS, type Sort } from "./memoryLib"
 import { typeOf } from "./MemoryTypes"
-
-const TOKENS_PER_THOUSAND = 1000
-
-const formatTokenAmount = (tokens: number) => (tokens >= TOKENS_PER_THOUSAND ? `${(tokens / TOKENS_PER_THOUSAND).toFixed(1)} k` : tokens)
 
 function FileTypeIcon({ file }: { file: MemFile }) {
   const { t } = useTranslation()
@@ -88,7 +84,7 @@ export function Section({
                 title={exact ? t("memory.section.tokensExact") : t("memory.section.tokensEstimate")}
               >
                 {exact ? "" : "≈ "}
-                {t("memory.section.tokens", { amount: formatTokenAmount(budget) })}
+                {t("memory.section.tokens", { amount: compact(budget) })}
               </span>
             )}
             {/* Ajout et tri regroupés : un seul bouton, au lieu de trois icônes côte à côte. */}
