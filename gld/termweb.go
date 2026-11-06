@@ -1,8 +1,9 @@
 package main
 
-// Terminal complet dans le navigateur, désactivé par défaut (GLD_WEB_TERMINAL=1). Il ne lance jamais de shell : il se branche, par
-// une session tmux « groupée » qui ne perturbe pas le terminal de l'hôte, sur le panneau d'une session Claude déjà ouverte,
-// retrouvée par son identifiant. Verrous : ouverture par POST (protégé contre le CSRF) qui donne un jeton à usage unique de 30 s,
+// Terminal complet dans le navigateur, désactivé par défaut (GLD_WEB_TERMINAL=1). gld ne lance pas lui-même de shell : il se
+// branche, par une session tmux « groupée » qui ne perturbe pas le terminal de l'hôte, sur le panneau d'une session Claude déjà
+// ouverte, retrouvée par son identifiant. Ce n'est pas une frontière : le client tmux est complet, son préfixe donne un shell
+// (new-window, run-shell) et toutes les sessions du serveur tmux (choose-tree), y compris celles d'autres homes. Verrous : ouverture par POST (protégé contre le CSRF) qui donne un jeton à usage unique de 30 s,
 // Origin obligatoire et identique au Host sur le WebSocket, un seul client par session, lecture seule tant que la page n'a pas
 // demandé la main, délai d'inactivité. Le jeton d'accès de gld (écoute hors localhost) s'applique comme pour toute route.
 
