@@ -386,7 +386,7 @@ func routesIDEWrite(mux *http.ServeMux) {
 				ideConflict(responseWriter, false, diskEtag)
 				return
 			}
-			mode = info.Mode().Perm()
+			mode = info.Mode().Perm() & 0o755 // ni groupe ni autres en écriture ; le bit exécutable est conservé
 		case errors.Is(err, errIdeNotFound):
 			if body.Etag != "" && !body.Force {
 				ideConflict(responseWriter, true, "")

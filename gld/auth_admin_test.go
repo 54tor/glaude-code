@@ -286,19 +286,18 @@ func TestGrantExecNeedsConfirm(t *testing.T) {
 	if recorder := grant(map[string]any{"confirm": true}); recorder.Code != 403 {
 		t.Fatalf("sans réauth : %d", recorder.Code)
 	}
-	// Second facteur validé sur la session : réauth fraîche cinq minutes, mot de passe toujours exigé.
+	// Un code de secours validé sur la session n'arme pas la réauth : seule une clé de sécurité est retenue cinq minutes.
 	adminRig.ok(adminRig.do("POST", "/v1/auth/mfa/recovery", &root, map[string]string{"code": root.codes[0]}))
 	root.codes = root.codes[1:]
-	*adminRig.clock = adminRig.clock.Add(reauthFor + time.Second)
 	if recorder := grant(map[string]any{"confirm": true, "reauth": map[string]string{"password": testPw}}); recorder.Code != 403 {
-		t.Fatalf("réauth périmée : %d", recorder.Code)
+		t.Fatalf("mot de passe seul après un code de secours : %d", recorder.Code)
 	}
-	adminRig.ok(adminRig.do("POST", "/v1/auth/mfa/recovery", &root, map[string]string{"code": root.codes[0]}))
-	root.codes = root.codes[1:]
-	if recorder := grant(map[string]any{"confirm": true, "reauth": map[string]string{"password": "mauvais mot de passe"}}); recorder.Code != 401 {
+	reauthAvecMauvaisMotDePasse := root.reauth()
+	reauthAvecMauvaisMotDePasse["password"] = "mauvais mot de passe"
+	if recorder := grant(map[string]any{"confirm": true, "reauth": reauthAvecMauvaisMotDePasse}); recorder.Code != 401 {
 		t.Fatalf("mauvais mot de passe : %d", recorder.Code)
 	}
-	lookup := adminRig.ok(grant(map[string]any{"confirm": true, "reauth": map[string]string{"password": testPw}}))
+	lookup := adminRig.ok(grant(map[string]any{"confirm": true, "reauth": root.reauth()}))
 	if got := lookup["rights"].([]any); len(got) != 2 {
 		t.Fatalf("droits : %v", got)
 	}
