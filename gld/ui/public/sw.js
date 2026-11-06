@@ -32,7 +32,8 @@ self.addEventListener("push", (e) => {
 
 self.addEventListener("notificationclick", (e) => {
   e.notification.close()
-  const url = e.notification.data?.url || "/"
+  const target = new URL(e.notification.data?.url || "/", self.location.origin)
+  const url = target.origin === self.location.origin ? target.pathname + target.search + target.hash : "/"
   e.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((cs) => {
       const c = cs[0]
