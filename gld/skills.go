@@ -448,15 +448,7 @@ func saveSkill(key, text string, create bool) error {
 		return err
 	}
 	defer skillRoot.Close()
-	temporaryName := skillFile + ".gld-web.tmp"
-	if fileWriteErr := skillRoot.WriteFile(temporaryName, []byte(text), 0o644); fileWriteErr != nil {
-		return fileWriteErr
-	}
-	if renameErr := skillRoot.Rename(temporaryName, skillFile); renameErr != nil {
-		skillRoot.Remove(temporaryName)
-		return renameErr
-	}
-	return nil
+	return rootWriteAtomic(skillRoot, skillFile, []byte(text), 0o644)
 }
 
 // removeSkill supprime un skill (SKILL.md à la corbeille). Un dossier qui contient d'autres fichiers n'est pas touché :

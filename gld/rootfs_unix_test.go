@@ -94,3 +94,25 @@ func TestDossiersLiesDeCfgDirRefusesSousRunAs(t *testing.T) {
 		t.Fatalf("le fichier visé par le lien a disparu : %v", statErr)
 	}
 }
+
+// L'ancien temporaire à nom fixe « CLAUDE.md.gld-web.tmp » suivait un lien posé à sa place : l'écriture partait dans la cible
+// du lien. Le temporaire aléatoire créé en O_EXCL laisse la cible intacte et CLAUDE.md reste un fichier ordinaire.
+func TestMemSaveNeSuitPasUnLienPoseAuNomDuTemporaire(t *testing.T) {
+	cfg := t.TempDir()
+	previousRoot := root
+	t.Cleanup(func() { root = previousRoot })
+	use(cfg)
+	fichierVictime := filepath.Join(cfg, "victime.txt")
+	os.WriteFile(fichierVictime, []byte("intact"), 0o600)
+	os.Symlink("victime.txt", filepath.Join(cfg, "CLAUDE.md.gld-web.tmp")) // lien relatif, interne à la racine : os.Root le suit
+
+	if saveErr := memSave("g/CLAUDE.md", "nouveau contenu"); saveErr != nil {
+		t.Fatal(saveErr)
+	}
+	if contenuVictime, _ := os.ReadFile(fichierVictime); string(contenuVictime) != "intact" {
+		t.Fatalf("la cible du lien a été écrasée : %q", contenuVictime)
+	}
+	if infoClaudeMD, statErr := os.Lstat(filepath.Join(cfg, "CLAUDE.md")); statErr != nil || !infoClaudeMD.Mode().IsRegular() {
+		t.Fatalf("CLAUDE.md n'est pas un fichier ordinaire : %v", statErr)
+	}
+}
