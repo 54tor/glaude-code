@@ -99,6 +99,34 @@ describe("SessionList", () => {
     expect(calls.read).toHaveBeenCalledWith(expect.objectContaining({ id: "a" }))
   })
 
+  it("la ligne est un lien vers la session, la recherche de l'URL courante conservée", () => {
+    window.history.replaceState(null, "", "/toutes?q=audit")
+    mount([row("a")], { flat: true })
+    const lienDeSession = screen.getByRole("link", { name: /Titre a/ })
+    expect(lienDeSession.getAttribute("href")).toBe("/toutes?q=audit&s=a")
+    window.history.replaceState(null, "", "/")
+  })
+
+  it("Ctrl+clic ou clic milieu sur la ligne : le navigateur ouvre un onglet, la lecture n'est pas lancée ici", () => {
+    const { calls } = mount([row("a")], { flat: true })
+    const lienDeSession = screen.getByRole("link", { name: /Titre a/ })
+    const clicAvecCtrl = new MouseEvent("click", { bubbles: true, cancelable: true, ctrlKey: true })
+    lienDeSession.dispatchEvent(clicAvecCtrl)
+    expect(clicAvecCtrl.defaultPrevented).toBe(false)
+    const clicMilieu = new MouseEvent("click", { bubbles: true, cancelable: true, button: 1 })
+    lienDeSession.dispatchEvent(clicMilieu)
+    expect(clicMilieu.defaultPrevented).toBe(false)
+    expect(calls.read).not.toHaveBeenCalled()
+  })
+
+  it("clic simple sur la ligne : lecture dans la page, sans navigation du navigateur", () => {
+    const { calls } = mount([row("a")], { flat: true })
+    const clicSimple = new MouseEvent("click", { bubbles: true, cancelable: true })
+    screen.getByRole("link", { name: /Titre a/ }).dispatchEvent(clicSimple)
+    expect(clicSimple.defaultPrevented).toBe(true)
+    expect(calls.read).toHaveBeenCalledWith(expect.objectContaining({ id: "a" }))
+  })
+
   it("« Reprendre dans un terminal » ouvre dir+id ; absent pour un dossier disparu", () => {
     const { calls } = mount([row("a"), row("b", {}, "/home/bob/gone", true)], { flat: true })
     const resumeButtons = screen.getAllByRole("button", { name: "Reprendre dans un terminal" })

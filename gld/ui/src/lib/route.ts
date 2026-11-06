@@ -105,3 +105,9 @@ export function href(route: Route): string {
       return "/"
   }
 }
+
+export function sessionHref(sessionId: string): string {
+  const searchParams = new URLSearchParams(window.location.search)
+  searchParams.set("s", sessionId)
+  return `${window.location.pathname}?${searchParams.toString()}`
+}
