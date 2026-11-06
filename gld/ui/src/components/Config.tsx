@@ -123,13 +123,15 @@ export function Config({ home, tab, onTab, ui, dir }: { home: string; tab: strin
           ) : (
             <div className="mb-4 flex flex-wrap gap-x-6 gap-y-3">
               {groups.map(([groupName, groupTabs]) => (
-                <div key={groupName}>
+                <div key={groupName} className="max-w-full min-w-0">
                   <p className="mb-1 px-1 text-2xs font-medium tracking-wide text-muted-foreground uppercase">{t(`config.main.groups.${groupName}`)}</p>
-                  <TabsList className="w-max">
-                    {groupTabs.map(([tabValue, tabLabel]) => (
-                      <TabsTrigger key={tabValue} value={tabValue}>{tabLabel}</TabsTrigger>
-                    ))}
-                  </TabsList>
+                  <div className="overflow-x-auto">
+                    <TabsList className="w-max">
+                      {groupTabs.map(([tabValue, tabLabel]) => (
+                        <TabsTrigger key={tabValue} value={tabValue}>{tabLabel}</TabsTrigger>
+                      ))}
+                    </TabsList>
+                  </div>
                 </div>
               ))}
             </div>
