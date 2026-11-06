@@ -13,7 +13,7 @@
       "open_one": "{{count}} ouverte",
       "open_other": "{{count}} ouvertes",
       "warm_one": "{{count}} au cache chaud",
-      "warm_other": "{{count}} au cache chauds"
+      "warm_other": "{{count}} au cache chaud"
     },
     "format": {
       "today": "Aujourd'hui",
