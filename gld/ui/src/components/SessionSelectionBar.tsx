@@ -10,7 +10,7 @@ export function SessionSelectionBar({ selected, onSelectAll, onClear }: { select
   const { t } = useTranslation()
   const actions = useActions()
   return (
-    <div className="absolute inset-x-0 bottom-4 z-30 flex justify-center px-4">
+    <div className="absolute inset-x-0 bottom-[calc(1rem+env(safe-area-inset-bottom))] z-30 flex justify-center px-4">
       <div className="flex items-center gap-1 rounded-xl border bg-popover p-1.5 pl-4 text-sm shadow-lg">
         <span className="mr-2 font-medium">{t("shell.selection.count", { count: selected.length })}</span>
         <Button variant="ghost" size="sm" onClick={() => onSelectAll()}>

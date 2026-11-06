@@ -51,7 +51,7 @@ export function StatusBar({ editor, watch, index, branch, dirty }: Props) {
   const indent = status?.indent.startsWith("tabs:") ? t("ide.status.tabs") : status && t("ide.status.spaces", { n: status.indent.split(":")[1] })
   const flux = watchLabel(watch, t)
   return (
-    <div aria-label={t("ide.status.label")} role="group" className="flex shrink-0 flex-wrap items-center gap-x-3 border-t px-2 text-xs text-muted-foreground">
+    <div aria-label={t("ide.status.label")} role="group" className="safe-b flex shrink-0 flex-wrap items-center gap-x-3 border-t px-2 text-xs text-muted-foreground">
       {status && (
         <>
           <span>{t("ide.status.pos", { line: status.line, col: status.col })}</span>
