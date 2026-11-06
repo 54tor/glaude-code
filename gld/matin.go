@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -39,11 +40,18 @@ type matinOpts struct {
 	env                         map[string]string
 }
 
+var matinValueFlags = []string{"--id", "--args", "--prompt", "--term", "--age", "--min"}
+
 func cliMatin(runContext context.Context, args []string, output io.Writer) error {
 	resume, resumeName := false, ""
 	var rest []string
 	var env map[string]string
 	for argIndex := 0; argIndex < len(args); argIndex++ { // --resume prend un nom facultatif
+		if slices.Contains(matinValueFlags, args[argIndex]) && argIndex+1 < len(args) { // la valeur d'une option n'est jamais un drapeau
+			rest = append(rest, args[argIndex], args[argIndex+1])
+			argIndex++
+			continue
+		}
 		if args[argIndex] == "--env" { // seul le couple de tabEnvKey est admis ; jamais par --args
 			if argIndex+1 >= len(args) || args[argIndex+1] != tabEnvKey+"="+tabEnvVal {
 				return terr("srv.matin.envRefuse")
@@ -62,7 +70,7 @@ func cliMatin(runContext context.Context, args []string, output io.Writer) error
 		}
 		rest = append(rest, args[argIndex])
 	}
-	parsedFlags, err := parseFlags(rest, []string{"--dry-run", "--nommees"}, []string{"--id", "--args", "--prompt", "--term", "--age", "--min"}, map[string]string{"-n": "--dry-run"})
+	parsedFlags, err := parseFlags(rest, []string{"--dry-run", "--nommees"}, matinValueFlags, map[string]string{"-n": "--dry-run"})
 	if err != nil {
 		if err == errHelp {
 			return helpText(output, matinHelp())
