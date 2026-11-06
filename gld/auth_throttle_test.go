@@ -424,3 +424,34 @@ func TestMFAParAdresse(t *testing.T) {
 		t.Fatal("plafond global du second facteur non appliqué")
 	}
 }
+
+// Derrière un proxy non déclaré (X-Forwarded-For reçu sans GLD_TRUSTED_PROXIES), l'adresse du proxy est celle de tous les
+// clients : elle ne doit ni devenir « connue », ni lever le verrou d'un compte.
+func TestAdresseDUnProxyNonDeclareJamaisConnue(t *testing.T) {
+	th, _, _ := testThrottle(t)
+	const adresseDuProxy = "127.0.0.1"
+	if successErr := th.Success("carol", adresseDuProxy); successErr != nil {
+		t.Fatal(successErr)
+	}
+	undeclaredProxies.Store(adresseDuProxy, true)
+	t.Cleanup(func() { undeclaredProxies.Delete(adresseDuProxy) })
+	for numeroEssai := 0; numeroEssai < thLockAfter; numeroEssai++ {
+		th.Fail("carol", fmt.Sprintf("203.0.113.%d", numeroEssai), "password")
+	}
+	if _, blocked := th.Check("carol", adresseDuProxy); !blocked {
+		t.Fatal("le verrou du compte est levé pour l'adresse d'un proxy non déclaré")
+	}
+}
+
+// warnXFF retient l'adresse d'un proxy local qui transmet X-Forwarded-For sans être déclaré.
+func TestWarnXFFRetientLeProxyNonDeclare(t *testing.T) {
+	t.Setenv("GLD_TRUSTED_PROXIES", "")
+	requete := httptest.NewRequest("POST", "/v1/auth/sessions", nil)
+	requete.RemoteAddr = "127.0.0.1:5000"
+	requete.Header.Set("X-Forwarded-For", "198.51.100.9")
+	t.Cleanup(func() { undeclaredProxies.Delete("127.0.0.1") })
+	warnXFF(requete)
+	if knownAllowed("127.0.0.1") {
+		t.Fatal("proxy non déclaré non retenu")
+	}
+}

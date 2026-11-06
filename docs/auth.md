@@ -139,7 +139,7 @@ Un déluge de connexions sur un nom peut gêner ce compte (déni de service loca
 
 ### Proxys et adresse du client
 
-L'adresse du client est `RemoteAddr`. `X-Forwarded-For` n'est lu que si l'adresse directe est listée dans `GLD_TRUSTED_PROXIES` (adresses ou préfixes CIDR séparés par des virgules). Derrière un proxy sans cette variable, tous les clients partagent l'adresse du proxy, et gld avertit au démarrage s'il voit un `X-Forwarded-For` venant d'une adresse de bouclage ou privée.
+L'adresse du client est `RemoteAddr`. `X-Forwarded-For` n'est lu que si l'adresse directe est listée dans `GLD_TRUSTED_PROXIES` (adresses ou préfixes CIDR séparés par des virgules). Derrière un proxy sans cette variable, tous les clients partagent l'adresse du proxy, et gld avertit au démarrage s'il voit un `X-Forwarded-For` venant d'une adresse de bouclage ou privée. Une telle adresse ne devient jamais « connue » : elle ne lève ni le verrou du compte ni la suite d'échecs, et ne dispense pas du plafond global (sinon un compte qui s'y est connecté une fois rendrait ces protections inopérantes pour tous les clients du proxy).
 
 ### HTTPS et WebAuthn
 
@@ -237,7 +237,9 @@ Non testé en réel : onglets tmux, envoi de touches et terminal web sous un aut
 - `exec` et `config_write` valent le compte OS de gld ; la séparation par compte est expérimentale.
 - Tous les homes et tous les utilisateurs tournent sous un même compte OS (y compris sous `GLD_RUN_AS`, qui n'a qu'un compte cible) : `home_acl` ne sépare pas deux utilisateurs qui ont `exec`, l'un peut lire et modifier les fichiers des homes de l'autre. Sous Linux, un gld enfant se marque non « dumpable », donc son jeton n'est pas lisible dans `/proc/<pid>/environ` ; macOS et Windows n'ont pas cette protection.
 - Séparation par compte OS : voir [auth-followup-openroot.md](auth-followup-openroot.md).
-- Rejeu d'une ligne signée ancienne non détecté ; signature inutile contre qui lit la clé. Le nombre de sessions affiché par `GET /v1/admin/users` n'est pas vérifié (affichage seul).
+- Rejeu d'une ligne signée ancienne non détecté ; signature inutile contre qui lit la clé.
+- `parent_hash` (le lien d'une session jumelée vers son émettrice) n'est pas signé : un écrivain SQL sans la clé peut détacher une session jumelée, qui ne tombe alors plus avec son émettrice.
+- Le plafond global des jetons faux (100 par minute) est partagé par les `Authorization: Bearer` faux, le formulaire du jeton et les codes de jumelage : un anonyme qui l'épuise empêche tout nouveau jumelage pendant la minute (les sessions ouvertes ne sont pas touchées). Le nombre de sessions affiché par `GET /v1/admin/users` n'est pas vérifié (affichage seul).
 - Retour au mode ouvert possible si témoin, marqueur et lignes signées sont supprimés ensemble (voir « Où sont les données »).
 - Un déluge d'adresses peut taire d'autres refus anonymes dans le journal pendant une minute (le résumé `suppressed` en garde le total).
 - Une base créée par un état intermédiaire de développement du schéma 7 est refusée et doit être recréée ; les bases des schémas 5 et 6 se mettent à niveau seules.
