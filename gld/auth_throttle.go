@@ -72,15 +72,6 @@ func thName(user string) string {
 // Marqueur posé par Success : first_at sert de date de dernière connexion réussie.
 func knownKey(user, ip string) string { return "known:" + thName(user) + "|" + ip }
 
-// undeclaredProxies : adresses d'où arrive un X-Forwarded-For sans GLD_TRUSTED_PROXIES (warnXFF). Tous les clients y partagent
-// l'adresse du proxy : la reconnaître comme « connue » lèverait les verrous de compte pour n'importe qui.
-var undeclaredProxies sync.Map
-
-func knownAllowed(ip string) bool {
-	_, isUndeclaredProxy := undeclaredProxies.Load(ip)
-	return !isUndeclaredProxy
-}
-
 func backoff(fails int64) time.Duration {
 	if fails < 3 {
 		return 0
@@ -93,7 +84,12 @@ func backoff(fails int64) time.Duration {
 }
 
 func (throttler *throttle) Check(user, ip string) (wait time.Duration, blocked bool) {
-	wait, blocked, known := throttler.pending(user, ip)
+	return throttler.CheckKnown(user, ip, true)
+}
+
+// CheckKnown : allowKnown faux quand la requête passe par un proxy non déclaré, dont l'adresse est celle de tous ses clients.
+func (throttler *throttle) CheckKnown(user, ip string, allowKnown bool) (wait time.Duration, blocked bool) {
+	wait, blocked, known := throttler.pending(user, ip, allowKnown)
 	if blocked || wait > 0 || known { // un couple déjà connu ne puise pas dans le plafond global : des noms inventés ne le bloquent plus
 		return wait, blocked
 	}
@@ -102,12 +98,16 @@ func (throttler *throttle) Check(user, ip string) (wait time.Duration, blocked b
 
 // Pending est Check sans le plafond global : il sert à annoncer le Retry-After d'un échec sans consommer de place.
 func (throttler *throttle) Pending(user, ip string) (wait time.Duration, blocked bool) {
-	wait, blocked, _ = throttler.pending(user, ip)
+	return throttler.PendingKnown(user, ip, true)
+}
+
+func (throttler *throttle) PendingKnown(user, ip string, allowKnown bool) (wait time.Duration, blocked bool) {
+	wait, blocked, _ = throttler.pending(user, ip, allowKnown)
 	return wait, blocked
 }
 
 // pending : known vaut true si ce compte s'est connecté depuis cette adresse dans les thKnownFor.
-func (throttler *throttle) pending(user, ip string) (wait time.Duration, blocked, known bool) {
+func (throttler *throttle) pending(user, ip string, allowKnown bool) (wait time.Duration, blocked, known bool) {
 	now := throttler.now()
 	windowStart := now.Add(-thWindow).Unix()
 	userKey, ipKey, pairKey, mfaKey := thKeys(user, ip)
@@ -147,7 +147,7 @@ func (throttler *throttle) pending(user, ip string) (wait time.Duration, blocked
 	userRow := rowsByKey[userKey]
 	lockEnd := max(userRow.locked, rowsByKey[streakCounterKey].locked)
 	userFails := failsInWindow(userKey)
-	if knownRow, found := rowsByKey[knownMarkerKey]; found && knownRow.first >= now.Add(-thKnownFor).Unix() && knownAllowed(ip) {
+	if knownRow, found := rowsByKey[knownMarkerKey]; found && knownRow.first >= now.Add(-thKnownFor).Unix() && allowKnown {
 		lockEnd, userFails, known = 0, 0, true
 	}
 	lockEnd = max(lockEnd, rowsByKey[ipKey].locked) // bannissement de l'IP : même une IP où ce compte s'est déjà connecté n'y échappe pas
@@ -245,6 +245,11 @@ func lockEvent(transaction *sql.Tx, now int64, user, ip, outcome string) error {
 // Les compteurs mfa: ne sont pas remis à zéro : sinon un mot de passe connu suffirait
 // à rouvrir cinq essais de second facteur à volonté.
 func (throttler *throttle) Success(user, ip string) error {
+	return throttler.SuccessKnown(user, ip, true)
+}
+
+// SuccessKnown : allowKnown faux, la connexion réussit sans faire de cette adresse une adresse « connue ».
+func (throttler *throttle) SuccessKnown(user, ip string, allowKnown bool) error {
 	now := throttler.now().Unix()
 	userKey, _, pairKey, _ := thKeys(user, ip)
 	// Le compteur MFA de cette adresse repart de zéro, sauf s'il bloque déjà ; le compteur global du compte reste.
@@ -253,7 +258,7 @@ func (throttler *throttle) Success(user, ip string) error {
 	if err != nil {
 		return err
 	}
-	if !knownAllowed(ip) {
+	if !allowKnown {
 		return nil
 	}
 	_, err = throttler.db.Exec(`INSERT INTO throttle(key, fails, first_at, locked_until) VALUES (?, 0, ?, 0)
