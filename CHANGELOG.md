@@ -16,7 +16,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 ### Corrigé
 - Accueil : les cartes ne débordent plus sur téléphone et le titre des sessions reste visible sur tablette ; elles passent sur deux colonnes seulement quand la place réelle le permet. Le sous-titre « 0 session » laisse la place au nombre de sessions ouvertes et au cache chaud.
 - Workspaces sauvegardés et Teams : plus de texte écrasé ni de carte coupée sur petit écran ; « Fermer toutes les sessions » est marqué comme action destructive. Teams n'affiche plus « 0 session » sous son titre.
-- Configuration : les groupes d'onglets défilent sur petit écran au lieu d'être coupés.
+- Configuration et Skills, Extensions et Plugins : les barres d'onglets défilent sur petit écran au lieu d'être coupées ; les derniers onglets étaient hors d'atteinte.
 - Liste des sessions : les titres restent alignés, le bouton des sous-sessions passe en fin de ligne.
 - Mémoire : les budgets de tokens suivent le format de la langue (« 11,4 k ») ; le sous-titre de Snippets abrège le dossier personnel en `~` ; « au cache chauds » devient « au cache chaud ».
 - Accessibilité : contour de focus clavier plein de 2 px, titre de page en `h1`, nom du bouton de compte incluant le pourcentage affiché, titres des cartes de l'Accueil séparés de leurs boutons.
