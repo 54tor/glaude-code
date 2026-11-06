@@ -82,6 +82,10 @@ func pushEventsFor(homeID string, previous, current pushHomeState, isFirstPass b
 type runningChild struct{ homeID, port, token string }
 
 func runningChildren() []runningChild {
+	homeIDsByName := map[string]string{}
+	for _, home := range loadHomes() { // lu une fois, hors de homesMu : un fichier lent ne bloque ni les relais ni les démarrages
+		homeIDsByName[home.Name] = home.ID
+	}
 	homesMu.Lock()
 	defer homesMu.Unlock()
 	var children []runningChild
@@ -91,8 +95,8 @@ func runningChildren() []runningChild {
 			continue
 		default:
 		}
-		if home, found := homeByName(name); found && home.ID != "" {
-			children = append(children, runningChild{home.ID, process.port, process.token})
+		if homeID := homeIDsByName[name]; homeID != "" {
+			children = append(children, runningChild{homeID, process.port, process.token})
 		}
 	}
 	return children
