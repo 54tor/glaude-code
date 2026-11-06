@@ -22,6 +22,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Lecteur de session sur téléphone : le bouton Envoyer ne sort plus de l'écran pendant que Claude travaille ; Interrompre et Arrière-plan passent en icônes et le bouton affiche « Envoyer ».
 - iPhone : la barre de sélection des sessions et la barre d'état de l'espace de travail ne passent plus sous l'indicateur d'accueil.
 - Téléphone : listes de sessions et lecteur allégés. Le bouton « Reprendre dans un terminal » de chaque ligne et de chaque projet et le nombre de tokens ne s'affichent plus sur écran tactile étroit (Reprendre reste dans le menu « … », les tokens dans Infos) ; « Écran brut » est masqué et « Attendre le repos » passe dans le menu ▾ d'Envoyer.
+- Lecteur de session sur téléphone : chemin, modèle, état git, Pousser et fichiers modifiés tiennent sur une seule ligne qui défile, au lieu de trois ou quatre lignes.
 - Mémoire : les budgets de tokens suivent le format de la langue (« 11,4 k ») ; le sous-titre de Snippets abrège le dossier personnel en `~` ; « au cache chauds » devient « au cache chaud ».
 - Accessibilité : contour de focus clavier plein de 2 px, titre de page en `h1`, nom du bouton de compte incluant le pourcentage affiché, titres des cartes de l'Accueil séparés de leurs boutons.
 - Page de connexion et de jumelage : elle reprend l'accent cyan de l'application au lieu du vert.
