@@ -16,6 +16,8 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -41,13 +43,19 @@ func npxEnv(base []string) []string {
 	var filtered []string
 	for _, entry := range base {
 		key, _, _ := strings.Cut(entry, "=")
-		if strings.HasPrefix(key, "GLD_WEB_") || key == "GLD_AUTH_KEY" || key == "NODE_OPTIONS" || key == "npm_config_node_options" || key == "npm_config_registry" {
+		if strings.HasPrefix(key, "GLD_WEB_") || slices.Contains(npxForcedKeys, key) {
 			continue
 		}
 		filtered = append(filtered, entry)
 	}
-	return append(filtered, "npm_config_registry=https://registry.npmjs.org/", "npm_config_node_options=", "NODE_OPTIONS=")
+	forced := []string{"npm_config_registry=https://registry.npmjs.org/", "npm_config_node_options=", "NODE_OPTIONS=", "npm_config_ignore_scripts=true"}
+	if runtime.GOOS != "windows" {
+		forced = append(forced, "npm_config_script_shell=/bin/sh") // npm exec lance le binaire par ce shell : jamais celui d'un .npmrc de dépôt
+	}
+	return append(filtered, forced...)
 }
+
+var npxForcedKeys = []string{"GLD_AUTH_KEY", "NODE_OPTIONS", "npm_config_node_options", "npm_config_registry", "npm_config_ignore_scripts", "npm_config_script_shell"}
 
 // skillsHome : le home où npx pose ses fichiers (celui du compte cible sous GLD_RUN_AS).
 func skillsHome() string {
@@ -158,6 +166,11 @@ func skillsAct(requestContext context.Context, action, source, skill, scope, pro
 	defer npxMu.Unlock()
 	requestContext, cancel := context.WithTimeout(requestContext, npxTimeout)
 	defer cancel()
+	if scope == "project" {
+		// Le paquet et ses dépendances s'installent d'abord dans le cache depuis un dossier neutre : un registre par portée
+		// (@x:registry) du .npmrc du dépôt ne peut plus détourner une dépendance ; l'appel suivant reprend le cache.
+		runNpxSkills(requestContext, skillsHome(), []string{"--yes", skillsPkg, "--help"})
+	}
 	output, err := runNpxSkills(requestContext, dir, args)
 	output = strings.TrimSpace(output)
 	if errors.Is(err, exec.ErrNotFound) {

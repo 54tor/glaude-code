@@ -285,12 +285,21 @@ func TestSkillsActRefuseProjetAvecSkillsLocal(t *testing.T) {
 	proj := t.TempDir()
 	put(t, filepath.Join(cfg, "projects", "-p", id1+".jsonl"), `{"cwd":"`+proj+`"}`+"\n", old)
 	count := 0
-	fakeNpx(t, func(context.Context, string, []string) (string, error) { count++; return "", nil })
-	if _, err := skillsAct(context.Background(), "add", "o/r", "x", "project", "-p"); err != nil || count != 1 {
+	var dossiersDesAppels []string
+	fakeNpx(t, func(_ context.Context, dossierDAppel string, _ []string) (string, error) {
+		count++
+		dossiersDesAppels = append(dossiersDesAppels, dossierDAppel)
+		return "", nil
+	})
+	if _, err := skillsAct(context.Background(), "add", "o/r", "x", "project", "-p"); err != nil || count != 2 {
 		t.Fatalf("projet sain refusé : %v, appels %d", err, count)
 	}
+	// Le premier appel remplit le cache depuis un dossier neutre : le .npmrc du dépôt ne choisit pas les dépendances.
+	if dossiersDesAppels[0] != skillsHome() || dossiersDesAppels[1] != proj {
+		t.Fatalf("dossiers des appels : %v", dossiersDesAppels)
+	}
 	put(t, filepath.Join(proj, "node_modules", "skills", "package.json"), "{}", old)
-	if _, err := skillsAct(context.Background(), "add", "o/r", "x", "project", "-p"); err == nil || count != 1 {
+	if _, err := skillsAct(context.Background(), "add", "o/r", "x", "project", "-p"); err == nil || count != 2 {
 		t.Errorf("projet piégé accepté : %v, appels %d", err, count)
 	}
 	parent := t.TempDir()
@@ -388,5 +397,16 @@ func TestCheckSkillUpdatesForceLimite(t *testing.T) {
 	checkSkillUpdates(context.Background(), true)
 	if count != 1 {
 		t.Errorf("deux forçages de suite : %d appels", count)
+	}
+}
+
+// Le .npmrc d'un dépôt ne choisit ni les scripts d'installation ni le shell de npm exec.
+func TestNpxEnvNeutraliseScriptsEtShell(t *testing.T) {
+	environnementObtenu := npxEnv([]string{"npm_config_ignore_scripts=false", "npm_config_script_shell=/tmp/piege"})
+	if !slices.Contains(environnementObtenu, "npm_config_ignore_scripts=true") || slices.Contains(environnementObtenu, "npm_config_ignore_scripts=false") {
+		t.Fatalf("scripts d'installation non neutralisés : %v", environnementObtenu)
+	}
+	if slices.Contains(environnementObtenu, "npm_config_script_shell=/tmp/piege") {
+		t.Fatalf("shell imposé conservé : %v", environnementObtenu)
 	}
 }
