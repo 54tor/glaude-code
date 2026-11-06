@@ -5,6 +5,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 ## [Non publié]
 
 ### Ajouté
+- Configuration > Réglages : un groupe « Attribution » pour choisir le texte ajouté par Claude aux commits et aux pull requests (vide : aucune ligne ajoutée).
 - Configuration > Projets : les règles d'un dossier sont regroupées par fichier (global en lecture seule, partagé, perso) et chaque règle indique les hooks et skills du projet qui touchent le même outil ; les dossiers supplémentaires du global s'affichent aussi.
 - Configuration > Projets : ajouter une règle de permission directement dans un dossier (type de règle, fichier partagé ou perso) et voir les plugins installés pour ce dossier.
 - Notifications push : le bouton 🔔 en bas de la barre latérale envoie à l'appareil une notification, application fermée (iPhone compris en HTTPS), quand une session pose une question ou attend votre message, réglable par type ; en mode multi-utilisateur, seules les sessions que l'abonné a le droit de lire sont notifiées.

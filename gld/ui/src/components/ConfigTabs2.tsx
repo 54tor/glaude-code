@@ -263,7 +263,7 @@ export function PermsTab({ file, label, doc, propose, proposePerms, gone, onTran
 // --- réglages simples ----------------------------------------------------------------------------------------
 
 type Opt = readonly [string, string] // valeur, libellé
-type Field = { key: string; path?: string[]; label: string; kind: "bool" | "number" | "enum"; options?: Opt[] }
+type Field = { key: string; path?: string[]; label: string; kind: "bool" | "number" | "enum" | "text"; options?: Opt[] }
 
 // Valeurs connues d'après la documentation de Claude Code. Une valeur déjà présente dans le fichier mais inconnue d'ici
 // reste affichée et choisie (voir Row) ; « (par défaut) » retire le réglage.
@@ -305,6 +305,10 @@ const fieldGroups = (t: TFunction): { title: string; fields: Field[] }[] => {
       ],
     },
     {
+      title: t("config.settings.group.attribution"),
+      fields: [makeField("attribution.commit", "text", undefined, ["attribution", "commit"]), makeField("attribution.pr", "text", undefined, ["attribution", "pr"])],
+    },
+    {
       title: t("config.settings.group.security"),
       fields: [
         makeField("permissions.defaultMode", "enum", translatedOptions("mode", [["default", "default"], ["acceptEdits", "acceptEdits"], ["plan", "plan"], ["auto", "auto"], ["bypassPermissions", "bypassPermissions"]]), ["permissions", "defaultMode"]),
@@ -333,6 +337,9 @@ function Row({ field, value, file, propose }: { field: Field; value: unknown; fi
   const [text, setText] = useState(value === undefined ? "" : String(value))
   const path = field.path ?? [field.key]
   const set = (newValue: unknown) => propose({ file, op: "set", path, value: newValue })
+  const isText = field.kind === "text"
+  const applyText = () => set(isText ? text : Number(text))
+  const canApply = isText ? text !== current : !!text.trim() && text !== current
   const current = value === undefined ? "" : String(value)
   const options = enumOptions(field, current, t)
   const changeEnum = (selectedValue: string) => {
@@ -355,15 +362,15 @@ function Row({ field, value, file, propose }: { field: Field; value: unknown; fi
       ) : (
         <>
           <Input
-            type="number"
+            type={isText ? "text" : "number"}
             value={text}
             onChange={(changeEvent) => setText(changeEvent.target.value)}
-            onKeyDown={(keyEvent) => keyEvent.key === "Enter" && text.trim() && set(Number(text))}
+            onKeyDown={(keyEvent) => keyEvent.key === "Enter" && canApply && applyText()}
             placeholder={t("config.settings.default")}
-            className="h-7 w-56 text-xs"
+            className={isText ? "h-7 w-72 text-xs" : "h-7 w-56 text-xs"}
             aria-label={field.label}
           />
-          <Button size="sm" variant="outline" disabled={!text.trim() || text === current} onClick={() => set(Number(text))}>
+          <Button size="sm" variant="outline" disabled={!canApply} onClick={applyText}>
             {t("common.apply")}
           </Button>
         </>
