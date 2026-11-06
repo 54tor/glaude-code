@@ -437,6 +437,7 @@ func handler() http.Handler {
 	// Le jeton hôte passe après la garde invité : un invité n'en a pas, et un cookie invité invalide retombe sur lui.
 	guest := guestGate(mux, host)
 	return http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		setHSTS(responseWriter, request)
 		if !openHosts && !hosts[request.Host] {
 			forbid(responseWriter, request)
 			return
