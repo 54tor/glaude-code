@@ -5,6 +5,8 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
+	"io/fs"
 	"net/http"
 	"path/filepath"
 	"strconv"
@@ -29,8 +31,11 @@ func notesFile() string { return filepath.Join(cfgDir(), "gld-web-notes.json") }
 func notesLoad() (map[string]string, error) {
 	notes := map[string]string{}
 	content, readErr := readTrusted(notesFile())
-	if readErr != nil {
+	if errors.Is(readErr, fs.ErrNotExist) {
 		return notes, nil
+	}
+	if readErr != nil {
+		return nil, terr("srv.notes.fichierIllisible", "A1", readErr.Error())
 	}
 	if decodeErr := json.Unmarshal(content, &notes); decodeErr != nil {
 		return nil, terr("srv.notes.fichierIllisible", "A1", decodeErr.Error())
