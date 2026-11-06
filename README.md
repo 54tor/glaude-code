@@ -251,6 +251,10 @@ téléphone passe par un nom de domaine (proxy, tunnel), donnez cette adresse pu
 gld --listen 0.0.0.0 --public-url https://gld.exemple.org   # ou GLD_PUBLIC_URL=https://gld.exemple.org
 ```
 
+Avec une adresse publique en `https://` sur un nom (ni IP, ni `localhost`), gld envoie `Strict-Transport-Security: max-age=31536000`
+aux requêtes HTTPS adressées à ce nom : le navigateur refusera ensuite tout accès en HTTP clair à ce nom, quel que soit le port,
+pendant un an. Ne déclarez pas comme adresse publique un nom qui sert aussi un autre service en HTTP.
+
 Sur iPhone et iPad, l'application installée (« Sur l'écran d'accueil ») n'a ni notifications (y compris push), ni copie native, ni clé
 de sécurité tant qu'elle est servie en HTTP. gld peut servir lui-même en HTTPS avec un certificat auquel l'appareil fait
 confiance, par exemple créé avec [mkcert](https://github.com/FiloSottile/mkcert) (installez son autorité racine sur

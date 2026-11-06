@@ -10,6 +10,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Notifications push : le bouton 🔔 en bas de la barre latérale envoie à l'appareil une notification, application fermée (iPhone compris en HTTPS), quand une session pose une question ou attend votre message, réglable par type ; en mode multi-utilisateur, seules les sessions que l'abonné a le droit de lire sont notifiées.
 
 - Écran « Nouvelle version disponible » : quand gld a été mis à jour pendant que la page restait ouverte (PWA comprise), un écran propose de recharger.
+- HTTPS : avec `--public-url https://<nom>` (ni IP, ni `localhost`), les réponses HTTPS à ce nom portent `Strict-Transport-Security` (un an, sans sous-domaines).
 - Barre latérale : un clic milieu sur une session ouverte la ferme, sans ouvrir de menu.
 - Listes de sessions : chaque ligne est un vrai lien ; Ctrl+clic ou clic milieu ouvre la session dans un nouvel onglet, et le lien se copie.
 
