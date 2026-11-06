@@ -7,21 +7,27 @@ import (
 	"errors"
 	"io/fs"
 	"path/filepath"
+	"slices"
 	"sync"
 
 	webpush "github.com/SherClockHolmes/webpush-go"
 )
 
-const pushSubscriptionsMax = 200
+const (
+	pushSubscriptionsMax     = 200
+	pushSubscriptionsPerUser = 10
+)
 
 type pushSubscription struct {
 	Endpoint string `json:"endpoint"`
 	P256dh   string `json:"p256dh"`
 	Auth     string `json:"auth"`
 	UserID   int64  `json:"userId"`
-	Lang     string `json:"lang"`
-	Asking   bool   `json:"asking"`
-	Waiting  bool   `json:"waiting"`
+	// SessionID : la session qui a créé l'abonnement ; avec comptes, l'abonnement ne sert plus dès qu'elle est fermée.
+	SessionID string `json:"sessionId,omitempty"`
+	Lang      string `json:"lang"`
+	Asking    bool   `json:"asking"`
+	Waiting   bool   `json:"waiting"`
 }
 
 type pushVapid struct {
@@ -107,15 +113,21 @@ func pushSubscriptionUpsert(newSubscription pushSubscription) error {
 	if loadErr != nil {
 		return loadErr
 	}
+	content.Subscriptions = slices.DeleteFunc(content.Subscriptions, func(existingSubscription pushSubscription) bool {
+		return existingSubscription.UserID == newSubscription.UserID && !pushSessionLive(existingSubscription.SessionID)
+	})
 	replaced := false
+	userSubscriptionCount := 0
 	for subscriptionIndex, existingSubscription := range content.Subscriptions {
 		if existingSubscription.Endpoint == newSubscription.Endpoint {
 			content.Subscriptions[subscriptionIndex] = newSubscription
 			replaced = true
+		} else if existingSubscription.UserID == newSubscription.UserID {
+			userSubscriptionCount++
 		}
 	}
 	if !replaced {
-		if len(content.Subscriptions) >= pushSubscriptionsMax {
+		if len(content.Subscriptions) >= pushSubscriptionsMax || userSubscriptionCount >= pushSubscriptionsPerUser {
 			return terr("srv.push.trop")
 		}
 		content.Subscriptions = append(content.Subscriptions, newSubscription)

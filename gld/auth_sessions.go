@@ -122,17 +122,31 @@ func (store *authStore) SessionPassive(cookie string) (*Principal, error) {
 	return store.session(cookie, false)
 }
 
+// SessionLive : la session désignée par son identifiant (Principal.SessionID) rouvrirait encore un accès complet ; sans cookie,
+// sans prolonger son inactivité. Sert aux abonnements push, rattachés à la session qui les a créés.
+func (store *authStore) SessionLive(sessionID string) bool {
+	sessionHash, err := hex.DecodeString(sessionID)
+	if err != nil || len(sessionHash) != sha256.Size {
+		return false
+	}
+	principal, err := store.sessionByHash(sessionHash, false)
+	return err == nil && principal.MFA
+}
+
 func (store *authStore) session(cookie string, touch bool) (*Principal, error) {
 	rawValue, err := base64.RawURLEncoding.DecodeString(cookie)
 	if err != nil || len(rawValue) != sessionValueLen {
 		return nil, errNoSession
 	}
-	sessionHash := store.sessHash(rawValue)
+	return store.sessionByHash(store.sessHash(rawValue), touch)
+}
+
+func (store *authStore) sessionByHash(sessionHash []byte, touch bool) (*Principal, error) {
 	var userID, created, lastSeen, expiresAt int64
 	var mfa sql.NullInt64
 	var sig, parentHash []byte
 	var parentExpiresAt sql.NullInt64
-	err = store.db.QueryRow(`SELECT s.user_id,s.created_at,s.last_seen_at,s.expires_at,s.mfa_at,s.sig,s.parent_hash,p.expires_at FROM sessions s LEFT JOIN sessions p ON p.id_hash=s.parent_hash WHERE s.id_hash=?`, sessionHash).Scan(&userID, &created, &lastSeen, &expiresAt, &mfa, &sig, &parentHash, &parentExpiresAt)
+	err := store.db.QueryRow(`SELECT s.user_id,s.created_at,s.last_seen_at,s.expires_at,s.mfa_at,s.sig,s.parent_hash,p.expires_at FROM sessions s LEFT JOIN sessions p ON p.id_hash=s.parent_hash WHERE s.id_hash=?`, sessionHash).Scan(&userID, &created, &lastSeen, &expiresAt, &mfa, &sig, &parentHash, &parentExpiresAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, errNoSession
 	}

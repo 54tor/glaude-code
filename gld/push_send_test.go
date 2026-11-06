@@ -26,8 +26,11 @@ func installerTransportPushDeTest(t *testing.T, statutParEndpoint map[string]int
 	t.Helper()
 	isolerDossierDeConfigurationPush(t)
 	envois := &[]envoiPushEnregistre{}
-	transportInitial, droitsInitiaux := pushTransport, pushMayRead
-	t.Cleanup(func() { pushTransport, pushMayRead = transportInitial, droitsInitiaux })
+	transportInitial, droitsInitiaux, sessionInitiale := pushTransport, pushMayRead, pushSessionLive
+	t.Cleanup(func() {
+		pushTransport, pushMayRead, pushSessionLive = transportInitial, droitsInitiaux, sessionInitiale
+	})
+	pushSessionLive = func(string) bool { return true }
 	pushTransport = func(abonnement pushSubscription, corps []byte) (int, error) {
 		verrouEnvoisPush.Lock()
 		*envois = append(*envois, envoiPushEnregistre{abonnement.Endpoint, corps})
@@ -218,5 +221,28 @@ func TestPushSendUserMayReadRefuseUnCompteDesactive(t *testing.T) {
 	}
 	if pushUserMayRead(identifiantCompte, mainHomeID) {
 		t.Fatal("un compte désactivé ne doit plus recevoir d'envoi")
+	}
+}
+
+// Avec comptes, l'abonnement suit la session qui l'a créé : révoquée, plus aucun envoi ; sans identifiant de session, jamais.
+func TestPushCreatorSessionLiveSuitLaSessionCreatrice(t *testing.T) {
+	testClock(t)
+	magasinDesComptes, identifiantCompte := sessUser(t)
+	_, principalCreateur := fullSession(t, magasinDesComptes, identifiantCompte)
+	fonctionInitiale := authStateFn
+	t.Cleanup(func() { authStateFn = fonctionInitiale })
+	authStateFn = func() (*authStore, bool, error) { return magasinDesComptes, true, nil }
+
+	if !pushCreatorSessionLive(principalCreateur.SessionID) {
+		t.Fatal("la session créatrice ouverte doit permettre l'envoi")
+	}
+	if pushCreatorSessionLive("") {
+		t.Fatal("un abonnement sans session ne doit rien recevoir en mode comptes")
+	}
+	if revokeErr := magasinDesComptes.RevokeSession(principalCreateur.SessionID); revokeErr != nil {
+		t.Fatal(revokeErr)
+	}
+	if pushCreatorSessionLive(principalCreateur.SessionID) {
+		t.Fatal("une session révoquée ne doit plus recevoir d'envoi")
 	}
 }
