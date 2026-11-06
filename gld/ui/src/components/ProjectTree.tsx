@@ -113,7 +113,7 @@ export function GroupRow({ vg: viewGroup, dirKey, project, depth, active, onGrou
             aria-current={active}
             title={t("shell.tree.groupTitle", { name: viewGroup.name, project })}
             className={cn(
-              "flex h-7 w-full items-center gap-2 rounded-md pr-2 text-left text-xs transition-colors data-[state=open]:bg-muted",
+              "flex h-7 w-full items-center gap-2 rounded-md pr-2 text-left text-xs transition-colors data-[state=open]:bg-muted pointer-coarse:h-11",
               active ? "bg-accent font-medium text-accent-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
             )}
             style={{ paddingLeft: rowPadding(depth + 1) + CHEVRON_WIDTH }}
@@ -144,7 +144,7 @@ function RepoRows({ repos, status, depth, home, id }: { repos: string[]; status:
         onClick={flip}
         aria-expanded={open}
         title={t("shell.tree.reposHint", { n: repos.length })}
-        className="flex h-7 w-full items-center gap-1 rounded-md pr-2 text-left text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        className="flex h-7 w-full items-center gap-1 rounded-md pr-2 text-left text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground pointer-coarse:h-11"
         style={{ paddingLeft: pad }}
       >
         <ChevronRight className={cn("size-3.5 shrink-0 transition-transform", open && "rotate-90")} />
@@ -200,14 +200,14 @@ function Item({
         <ContextMenuTrigger asChild disabled={!folder}>
           <div
             className={cn(
-              "group relative flex h-7 items-center gap-1 rounded-md pr-2 text-xs transition-colors",
+              "group relative flex h-7 items-center gap-1 rounded-md pr-2 text-xs transition-colors pointer-coarse:h-11",
               active ? "bg-accent font-medium text-accent-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
             )}
             style={{ paddingLeft: rowPadding(depth) }}
           >
             <button
               className={cn(
-                "relative z-10 grid size-5 shrink-0 place-items-center rounded-sm text-muted-foreground hover:text-foreground",
+                "relative z-10 grid size-5 shrink-0 place-items-center rounded-sm text-muted-foreground hover:text-foreground pointer-coarse:h-11 pointer-coarse:w-7",
                 !kids && "invisible"
               )}
               onClick={() => toggle(node.key)}
