@@ -461,7 +461,9 @@ func (authHandlers *authAPI) second(responseWriter http.ResponseWriter, request 
 	}
 	authHandlers.log(userID, name, ip, kind, evSuccess)
 	if principal.MFA {
-		authHandlers.markReauth(principal.SessionID)
+		if method == "webauthn" { // une clé de sécurité n'a pas de code à retaper : seule son assertion est retenue 5 min
+			authHandlers.markReauth(principal.SessionID)
+		}
 		writeJSON(responseWriter, http.StatusOK, map[string]any{"csrf": principal.CSRF})
 		return
 	}

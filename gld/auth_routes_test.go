@@ -1227,3 +1227,18 @@ func TestParseFactor(t *testing.T) {
 		}
 	}
 }
+
+// docs/auth.md : seule une assertion de clé de sécurité est retenue 5 min. Un code TOTP validé sur une session complète ne doit
+// pas permettre l'action sensible suivante avec le mot de passe seul.
+func TestReauthNonRetenueApresUnCodeTOTP(t *testing.T) {
+	authRig := newAuthRig(t)
+	secret := authRig.enrolTOTP()
+	content, csrf := authRig.full(secret)
+	if recorder := authRig.do("POST", "/v1/auth/mfa/totp", content, csrf, map[string]string{"code": authRig.code(secret)}); recorder.Code != 200 {
+		t.Fatalf("code TOTP sur session complète : %d %s", recorder.Code, recorder.Body)
+	}
+	recorder := authRig.do("PUT", "/v1/auth/password", content, csrf, map[string]string{"password": testPw, "new": "a much better passphrase"})
+	if recorder.Code != 401 {
+		t.Fatalf("mot de passe changé sans code après un TOTP : %d %s", recorder.Code, recorder.Body)
+	}
+}
