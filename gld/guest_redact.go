@@ -27,7 +27,7 @@ const (
 
 var (
 	hostPathRe = regexp.MustCompile(
-		`(^|[^A-Za-z0-9._@+%~=/\\-]|\\[nrt]|\\u[0-9A-Fa-f]{4})` +
+		`(^|[^A-Za-z0-9._+%~/\\-]|\\[nrt]|\\u[0-9A-Fa-f]{4})` +
 			`(/(?:[A-Za-z0-9._@+%~=-]+/)+[A-Za-z0-9._@+%~=-]+)`)
 	appPathPrefixes   = []string{"/v1/", "/assets/", "/icons/", "/guest/", "/invite/"}
 	spareAccountNames = map[string]bool{"user": true, "root": true}
