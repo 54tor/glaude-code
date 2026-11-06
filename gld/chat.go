@@ -42,7 +42,7 @@ func claudeFlags(raw string) (kept, ignored []string, err error) {
 		if !flagRe.MatchString(flag) {
 			return nil, nil, terr("srv.chat.optionRefusee", "A1", flag)
 		}
-		if name, _, _ := strings.Cut(flag, "="); chatAllowed[name] {
+		if name, value, hasValue := strings.Cut(flag, "="); chatAllowed[name] && hasValue && value != "" { // sans « = », l'option avalerait « -p »
 			kept = append(kept, flag)
 		} else {
 			ignored = append(ignored, flag)

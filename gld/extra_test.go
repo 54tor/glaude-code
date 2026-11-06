@@ -606,3 +606,14 @@ func TestReaderContainsTrouveUneOccurrenceACheval(t *testing.T) {
 		t.Fatal("occurrence inventée")
 	}
 }
+
+// Une option permise sans « =valeur » placée avant « -p » ferait lire « -p » comme sa valeur : elle est ignorée, pas transmise.
+func TestClaudeFlagsIgnoreUneOptionPermiseSansValeur(t *testing.T) {
+	optionsGardees, optionsIgnorees, flagErr := claudeFlags("--effort")
+	if flagErr != nil {
+		t.Fatal(flagErr)
+	}
+	if len(optionsGardees) != 0 || len(optionsIgnorees) != 1 {
+		t.Fatalf("gardées %v, ignorées %v", optionsGardees, optionsIgnorees)
+	}
+}
