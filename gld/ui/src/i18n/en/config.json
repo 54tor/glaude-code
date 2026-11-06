@@ -123,9 +123,12 @@
       "group": {
         "model": "Model and behavior",
         "ui": "Interface",
+        "attribution": "Attribution (commits and pull requests)",
         "security": "Permissions and security"
       },
       "field": {
+        "commit": "Text added to commits",
+        "pr": "Text added to pull requests",
         "model": "Default model",
         "effortLevel": "Effort",
         "language": "Response language",
