@@ -88,10 +88,10 @@ func TestWriteConfigNeSuitPasLesLiens(t *testing.T) {
 	if st, _ := os.Stat(path); st.Mode().Perm() != 0o600 {
 		t.Fatalf("mode %v", st.Mode())
 	}
-	os.Chmod(path, 0o644)
+	os.Chmod(path, 0o640)
 	writeConfig(path, []byte("{ }\n"))
-	if st, _ := os.Stat(path); st.Mode().Perm() != 0o644 {
-		t.Fatalf("mode non conservé : %v", st.Mode())
+	if st, _ := os.Stat(path); st.Mode().Perm() != 0o600 {
+		t.Fatalf("mode recopié sans masque (groupe et autres retirés) : %v", st.Mode())
 	}
 	if values, _ := filepath.Glob(filepath.Join(cfg, ".gld-web-*.tmp")); len(values) != 0 {
 		t.Fatalf("temporaires restés : %v", values)

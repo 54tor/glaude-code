@@ -276,7 +276,7 @@ func writeConfigExec(path string, content []byte, executable bool) error {
 	mode := os.FileMode(0o600)
 	if configRoot, rel, confineErr := confine(base, path); confineErr == nil {
 		if fileInfo, statErr := configRoot.Lstat(rel); statErr == nil && fileInfo.Mode().IsRegular() {
-			mode = fileInfo.Mode().Perm() & 0o777
+			mode = fileInfo.Mode().Perm() & 0o700 // jamais un mode imposé par la cible de GLD_RUN_AS (0666) sur un fichier écrit par root
 		}
 		configRoot.Close()
 	}

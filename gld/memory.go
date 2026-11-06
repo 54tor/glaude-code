@@ -392,7 +392,7 @@ func memWrite(key, text string, keep bool) error {
 	defer memoryRoot.Close()
 	mode := os.FileMode(0o644)
 	if fileInfo, statErr := memoryRoot.Stat(rel); statErr == nil {
-		mode = fileInfo.Mode().Perm()
+		mode = fileInfo.Mode().Perm() & 0o700
 	}
 	if parentDir := filepath.Dir(rel); parentDir != "." {
 		if mkdirAllErr := memoryRoot.MkdirAll(parentDir, 0o755); mkdirAllErr != nil {
