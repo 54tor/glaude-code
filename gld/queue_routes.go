@@ -61,8 +61,14 @@ var (
 
 // markSent : un envoi vient d'avoir lieu (file ou hôte au clavier) ; la session doit avoir le temps de démarrer un tour.
 func markSent(sessionID string) {
+	now := time.Now()
 	sentMu.Lock()
-	notBefore[sessionID] = time.Now().Add(queueSettle)
+	for knownSessionID, deadline := range notBefore { // une échéance passée ne retient plus rien : la carte ne grossit pas sans fin
+		if now.After(deadline) {
+			delete(notBefore, knownSessionID)
+		}
+	}
+	notBefore[sessionID] = now.Add(queueSettle)
 	sentMu.Unlock()
 }
 
