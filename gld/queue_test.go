@@ -560,3 +560,20 @@ func TestDrainDropsGuestItemWhenModeFlipsBeforeSend(t *testing.T) {
 		t.Fatalf("sent=%v list=%v", *sent, queueStore.List(shSess))
 	}
 }
+
+// Les échéances passées sont retirées à chaque envoi : la carte des sessions récemment servies ne grossit pas sans fin.
+func TestMarkSentPurgeLesEcheancesPassees(t *testing.T) {
+	sentMu.Lock()
+	clear(notBefore)
+	notBefore["ancienne-session"] = time.Now().Add(-time.Minute)
+	sentMu.Unlock()
+	t.Cleanup(func() { sentMu.Lock(); clear(notBefore); sentMu.Unlock() })
+
+	markSent("session-courante")
+
+	sentMu.Lock()
+	defer sentMu.Unlock()
+	if _, resteEncore := notBefore["ancienne-session"]; resteEncore || len(notBefore) != 1 {
+		t.Fatalf("échéances : %v", notBefore)
+	}
+}

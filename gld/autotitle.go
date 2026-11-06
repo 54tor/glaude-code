@@ -82,7 +82,11 @@ func renameLive(sessionID, transcriptPath string) {
 	alreadyScheduled := liveRenamed[sessionID]
 	liveRenamed[sessionID] = true
 	liveRenamedMu.Unlock()
-	if alreadyScheduled || hasTitle(transcriptPath) {
+	if alreadyScheduled {
+		return
+	}
+	if hasTitle(transcriptPath) {
+		forgetLiveRename(sessionID)
 		return
 	}
 	go func() {
@@ -91,6 +95,7 @@ func renameLive(sessionID, transcriptPath string) {
 		defer ticker.Stop()
 		for now := range ticker.C {
 			if now.After(deadline) || homeCtx.Err() != nil {
+				forgetLiveRename(sessionID) // abandon : une prochaine demande pourra réessayer ; après un envoi, on garde la marque
 				return
 			}
 			sentMu.Lock()
@@ -110,6 +115,12 @@ func renameLive(sessionID, transcriptPath string) {
 			return
 		}
 	}()
+}
+
+func forgetLiveRename(sessionID string) {
+	liveRenamedMu.Lock()
+	delete(liveRenamed, sessionID)
+	liveRenamedMu.Unlock()
 }
 
 func titleSystem() string { return L("prompt.titleSystem", "A1", replyLang()) }
