@@ -119,12 +119,14 @@ export function Tabs({ args, onAsk, onPrompt }: { args: string; onAsk: (ask: Ask
           <section key={tabSave.at} className="rounded-lg border">
             <div className="flex items-center gap-2 border-b px-4 py-2.5">
               <History className="size-4 shrink-0 text-muted-foreground" />
-              <span className="min-w-0 truncate text-sm font-medium">{tabSave.name || t("shell.tabs.auto")}</span>
-              {!tabSave.auto && <Badge variant="secondary">{t("shell.tabs.manual")}</Badge>}
-              <span className="min-w-0 truncate text-xs text-muted-foreground" title={full(tabSave.at)}>
-                {ago(Date.parse(tabSave.at) / 1000)} · {t("shell.count.sessions", { count: tabSave.sessions.length })}
-              </span>
-              <Button variant="outline" size="xs" className="ml-auto" onClick={() => reopen(tabSave.sessions)}>
+              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-0.5">
+                <span className="max-w-full truncate text-sm font-medium">{tabSave.name || t("shell.tabs.auto")}</span>
+                {!tabSave.auto && <Badge variant="secondary">{t("shell.tabs.manual")}</Badge>}
+                <span className="text-xs text-muted-foreground" title={full(tabSave.at)}>
+                  {ago(Date.parse(tabSave.at) / 1000)} · {t("shell.count.sessions", { count: tabSave.sessions.length })}
+                </span>
+              </div>
+              <Button variant="outline" size="xs" className="shrink-0" onClick={() => reopen(tabSave.sessions)}>
                 <SquareTerminal /> {t("shell.tabs.reopenAll")}
               </Button>
               <DropdownMenu>
