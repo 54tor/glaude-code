@@ -106,6 +106,16 @@ func rWriteAtomic(base, path string, content []byte, mode os.FileMode) error {
 	return rootWriteAtomic(trustedRoot, rel, content, mode)
 }
 
+// rootCreateExclusive crée rel sans jamais remplacer un fichier existant (O_EXCL).
+func rootCreateExclusive(trustedRoot *os.Root, rel string, content []byte, mode os.FileMode) error {
+	createdFile, err := trustedRoot.OpenFile(rel, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode)
+	if err != nil {
+		return err
+	}
+	_, writeErr := createdFile.Write(content)
+	return errors.Join(writeErr, createdFile.Chmod(mode), createdFile.Close())
+}
+
 // rootReadAtMost lit au plus maxBytes+1 octets : l'appelant juge le dépassement sans charger un fichier de taille quelconque.
 func rootReadAtMost(trustedRoot *os.Root, rel string, maxBytes int64) ([]byte, error) {
 	openedFile, err := trustedRoot.Open(rel)

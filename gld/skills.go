@@ -550,10 +550,21 @@ func copySkill(key, to string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if mkdirErr := mkdirTrusted(target, 0o755); mkdirErr != nil {
+	if mkdirErr := mkdirTrusted(destinationBase, 0o755); mkdirErr != nil {
 		return "", mkdirErr
 	}
-	destinationRoot, err := openRootTrusted(target)
+	destinationBaseRoot, err := openRootTrusted(destinationBase)
+	if err != nil {
+		return "", err
+	}
+	defer destinationBaseRoot.Close()
+	if mkdirErr := destinationBaseRoot.Mkdir(destinationName, 0o755); mkdirErr != nil {
+		if errors.Is(mkdirErr, fs.ErrExist) {
+			return "", terr("srv.skills.unSkillDeCe2")
+		}
+		return "", mkdirErr
+	}
+	destinationRoot, err := destinationBaseRoot.OpenRoot(destinationName)
 	if err != nil {
 		return "", err
 	}
@@ -564,7 +575,7 @@ func copySkill(key, to string) (string, error) {
 				return "", mkdirAllErr
 			}
 		}
-		if fileWriteErr := destinationRoot.WriteFile(copied.rel, copied.data, copied.mode); fileWriteErr != nil {
+		if fileWriteErr := rootCreateExclusive(destinationRoot, copied.rel, copied.data, copied.mode); fileWriteErr != nil {
 			return "", fileWriteErr
 		}
 	}
