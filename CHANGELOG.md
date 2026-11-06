@@ -23,7 +23,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - iPhone : la barre de sélection des sessions et la barre d'état de l'espace de travail ne passent plus sous l'indicateur d'accueil.
 - Téléphone : listes de sessions et lecteur allégés. Le bouton « Reprendre dans un terminal » de chaque ligne et de chaque projet et le nombre de tokens ne s'affichent plus sur écran tactile étroit (Reprendre reste dans le menu « … », les tokens dans Infos) ; « Écran brut » est masqué et « Attendre le repos » passe dans le menu ▾ d'Envoyer.
 - Lecteur de session sur téléphone : chemin, modèle, état git, Pousser et fichiers modifiés tiennent sur une seule ligne qui défile, au lieu de trois ou quatre lignes.
-- Écran tactile : les boutons icône passent à 40 px et les petits boutons à 36 px de haut, le bouton des sous-sessions s'agrandit aussi ; le rendu à la souris ne change pas.
+- Écran tactile : les boutons icône passent à 40 px, les petits boutons et les petites listes déroulantes à 36 px de haut, le bouton des sous-sessions s'agrandit aussi ; le rendu à la souris ne change pas.
 - Espace de travail sur téléphone : un seul volet à la fois, l'arbre puis l'éditeur dès qu'un fichier est ouvert ; le bouton « Fichiers » ramène à l'arbre.
 - Mémoire : les budgets de tokens suivent le format de la langue (« 11,4 k ») ; le sous-titre de Snippets abrège le dossier personnel en `~` ; « au cache chauds » devient « au cache chaud ».
 - Accessibilité : contour de focus clavier plein de 2 px, titre de page en `h1`, nom du bouton de compte incluant le pourcentage affiché, titres des cartes de l'Accueil séparés de leurs boutons.
