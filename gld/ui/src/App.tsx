@@ -138,7 +138,8 @@ function Shell() {
     )
   const goToRoute = (targetRoute: Route) => {
     let searchSuffix = ""
-    if (searchQuery) {
+    const isReclickOnCurrentRoute = href(targetRoute) === href(route)
+    if (searchQuery && !isReclickOnCurrentRoute) {
       const advancedSuffix = advancedSearch ? "&qa=1" : ""
       searchSuffix = `?q=${encodeURIComponent(searchQuery)}${advancedSuffix}`
     }
