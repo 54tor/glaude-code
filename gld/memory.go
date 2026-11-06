@@ -345,7 +345,7 @@ func memRead(key string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	memoryRoot, err := os.OpenRoot(base)
+	memoryRoot, err := openRootTrusted(base)
 	if err != nil {
 		return "", err
 	}
@@ -385,7 +385,7 @@ func memWrite(key, text string, keep bool) error {
 	if mkdirErr := mkdirTrusted(base, 0o755); mkdirErr != nil {
 		return mkdirErr
 	}
-	memoryRoot, err := os.OpenRoot(base)
+	memoryRoot, err := openRootTrusted(base)
 	if err != nil {
 		return err
 	}
@@ -424,7 +424,7 @@ func memDelete(key string, trash bool) error {
 			return trashErr
 		}
 	}
-	memoryRoot, err := os.OpenRoot(base)
+	memoryRoot, err := openRootTrusted(base)
 	if err != nil {
 		return err
 	}

@@ -201,7 +201,7 @@ func readSnippet(key string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	snippetRoot, err := os.OpenRoot(base)
+	snippetRoot, err := openRootTrusted(base)
 	if err != nil {
 		return "", err
 	}
@@ -240,7 +240,7 @@ func saveSnippet(key, text string, create bool) error {
 	if mkdirErr := mkdirTrusted(base, 0o755); mkdirErr != nil {
 		return mkdirErr
 	}
-	snippetRoot, err := os.OpenRoot(base)
+	snippetRoot, err := openRootTrusted(base)
 	if err != nil {
 		return err
 	}
@@ -274,7 +274,7 @@ func removeSnippet(key string) error {
 	if trashErr := saveTrash("s/"+key, filepath.Join(base, rel), "supprimé", text); trashErr != nil {
 		return trashErr
 	}
-	snippetRoot, err := os.OpenRoot(base)
+	snippetRoot, err := openRootTrusted(base)
 	if err != nil {
 		return err
 	}
@@ -295,7 +295,7 @@ func renameSnippet(fromKey, toKey string) error {
 	if !sameDir(sourceBase, targetBase) {
 		return terr("srv.commands.snippetInvalide")
 	}
-	snippetRoot, err := os.OpenRoot(sourceBase)
+	snippetRoot, err := openRootTrusted(sourceBase)
 	if err != nil {
 		return err
 	}

@@ -203,7 +203,7 @@ func uploadImage(name string) (*os.File, string, error) {
 	if !uploadName.MatchString(name) {
 		return nil, "", imageNotFound
 	}
-	imagesRoot, err := os.OpenRoot(imagesDir())
+	imagesRoot, err := openRootTrusted(imagesDir())
 	if err != nil {
 		return nil, "", imageNotFound
 	}
