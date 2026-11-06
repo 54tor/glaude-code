@@ -81,7 +81,7 @@ func persistedToken() string {
 		}
 	}
 	token := newToken()
-	if os.MkdirAll(directory, 0o700) == nil {
+	if mkdirTrusted(directory, 0o700) == nil {
 		if writeErr := rWriteAtomic(directory, tokenPath, []byte(token+"\n"), 0o600); writeErr != nil {
 			journal("jeton : écriture impossible : %v", writeErr)
 		}
