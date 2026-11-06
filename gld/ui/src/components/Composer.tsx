@@ -659,7 +659,7 @@ function LiveSend({ id, dir, onSent, liveState, onAsk, bar, compactHint, coldHin
             />
           </div>
           <span className="ml-auto max-md:hidden" />
-          <div className="flex items-center gap-2 max-md:w-full">
+          <div className="flex items-center gap-2 max-md:w-full max-md:flex-wrap">
             <SlashMenu id={id} text={text} onSent={onSent} />
             {liveState.st?.thinking && (
               <Button
@@ -670,7 +670,7 @@ function LiveSend({ id, dir, onSent, liveState, onAsk, bar, compactHint, coldHin
                   await api.sessionKey(id, "Escape").catch((error) => toast.error(errMsg(error)))
                 }}
               >
-                <Square className="max-md:hidden" /> {t("conversation.composer.interrupt")}
+                <Square /> <span className="max-md:sr-only">{t("conversation.composer.interrupt")}</span>
               </Button>
             )}
             {liveState.st?.thinking && (
@@ -682,16 +682,17 @@ function LiveSend({ id, dir, onSent, liveState, onAsk, bar, compactHint, coldHin
                   await api.sessionKey(id, "CtrlB").catch((error) => toast.error(errMsg(error)))
                 }}
               >
-                <ArrowDownToLine className="max-md:hidden" /> {t("conversation.composer.background")}
+                <ArrowDownToLine /> <span className="max-md:sr-only">{t("conversation.composer.background")}</span>
               </Button>
             )}
             <label className="flex items-center gap-1.5" title={t("conversation.composer.waitIdleTitle")}>
               <Checkbox checked={waitIdle} onCheckedChange={(checked) => setWaitIdle(id, checked === true)} />
               {t("conversation.composer.waitIdle")}
             </label>
-            <div className="flex max-md:flex-1">
-              <Button size="sm" className="rounded-r-none max-md:flex-1" onClick={() => void send()} disabled={(!text.trim() && !pictures.images.length) || busy || !exec}>
-                <Send /> {t("conversation.composer.sendToSession")}
+            <div className="flex max-md:min-w-0 max-md:flex-1">
+              <Button size="sm" className="rounded-r-none max-md:min-w-0 max-md:flex-1" onClick={() => void send()} disabled={(!text.trim() && !pictures.images.length) || busy || !exec}>
+                <Send /> <span className="truncate max-md:hidden">{t("conversation.composer.sendToSession")}</span>
+                <span className="truncate md:hidden">{t("conversation.composer.send")}</span>
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
