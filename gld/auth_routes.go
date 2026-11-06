@@ -187,19 +187,19 @@ func (authHandlers *authAPI) log(userID int64, name, ip, kind, outcome string) {
 	authHandlers.s.db.Exec(`INSERT INTO auth_events(at,user_id,name_tried,ip,kind,outcome) VALUES(?,?,?,?,?,?)`, authNow().Unix(), nullableUserID, name, ip, kind, outcome)
 }
 
-func (authHandlers *authAPI) fail(responseWriter http.ResponseWriter, userID int64, name, ip, kind, outcome, stage string) {
+func (authHandlers *authAPI) fail(responseWriter http.ResponseWriter, request *http.Request, userID int64, name, ip, kind, outcome, stage string) {
 	if err := authHandlers.th.Fail(name, ip, stage); err != nil {
 		journal("auth: throttle: %v", err)
 	}
 	authHandlers.log(userID, name, ip, kind, outcome)
-	wait, _ := authHandlers.th.Pending(name, ip)
+	wait, _ := authHandlers.th.PendingKnown(name, ip, !behindUndeclaredProxy(request))
 	authFail(responseWriter, wait)
 }
 
 // throttled répond aussitôt, sans rien vérifier, quand une attente ou un verrou s'applique ;
 // onBlocked passe avant la réponse, pour pouvoir encore effacer le cookie.
-func (authHandlers *authAPI) throttled(responseWriter http.ResponseWriter, userID int64, name, ip, kind string, onBlocked func()) bool {
-	wait, blocked := authHandlers.th.Check(name, ip)
+func (authHandlers *authAPI) throttled(responseWriter http.ResponseWriter, request *http.Request, userID int64, name, ip, kind string, onBlocked func()) bool {
+	wait, blocked := authHandlers.th.CheckKnown(name, ip, !behindUndeclaredProxy(request))
 	if !blocked && wait <= 0 {
 		return false
 	}
@@ -236,11 +236,11 @@ func (authHandlers *authAPI) login(responseWriter http.ResponseWriter, request *
 		return
 	}
 	defer release()
-	if authHandlers.throttled(responseWriter, 0, name, ip, evLogin, nil) {
+	if authHandlers.throttled(responseWriter, request, 0, name, ip, evLogin, nil) {
 		return
 	}
 	if !pwSane(requestBody.Password) || name == oversizeName {
-		authHandlers.fail(responseWriter, 0, name, ip, evLogin, "invalid_password", "password")
+		authHandlers.fail(responseWriter, request, 0, name, ip, evLogin, "invalid_password", "password")
 		return
 	}
 	user, err := authHandlers.s.UserByName(name)
@@ -252,21 +252,21 @@ func (authHandlers *authAPI) login(responseWriter http.ResponseWriter, request *
 		} else if !errors.Is(err, errNoUser) {
 			journal("auth: login: %v", err)
 		}
-		authHandlers.fail(responseWriter, 0, name, ip, evLogin, outcome, "password")
+		authHandlers.fail(responseWriter, request, 0, name, ip, evLogin, outcome, "password")
 		return
 	}
 	if !verifyPassword(user.PwHash, requestBody.Password) {
-		authHandlers.fail(responseWriter, user.ID, name, ip, evLogin, "bad_password", "password")
+		authHandlers.fail(responseWriter, request, user.ID, name, ip, evLogin, "bad_password", "password")
 		return
 	}
 	if user.Disabled {
-		authHandlers.fail(responseWriter, user.ID, name, ip, evLogin, "disabled", "password")
+		authHandlers.fail(responseWriter, request, user.ID, name, ip, evLogin, "disabled", "password")
 		return
 	}
 	factors, err := authHandlers.s.factors(user.ID)
 	if err != nil {
 		journal("auth: login factors: %v", err)
-		authHandlers.fail(responseWriter, user.ID, name, ip, evLogin, "factors", "password")
+		authHandlers.fail(responseWriter, request, user.ID, name, ip, evLogin, "factors", "password")
 		return
 	}
 	sessionValue, err := authHandlers.s.NewSession(user.ID, ip, request.UserAgent())
@@ -276,7 +276,7 @@ func (authHandlers *authAPI) login(responseWriter http.ResponseWriter, request *
 	}
 	if err != nil {
 		journal("auth: login session: %v", err)
-		authHandlers.fail(responseWriter, user.ID, name, ip, evLogin, "session_error", "password")
+		authHandlers.fail(responseWriter, request, user.ID, name, ip, evLogin, "session_error", "password")
 		return
 	}
 	setSessionCookie(responseWriter, request, sessionValue, authNow().Add(thMFAWindow))
@@ -444,7 +444,7 @@ func (authHandlers *authAPI) second(responseWriter http.ResponseWriter, request 
 	if !principal.MFA {
 		onBlocked = func() { authHandlers.kill(responseWriter, principal, ip) }
 	}
-	if authHandlers.throttled(responseWriter, userID, name, ip, kind, onBlocked) {
+	if authHandlers.throttled(responseWriter, request, userID, name, ip, kind, onBlocked) {
 		return
 	}
 	if !verify() {
@@ -455,7 +455,7 @@ func (authHandlers *authAPI) second(responseWriter http.ResponseWriter, request 
 		if !principal.MFA && authHandlers.th.mfaOver(name, ip) {
 			authHandlers.kill(responseWriter, principal, ip)
 		}
-		wait, _ := authHandlers.th.Pending(name, ip)
+		wait, _ := authHandlers.th.PendingKnown(name, ip, !behindUndeclaredProxy(request))
 		authFail(responseWriter, wait)
 		return
 	}
@@ -477,7 +477,7 @@ func (authHandlers *authAPI) second(responseWriter http.ResponseWriter, request 
 
 // promote achève la connexion : compteurs remis à zéro, nouvelle valeur de cookie, événement login/success.
 func (authHandlers *authAPI) promote(responseWriter http.ResponseWriter, request *http.Request, principal *Principal, ip string) (string, bool) {
-	if err := authHandlers.th.Success(principal.User.Name, ip); err != nil {
+	if err := authHandlers.th.SuccessKnown(principal.User.Name, ip, !behindUndeclaredProxy(request)); err != nil {
 		journal("auth: throttle success: %v", err)
 		return "", false
 	}
@@ -679,11 +679,11 @@ func (authHandlers *authAPI) reauth(responseWriter http.ResponseWriter, request 
 		return false
 	}
 	defer release()
-	if authHandlers.throttled(responseWriter, userID, name, ip, "reauth", nil) {
+	if authHandlers.throttled(responseWriter, request, userID, name, ip, "reauth", nil) {
 		return false
 	}
 	if !pwSane(reauthBody.Password) || !verifyPassword(principal.User.PwHash, reauthBody.Password) {
-		authHandlers.fail(responseWriter, userID, name, ip, "reauth", "bad_password", "password")
+		authHandlers.fail(responseWriter, request, userID, name, ip, "reauth", "bad_password", "password")
 		return false
 	}
 	passed = authHandlers.reauthFresh(principal.SessionID)
@@ -692,7 +692,7 @@ func (authHandlers *authAPI) reauth(responseWriter http.ResponseWriter, request 
 		passed = verifyTOTP(authHandlers.s, userID, reauthBody.Code, authNow()) || useRecovery(authHandlers.s, userID, reauthBody.Code)
 	}
 	if !passed {
-		authHandlers.fail(responseWriter, userID, name, ip, "reauth", "bad_factor", "mfa")
+		authHandlers.fail(responseWriter, request, userID, name, ip, "reauth", "bad_factor", "mfa")
 		return false
 	}
 	authHandlers.log(userID, name, ip, "reauth", evSuccess)

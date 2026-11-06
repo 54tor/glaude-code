@@ -316,6 +316,20 @@ func reqMode(request *http.Request) (*http.Request, authDecision) {
 
 var xffWarned sync.Once
 
+// behindUndeclaredProxy : cette requête arrive d'une adresse de bouclage ou privée avec X-Forwarded-For, sans GLD_TRUSTED_PROXIES.
+// Jugé à chaque requête, jamais retenu : un en-tête envoyé une fois ne change pas la confiance accordée ensuite à l'adresse.
+func behindUndeclaredProxy(request *http.Request) bool {
+	if os.Getenv("GLD_TRUSTED_PROXIES") != "" || request.Header.Get("X-Forwarded-For") == "" {
+		return false
+	}
+	host, _, splitErr := net.SplitHostPort(request.RemoteAddr)
+	if splitErr != nil {
+		host = request.RemoteAddr
+	}
+	address, parseErr := netip.ParseAddr(host)
+	return parseErr == nil && (address.IsLoopback() || address.IsPrivate())
+}
+
 // warnXFF : derrière un proxy non déclaré, tous les clients partagent son adresse (limitation des essais, adresses connues).
 func warnXFF(request *http.Request) {
 	if os.Getenv("GLD_TRUSTED_PROXIES") != "" || request.Header.Get("X-Forwarded-For") == "" {
@@ -326,7 +340,6 @@ func warnXFF(request *http.Request) {
 		host = request.RemoteAddr
 	}
 	if address, parseErr := netip.ParseAddr(host); parseErr == nil && (address.IsLoopback() || address.IsPrivate()) {
-		undeclaredProxies.Store(clientIP(request), true)
 		xffWarned.Do(func() {
 			fmt.Fprintln(os.Stderr, tr(cliLang(), "cli.main.xffUntrusted", nil))
 			journal("auth: X-Forwarded-For reçu de %s sans GLD_TRUSTED_PROXIES", host)
