@@ -193,6 +193,7 @@ func chatHandler(responseWriter http.ResponseWriter, request *http.Request) {
 	commandArgs := withGuard(append(builtinPromptArgs(), chatArgs(flags, id, payload.Mode, payload.Prompt)...))
 	cmd := withPath(exec.CommandContext(runContext, "claude", commandArgs...))
 	cmd.WaitDelay = time.Second
+	runInOwnGroup(cmd)
 	cmd.Dir = cwd
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
@@ -258,7 +259,7 @@ func chatStopHandler(responseWriter http.ResponseWriter, request *http.Request) 
 		writeErr(responseWriter, http.StatusNotFound, "not_found", L("srv.chat.rienEnCours"))
 		return
 	}
-	if cmd.Process.Signal(os.Interrupt) != nil { // Windows : pas de signal, on termine le processus
+	if interruptGroup(cmd.Process) != nil { // Windows : pas de signal, on termine le processus
 		cmd.Process.Kill()
 	}
 	writeJSON(responseWriter, http.StatusOK, map[string]any{"message": L("srv.chat.arretDemande")})
