@@ -75,6 +75,7 @@
       "coldTitle": "{{title}}\nOuverte, cache expiré",
       "cold": "cache froid",
       "hotTitle": "{{title}}\nCache encore environ {{left}} min",
+      "middleClose": "Clic milieu : fermer la session",
       "asking": "attend une réponse à une question",
       "working": "Claude travaille",
       "cacheExpiring": "cache bientôt expiré",

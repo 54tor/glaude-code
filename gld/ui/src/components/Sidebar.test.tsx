@@ -307,6 +307,30 @@ describe("Sidebar — sessions ouvertes et tièdes", () => {
     expect(props.go).toHaveBeenCalledWith({ kind: "dir", key: "~/Projets/a" })
   })
 
+  it("un clic milieu ferme la session ouverte, sans la lire", async () => {
+    const stop = vi.fn()
+    const { calls } = await mount({ hot: [row("a", { title: "Ouverte" })] }, { live: new Set(["a"]), stop })
+    const sessionButton = screen.getByText("Ouverte").closest("button") as HTMLElement
+    fireEvent.mouseUp(sessionButton, { button: 1 })
+    fireEvent(sessionButton, new MouseEvent("auxclick", { bubbles: true, button: 1 }))
+    expect(stop).toHaveBeenCalledWith(["a"])
+    expect(calls.read).not.toHaveBeenCalled()
+  })
+
+  it("un clic milieu sur une session au chaud mais fermée ne fait rien", async () => {
+    const stop = vi.fn()
+    await mount({ hot: [row("w", { title: "Tiède" })] }, { stop })
+    const sessionButton = screen.getByText("Tiède").closest("button") as HTMLElement
+    fireEvent(sessionButton, new MouseEvent("auxclick", { bubbles: true, button: 1 }))
+    expect(stop).not.toHaveBeenCalled()
+  })
+
+  it("l'infobulle d'une session ouverte annonce la fermeture au clic milieu", async () => {
+    await mount({ hot: [row("a", { title: "Ouverte" })] }, { live: new Set(["a"]) })
+    const sessionButton = screen.getByText("Ouverte").closest("button") as HTMLElement
+    expect(sessionButton.getAttribute("title")).toContain("Clic milieu : fermer la session")
+  })
+
   it("regroupées par dossier de travail, par ordre alphabétique", async () => {
     await mount({ hot: [row("1", { title: "Un" }, `${HOME}/Projets/zeta`), row("2", { title: "Deux" }, `${HOME}/Projets/alpha`)] }, { live: new Set(["1", "2"]) })
     const folderLabels = Array.from(document.querySelectorAll("summary")).map((summary) => summary.textContent)
