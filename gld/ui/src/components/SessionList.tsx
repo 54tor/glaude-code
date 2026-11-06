@@ -5,7 +5,8 @@ import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } fro
 import { ChevronRight, Coffee, Globe, MoreHorizontal, SquareTerminal, Star, Tag } from "lucide-react"
 import { ago, bucket, compact, full, tilde, tokTotal } from "@/lib/format"
 import { Badge } from "@/components/ui/badge"
-import { cn } from "@/lib/utils"
+import { cn, opensInAnotherTab } from "@/lib/utils"
+import { sessionHref } from "@/lib/route"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "@/components/ui/context-menu"
@@ -128,11 +129,16 @@ const Row = memo(function Row({
               <span className="tabular-nums">{kids}</span>
             </button>
           )}
-          <button
+          <a
             data-row
             data-id={session.id}
+            href={sessionHref(session.id)}
             className="min-w-0 flex-1 text-left outline-none after:absolute after:inset-0 after:rounded-lg focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-ring/80"
-            onClick={() => actions.read(session)}
+            onClick={(clickEvent) => {
+              if (opensInAnotherTab(clickEvent)) return
+              clickEvent.preventDefault()
+              actions.read(session)
+            }}
           >
             <span className={cn("line-clamp-1 text-md", session.named ? "font-medium" : "text-foreground/85")}>
               {actions.favs.has(session.id) && <Star className="mr-1 inline size-3.5 -translate-y-px fill-amber-400 text-amber-400" aria-label={t("shell.list.favorite")} />}
@@ -192,7 +198,7 @@ const Row = memo(function Row({
               )}
             </span>
             {hit && <Snip text={hit.snip} />}
-          </button>
+          </a>
           {/* Actions au-dessus du bouton étiré : visibles au survol, au focus clavier, ou menu ouvert. */}
           <div className="relative z-10 flex items-center gap-1 transition-opacity md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100 md:has-[[data-state=open]]:opacity-100">
             {!group.missing && (

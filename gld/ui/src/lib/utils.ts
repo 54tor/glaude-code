@@ -12,6 +12,9 @@ export const isSend = (event: { key: string; shiftKey: boolean; ctrlKey?: boolea
   return !touchOnly() || hasSendModifier
 }
 
+export const opensInAnotherTab = (clickEvent: { button: number; metaKey: boolean; ctrlKey: boolean; shiftKey: boolean; altKey: boolean }) =>
+  clickEvent.button !== 0 || clickEvent.metaKey || clickEvent.ctrlKey || clickEvent.shiftKey || clickEvent.altKey
+
 const TRAILING_PARENTHESIZED_HINT = /\s*\([^()]*\)$/
 
 // Retire l'aide clavier finale d'un texte indicatif (« … (Entrée envoie, …) ») là où elle est fausse : au clavier tactile.

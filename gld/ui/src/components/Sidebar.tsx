@@ -6,7 +6,7 @@ import { LayoutDashboard, ChevronRight, FolderPlus, GalleryHorizontalEnd, Folder
 import { tilde } from "@/lib/format"
 import { href, type Route } from "@/lib/route"
 import type { Node } from "@/lib/tree"
-import { cn } from "@/lib/utils"
+import { cn, opensInAnotherTab } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { swipeHandlers } from "@/lib/swipe"
@@ -53,8 +53,7 @@ function NavItem({ icon: Icon, label, n: count, active, onClick, to }: { icon: t
         aria-current={active ? "page" : undefined}
         className={itemClassName}
         onClick={(clickEvent) => {
-          const opensElsewhere = clickEvent.button !== 0 || clickEvent.metaKey || clickEvent.ctrlKey || clickEvent.shiftKey || clickEvent.altKey
-          if (opensElsewhere) return
+          if (opensInAnotherTab(clickEvent)) return
           clickEvent.preventDefault()
           onClick()
         }}
