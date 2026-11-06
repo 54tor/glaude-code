@@ -51,6 +51,16 @@ describe("formats", () => {
     expect(ago(now - 5)).toBe("just now")
     expect(size(2048)).toBe("2 MB")
   })
+
+  it("accordent les compteurs des teams au nombre, 0 au singulier en français", () => {
+    setLang("fr")
+    expect(i18n.t("teams.members", { count: 1 })).toBe("1 agent")
+    expect(i18n.t("teams.members", { count: 6 })).toBe("6 agents")
+    expect(i18n.t("teams.mateCount", { count: 0 })).toBe("0 coéquipier")
+    setLang("en")
+    expect(i18n.t("teams.members", { count: 1 })).toBe("1 agent")
+    expect(i18n.t("teams.teamCount", { count: 0 })).toBe("0 teams")
+  })
 })
 
 function Probe() {
