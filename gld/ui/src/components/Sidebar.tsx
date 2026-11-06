@@ -105,6 +105,8 @@ function Heading({ children, action, fold }: { children: React.ReactNode; action
 
 // Sessions actives depuis moins d'une heure : leur cache est chaud, les reprendre coûte peu.
 // En orange, celles dont le cache expire dans moins de 10 minutes.
+const MIDDLE_MOUSE_BUTTON = 1
+
 function Hot({ rows, now, ttl, go, title, hint, foldKey }: { rows: Row[]; now: number; ttl: number; go: (route: Route) => void; title: string; hint: string; foldKey?: string }) {
   const { t } = useTranslation()
   const actions = useActions()
@@ -127,6 +129,9 @@ function Hot({ rows, now, ttl, go, title, hint, foldKey }: { rows: Row[]; now: n
     const open = opened.has(session.id)
     const cold = now - session.mtime >= ttl // ouverte mais cache expiré
     const left = Math.max(1, Math.ceil((ttl - (now - session.mtime)) / 60))
+    const isClosable = actions.live.has(session.id)
+    const cacheTitle = cold ? t("shell.sidebar.coldTitle", { title: session.title }) : t("shell.sidebar.hotTitle", { title: session.title, left })
+    const isMiddleButton = (mouseEvent: React.MouseEvent) => mouseEvent.button === MIDDLE_MOUSE_BUTTON
     return (
       <Fragment key={session.id}>
       <div className="flex items-center">
@@ -135,7 +140,16 @@ function Hot({ rows, now, ttl, go, title, hint, foldKey }: { rows: Row[]; now: n
           <button
             onClick={() => actions.read(session)}
             onDoubleClick={() => go({ kind: "dir", key: segs(row.g.project, actions.home).join("/") })}
-            title={cold ? t("shell.sidebar.coldTitle", { title: session.title }) : t("shell.sidebar.hotTitle", { title: session.title, left })}
+            onMouseDown={(mouseEvent) => {
+              // sinon le navigateur passe en défilement automatique
+              if (isClosable && isMiddleButton(mouseEvent)) mouseEvent.preventDefault()
+            }}
+            onAuxClick={(mouseEvent) => {
+              if (!isClosable || !isMiddleButton(mouseEvent)) return
+              mouseEvent.preventDefault()
+              actions.stop([session.id])
+            }}
+            title={isClosable ? `${cacheTitle}\n${t("shell.sidebar.middleClose")}` : cacheTitle}
             className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-sm text-sidebar-foreground/85 transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
           >
             <SessionStatusIcon session={session} now={now} ttl={ttl} />

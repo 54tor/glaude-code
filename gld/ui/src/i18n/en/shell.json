@@ -75,6 +75,7 @@
       "coldTitle": "{{title}}\nOpen, cache expired",
       "cold": "cold cache",
       "hotTitle": "{{title}}\nCache still valid for about {{left}} min",
+      "middleClose": "Middle-click: close the session",
       "asking": "waiting for an answer to a question",
       "working": "Claude is working",
       "cacheExpiring": "cache about to expire",
