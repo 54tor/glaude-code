@@ -60,6 +60,10 @@ func TestPushStateRefuseSansJetonEnfant(t *testing.T) {
 	jetonInitial := childToken
 	t.Cleanup(func() { childToken = jetonInitial })
 	childToken = "jeton-enfant"
+	attenteInitiale, questionInitiale := waitingKnown, askingSessionsKnown
+	t.Cleanup(func() { waitingKnown, askingSessionsKnown = attenteInitiale, questionInitiale })
+	waitingKnown = func() ([]string, bool) { return nil, true }
+	askingSessionsKnown = func() ([]string, bool) { return nil, true }
 	mux := http.NewServeMux()
 	routesPushState(mux)
 
