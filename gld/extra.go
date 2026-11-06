@@ -185,7 +185,7 @@ func setTitle(path, id, title string) error {
 		return err
 	}
 	defer configRoot.Close()
-	transcriptFile, err := configRoot.OpenFile(rel, os.O_RDWR, 0)
+	transcriptFile, err := configRoot.OpenFile(rel, os.O_RDWR|os.O_APPEND, 0)
 	if err != nil {
 		return err
 	}
@@ -206,7 +206,7 @@ func setTitle(path, id, title string) error {
 			line = append([]byte{'\n'}, line...)
 		}
 	}
-	_, err = transcriptFile.WriteAt(line, fileInfo.Size())
+	_, err = transcriptFile.Write(line)
 	if closeErr := transcriptFile.Close(); err == nil {
 		err = closeErr
 	}
