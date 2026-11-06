@@ -94,13 +94,13 @@ func TestPushStoreRefuseDEcraserUnFichierIllisible(t *testing.T) {
 func TestPushStoreRefuseAuDelaDuPlafond(t *testing.T) {
 	isolerDossierDeConfigurationPush(t)
 	for numeroAbonnement := 0; numeroAbonnement < pushSubscriptionsMax; numeroAbonnement++ {
-		erreur := pushSubscriptionUpsert(pushSubscription{Endpoint: fmt.Sprintf("https://push.example.com/%d", numeroAbonnement)})
+		erreur := pushSubscriptionUpsert(pushSubscription{Endpoint: fmt.Sprintf("https://push.example.com/%d", numeroAbonnement), UserID: int64(numeroAbonnement)})
 		if erreur != nil {
 			t.Fatal(erreur)
 		}
 	}
 
-	erreurAuDela := pushSubscriptionUpsert(pushSubscription{Endpoint: "https://push.example.com/de-trop"})
+	erreurAuDela := pushSubscriptionUpsert(pushSubscription{Endpoint: "https://push.example.com/de-trop", UserID: pushSubscriptionsMax + 1})
 
 	if erreurAuDela == nil {
 		t.Fatal("le plafond n'est pas appliqué")
@@ -121,5 +121,45 @@ func TestPushStoreNeRegenerePasLesClesQuandLeFichierEstIllisible(t *testing.T) {
 	informations, erreurStat := os.Stat(pushFile())
 	if erreurStat != nil || !informations.IsDir() {
 		t.Fatal("le chemin illisible a été remplacé")
+	}
+}
+
+// Un compte ne peut pas occuper toute la table : au-delà de pushSubscriptionsPerUser, ses nouveaux abonnements sont refusés,
+// ceux d'un autre compte restent acceptés.
+func TestPushStoreRefuseAuDelaDuPlafondParCompte(t *testing.T) {
+	isolerDossierDeConfigurationPush(t)
+	const compteRempli, autreCompte = 7, 8
+	for numeroAbonnement := 0; numeroAbonnement < pushSubscriptionsPerUser; numeroAbonnement++ {
+		if erreur := pushSubscriptionUpsert(pushSubscription{Endpoint: fmt.Sprintf("https://push.example.com/%d", numeroAbonnement), UserID: compteRempli}); erreur != nil {
+			t.Fatal(erreur)
+		}
+	}
+	if erreur := pushSubscriptionUpsert(pushSubscription{Endpoint: "https://push.example.com/de-trop", UserID: compteRempli}); erreur == nil {
+		t.Fatal("le plafond par compte n'est pas appliqué")
+	}
+	if erreur := pushSubscriptionUpsert(pushSubscription{Endpoint: "https://push.example.com/autre", UserID: autreCompte}); erreur != nil {
+		t.Fatalf("un autre compte est bloqué : %v", erreur)
+	}
+}
+
+// Les abonnements dont la session créatrice est fermée ne comptent plus dans le plafond : ils sont retirés au prochain abonnement
+// du même compte.
+func TestPushStoreRetireLesAbonnementsDesSessionsFermees(t *testing.T) {
+	isolerDossierDeConfigurationPush(t)
+	fonctionInitiale := pushSessionLive
+	t.Cleanup(func() { pushSessionLive = fonctionInitiale })
+	pushSessionLive = func(string) bool { return true }
+	for numeroAbonnement := 0; numeroAbonnement < pushSubscriptionsPerUser; numeroAbonnement++ {
+		if erreur := pushSubscriptionUpsert(pushSubscription{Endpoint: fmt.Sprintf("https://push.example.com/%d", numeroAbonnement), UserID: 7, SessionID: "session-fermee"}); erreur != nil {
+			t.Fatal(erreur)
+		}
+	}
+	pushSessionLive = func(sessionID string) bool { return sessionID != "session-fermee" }
+	if erreur := pushSubscriptionUpsert(pushSubscription{Endpoint: "https://push.example.com/nouveau", UserID: 7, SessionID: "session-ouverte"}); erreur != nil {
+		t.Fatalf("abonnement refusé alors que les anciens appartiennent à une session fermée : %v", erreur)
+	}
+	abonnementsRestants, _ := pushSubscriptionsLoad()
+	if len(abonnementsRestants) != 1 || abonnementsRestants[0].SessionID != "session-ouverte" {
+		t.Fatalf("abonnements restants : %+v", abonnementsRestants)
 	}
 }

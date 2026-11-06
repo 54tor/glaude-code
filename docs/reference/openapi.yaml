@@ -4593,7 +4593,7 @@ paths:
       - push
       operationId: putPushSubscription
       x-gld-right: any
-      description: Creates or replaces this device's Web Push subscription (endpoint, keys, asking and waiting preferences, lang).
+      description: Creates or replaces this device's Web Push subscription (endpoint, keys, asking and waiting preferences, lang). With accounts, the subscription is bound to the caller's session and stops receiving once that session ends; at most 10 subscriptions per account.
       requestBody:
         required: true
         content:

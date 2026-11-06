@@ -36,9 +36,23 @@ type pushPayload struct {
 }
 
 var (
-	pushTransport = webpushSend
-	pushMayRead   = pushUserMayRead
+	pushTransport   = webpushSend
+	pushMayRead     = pushUserMayRead
+	pushSessionLive = pushCreatorSessionLive
 )
+
+// pushCreatorSessionLive : sans comptes, aucune session ; avec comptes, la session qui a créé l'abonnement doit être encore ouverte
+// (révoquée, déconnectée, expirée ou fermée par un changement de mot de passe : l'appareil ne reçoit plus rien).
+func pushCreatorSessionLive(sessionID string) bool {
+	accountStore, accountsOn, stateErr := authStateFn()
+	if stateErr != nil {
+		return false
+	}
+	if !accountsOn {
+		return true
+	}
+	return sessionID != "" && accountStore.SessionLive(sessionID)
+}
 
 func webpushSend(subscription pushSubscription, payload []byte) (int, error) {
 	publicKey, privateKey, keysErr := pushVapidKeys()
@@ -119,7 +133,7 @@ func pushDispatch(event pushEvent) {
 		return
 	}
 	for _, subscription := range subscriptions {
-		if !pushWantsEvent(subscription, event.Kind) || !pushMayRead(subscription.UserID, event.HomeID) {
+		if !pushWantsEvent(subscription, event.Kind) || !pushMayRead(subscription.UserID, event.HomeID) || !pushSessionLive(subscription.SessionID) {
 			continue
 		}
 		statusCode, sendErr := pushTransport(subscription, pushPayloadFor(subscription, event))

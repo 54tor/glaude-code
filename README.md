@@ -199,7 +199,9 @@ La page s'adapte aux petits écrans : le menu passe dans le bouton ☰.
 question ou une demande d'autorisation, et quand elle attend votre message. Les deux types se règlent séparément. Elles arrivent
 application fermée : il faut une page servie en HTTPS avec un certificat auquel l'appareil fait confiance (voir plus bas), et sur
 iPhone l'application ajoutée à l'écran d'accueil. En mode multi-utilisateur, chaque abonné ne reçoit que les sessions des dossiers
-où il a le droit de lecture des sessions, vérifié à chaque envoi. Les clés et les abonnements sont dans `gld-web-push.json`
+où il a le droit de lecture des sessions, vérifié à chaque envoi ; l'abonnement suit la session qui l'a créé (déconnexion,
+révocation, expiration ou changement de mot de passe : l'appareil ne reçoit plus rien, réactivez le bouton après reconnexion) et
+un compte a au plus 10 appareils abonnés. Les clés et les abonnements sont dans `gld-web-push.json`
 (permissions 0600) du dossier de configuration de la passerelle ; seuls les services push des navigateurs (Apple, Google, Mozilla,
 Microsoft) sont acceptés comme destination. Limites : un dossier de configuration secondaire n'envoie qu'une fois son
 processus lancé, un onglet ouvert ne coupe pas les notifications, et le clic ouvre la session dans le dossier de configuration

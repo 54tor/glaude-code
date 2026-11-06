@@ -11,6 +11,14 @@ const (
 	pushBodyMaxBytes      = 8 << 10
 )
 
+func pushCallerSession(request *http.Request) string {
+	gate := gateFrom(request)
+	if gate == nil || gate.p == nil {
+		return ""
+	}
+	return gate.p.SessionID
+}
+
 func pushCallerID(request *http.Request) int64 {
 	gate := gateFrom(request)
 	if gate == nil || gate.p == nil || gate.p.User == nil {
@@ -76,7 +84,7 @@ func routesPush(mux *http.ServeMux) {
 		}
 		upsertErr := pushSubscriptionUpsert(pushSubscription{
 			Endpoint: body.Endpoint, P256dh: body.Keys.P256dh, Auth: body.Keys.Auth,
-			UserID: pushCallerID(request), Lang: normalizeLang(body.Lang), Asking: body.Asking, Waiting: body.Waiting,
+			UserID: pushCallerID(request), SessionID: pushCallerSession(request), Lang: normalizeLang(body.Lang), Asking: body.Asking, Waiting: body.Waiting,
 		})
 		if upsertErr != nil {
 			writeErr(responseWriter, http.StatusInternalServerError, "internal", upsertErr.Error())
