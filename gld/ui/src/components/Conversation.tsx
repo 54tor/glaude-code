@@ -78,7 +78,7 @@ function Meta({ session, onFolder, extra }: { session: Session; onFolder?: () =>
   const actions = useActions()
   const bits = [tilde(session.cwd, actions.home), brief(session.mtime)]
   return (
-    <div className="@container flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground in-data-[kb]:hidden">
+    <div className="@container flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground in-data-[kb]:hidden max-md:flex-nowrap max-md:overflow-x-auto max-md:overscroll-x-contain max-md:[&>*]:shrink-0">
       {bits.map((bit, bitIndex) => (
         <span key={bitIndex} title={bitIndex === 1 ? full(session.mtime) : undefined} className={metaBitClassName(bitIndex, !!onFolder)}>
           {bitIndex === 0 && onFolder ? (
@@ -399,7 +399,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
       <LiveAgents live={live} dir={dir} id={id} />
       <LiveTasks live={live} dir={dir} id={id} />
       {gitDirs.map((repoDir) => (
-        <span key={repoDir} className="flex min-w-0 flex-wrap items-center gap-1.5 text-xs md:shrink-0" title={repoDir}>
+        <span key={repoDir} className="flex min-w-0 flex-wrap items-center gap-1.5 text-xs max-md:flex-nowrap md:shrink-0" title={repoDir}>
           <GitRepo dir={repoDir} st={git.status[repoDir]} chip />
         </span>
       ))}
