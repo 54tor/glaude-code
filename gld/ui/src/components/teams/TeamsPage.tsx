@@ -66,7 +66,7 @@ export function TeamsPage({ home }: { home: string }) {
   if (err) return <p className="p-4 text-sm text-destructive">{err}</p>
   if (!catalog) return null
   return (
-    <div className="mx-auto max-w-page space-y-8 p-4">
+    <div className="mx-auto w-full max-w-page space-y-8 p-4">
       <TeamPicker
         catalog={catalog}
         home={home}
