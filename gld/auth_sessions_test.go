@@ -399,3 +399,24 @@ func TestPurgeSessions(t *testing.T) {
 		t.Fatalf("échue : %d %v", count, err)
 	}
 }
+
+// docs/auth.md : laisser expirer l'émettrice ferme la session jumelée. L'émettrice inactive n'est purgée qu'une fois par 24 h,
+// donc la session jumelée doit vérifier elle-même l'état de son émettrice à chaque requête.
+func TestSessionJumeleeFermeeQuandLEmettriceExpire(t *testing.T) {
+	horloge := testClock(t)
+	magasinDesComptes, identifiantCompte := sessUser(t)
+	_, principalEmettrice := fullSession(t, magasinDesComptes, identifiantCompte)
+	cookieJumele, _, pairErr := magasinDesComptes.NewPairedSession(identifiantCompte, principalEmettrice.SessionID, "203.0.113.6", "ua")
+	if pairErr != nil {
+		t.Fatal(pairErr)
+	}
+	for ecoule := time.Duration(0); ecoule <= sessIdle; ecoule += time.Hour {
+		*horloge = horloge.Add(time.Hour)
+		if _, sessionErr := magasinDesComptes.Session(cookieJumele); sessionErr != nil && ecoule+time.Hour < sessIdle {
+			t.Fatalf("session jumelée fermée avant l'expiration de l'émettrice (%v) : %v", ecoule, sessionErr)
+		}
+	}
+	if _, sessionErr := magasinDesComptes.Session(cookieJumele); !errors.Is(sessionErr, errNoSession) {
+		t.Fatalf("session jumelée encore valide après l'expiration de l'émettrice : %v", sessionErr)
+	}
+}
