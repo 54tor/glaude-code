@@ -179,7 +179,7 @@ export function SessionsPane({
                     <Button
                       variant="ghost"
                       size="xs"
-                      className="ml-auto text-muted-foreground"
+                      className="ml-auto text-muted-foreground max-md:pointer-coarse:hidden"
                       onClick={() => actions.open({ dir: projectRows[0].s.dir })}
                       title={t("shell.pane.resumeFolderHint")}
                     >
