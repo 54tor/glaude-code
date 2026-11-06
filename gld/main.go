@@ -326,6 +326,7 @@ func warnXFF(request *http.Request) {
 		host = request.RemoteAddr
 	}
 	if address, parseErr := netip.ParseAddr(host); parseErr == nil && (address.IsLoopback() || address.IsPrivate()) {
+		undeclaredProxies.Store(clientIP(request), true)
 		xffWarned.Do(func() {
 			fmt.Fprintln(os.Stderr, tr(cliLang(), "cli.main.xffUntrusted", nil))
 			journal("auth: X-Forwarded-For reçu de %s sans GLD_TRUSTED_PROXIES", host)

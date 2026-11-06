@@ -72,6 +72,15 @@ func thName(user string) string {
 // Marqueur posé par Success : first_at sert de date de dernière connexion réussie.
 func knownKey(user, ip string) string { return "known:" + thName(user) + "|" + ip }
 
+// undeclaredProxies : adresses d'où arrive un X-Forwarded-For sans GLD_TRUSTED_PROXIES (warnXFF). Tous les clients y partagent
+// l'adresse du proxy : la reconnaître comme « connue » lèverait les verrous de compte pour n'importe qui.
+var undeclaredProxies sync.Map
+
+func knownAllowed(ip string) bool {
+	_, isUndeclaredProxy := undeclaredProxies.Load(ip)
+	return !isUndeclaredProxy
+}
+
 func backoff(fails int64) time.Duration {
 	if fails < 3 {
 		return 0
@@ -138,7 +147,7 @@ func (throttler *throttle) pending(user, ip string) (wait time.Duration, blocked
 	userRow := rowsByKey[userKey]
 	lockEnd := max(userRow.locked, rowsByKey[streakCounterKey].locked)
 	userFails := failsInWindow(userKey)
-	if knownRow, found := rowsByKey[knownMarkerKey]; found && knownRow.first >= now.Add(-thKnownFor).Unix() {
+	if knownRow, found := rowsByKey[knownMarkerKey]; found && knownRow.first >= now.Add(-thKnownFor).Unix() && knownAllowed(ip) {
 		lockEnd, userFails, known = 0, 0, true
 	}
 	lockEnd = max(lockEnd, rowsByKey[ipKey].locked) // bannissement de l'IP : même une IP où ce compte s'est déjà connecté n'y échappe pas
@@ -243,6 +252,9 @@ func (throttler *throttle) Success(user, ip string) error {
 		userKey, pairKey, streakKey(user), mfaPairKey(user, ip), thMFALimit, now-int64(thKnownFor/time.Second))
 	if err != nil {
 		return err
+	}
+	if !knownAllowed(ip) {
+		return nil
 	}
 	_, err = throttler.db.Exec(`INSERT INTO throttle(key, fails, first_at, locked_until) VALUES (?, 0, ?, 0)
 ON CONFLICT(key) DO UPDATE SET first_at = excluded.first_at`, knownKey(user, ip), now)
