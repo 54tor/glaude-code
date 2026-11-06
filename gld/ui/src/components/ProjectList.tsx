@@ -35,12 +35,12 @@ export function ProjectList({ route, go, q: query = "" }: { route: Route; go: (r
               <ContextMenuTrigger asChild>
                 <div
                   className={cn(
-                    "group relative flex h-7 items-center gap-1 rounded-md pr-2 pl-1 text-xs transition-colors",
+                    "group relative flex h-7 items-center gap-1 rounded-md pr-2 pl-1 text-xs transition-colors pointer-coarse:h-11",
                     active ? "bg-accent font-medium text-accent-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
                   )}
                 >
                   <button
-                    className={cn("relative z-10 grid size-5 shrink-0 place-items-center rounded-sm text-muted-foreground hover:text-foreground", !project.dirs.length && "invisible")}
+                    className={cn("relative z-10 grid size-5 shrink-0 place-items-center rounded-sm text-muted-foreground hover:text-foreground pointer-coarse:h-11 pointer-coarse:w-7", !project.dirs.length && "invisible")}
                     onClick={() => toggle(project.name)}
                     aria-label={isOpen ? t("shell.tree.collapse") : t("shell.tree.expand")}
                     aria-expanded={isOpen}
@@ -92,7 +92,7 @@ export function ProjectList({ route, go, q: query = "" }: { route: Route; go: (r
                             onClick={() => go({ kind: "dir", key })}
                             title={directory}
                             className={cn(
-                              "flex h-7 w-full items-center gap-2 rounded-md pr-2 pl-9 text-left text-xs transition-colors",
+                              "flex h-7 w-full items-center gap-2 rounded-md pr-2 pl-9 text-left text-xs transition-colors pointer-coarse:h-11",
                               isActiveDir ? "bg-accent font-medium text-accent-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
                             )}
                           >

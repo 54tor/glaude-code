@@ -89,7 +89,7 @@ function Heading({ children, action, fold }: { children: React.ReactNode; action
     <div className="mt-5 mb-1 flex items-center px-2">
       <h2 className="flex-1 text-xs font-semibold text-muted-foreground">
         {fold ? (
-          <button onClick={fold.toggle} aria-expanded={!fold.folded} className="flex items-center gap-1 hover:text-foreground">
+          <button onClick={fold.toggle} aria-expanded={!fold.folded} className="flex items-center gap-1 hover:text-foreground pointer-coarse:min-h-11">
             <ChevronRight className={cn("size-3.5 transition-transform", !fold.folded && "rotate-90")} aria-hidden />
             {children}
           </button>
@@ -177,7 +177,7 @@ function Hot({ rows, now, ttl, go, title, hint, foldKey }: { rows: Row[]; now: n
     <>
       <Heading>
         {foldKey ? (
-          <button onClick={() => setFolded(fold ? "" : "1")} aria-expanded={!fold} title={hint} className="flex items-center gap-1 hover:text-foreground">
+          <button onClick={() => setFolded(fold ? "" : "1")} aria-expanded={!fold} title={hint} className="flex items-center gap-1 hover:text-foreground pointer-coarse:min-h-11">
             <ChevronRight className={cn("size-3.5 transition-transform", !fold && "rotate-90")} aria-hidden />
             {title} <span className="tabular-nums">{rows.length}</span>
           </button>
@@ -193,7 +193,7 @@ function Hot({ rows, now, ttl, go, title, hint, foldKey }: { rows: Row[]; now: n
             <ContextMenuTrigger asChild>
               <summary
                 title={tilde(project, actions.home)}
-                className="flex h-7 cursor-pointer list-none items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground hover:bg-muted [&::-webkit-details-marker]:hidden"
+                className="flex h-7 cursor-pointer list-none items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground hover:bg-muted pointer-coarse:h-11 [&::-webkit-details-marker]:hidden"
               >
                 <ChevronRight className="size-3.5 shrink-0 transition-transform group-open/hot:rotate-90" aria-hidden />
                 <span className="flex-1 truncate">{label(project)}</span>
@@ -376,7 +376,7 @@ export function Sidebar({ searchRef, ...props }: SidebarProps) {
           />
           <Tip label={isContentSearch ? t("shell.sidebar.contentClose") : t("shell.sidebar.contentSearch")}>
             <button
-              className={cn("absolute top-1/2 right-8 -translate-y-1/2 rounded-sm p-0.5 text-muted-foreground hover:text-foreground", isContentSearch && "bg-accent text-foreground")}
+              className={cn("absolute top-1/2 right-8 -translate-y-1/2 rounded-sm p-0.5 text-muted-foreground hover:text-foreground pointer-coarse:p-1.5", isContentSearch && "bg-accent text-foreground")}
               onClick={() => setIsContentSearch(!isContentSearch)}
               aria-pressed={isContentSearch}
               aria-label={t("shell.sidebar.contentSearch")}
