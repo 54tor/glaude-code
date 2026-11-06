@@ -46,3 +46,18 @@ func TestPathID(t *testing.T) {
 		}
 	}
 }
+
+// Une réponse JSON ne se renifle pas et ne se garde pas en cache, sauf si la route a fixé son propre Cache-Control.
+func TestWriteJSONPoseNosniffEtNoStoreParDefaut(t *testing.T) {
+	enregistreur := httptest.NewRecorder()
+	writeJSON(enregistreur, 200, map[string]string{"a": "b"})
+	if enregistreur.Header().Get("X-Content-Type-Options") != "nosniff" || enregistreur.Header().Get("Cache-Control") != "no-store" {
+		t.Fatalf("en-têtes : %v", enregistreur.Header())
+	}
+	enregistreurAvecCache := httptest.NewRecorder()
+	enregistreurAvecCache.Header().Set("Cache-Control", "max-age=60")
+	writeJSON(enregistreurAvecCache, 200, map[string]string{"a": "b"})
+	if enregistreurAvecCache.Header().Get("Cache-Control") != "max-age=60" {
+		t.Fatal("le Cache-Control de la route a été remplacé")
+	}
+}

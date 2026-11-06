@@ -10,7 +10,12 @@ import (
 )
 
 func writeJSON(responseWriter http.ResponseWriter, code int, payload any) {
-	responseWriter.Header().Set("Content-Type", "application/json; charset=utf-8")
+	headers := responseWriter.Header()
+	headers.Set("Content-Type", "application/json; charset=utf-8")
+	headers.Set("X-Content-Type-Options", "nosniff")
+	if headers.Get("Cache-Control") == "" {
+		headers.Set("Cache-Control", "no-store") // un proxy ou un tunnel ne garde pas une réponse authentifiée
+	}
 	responseWriter.WriteHeader(code)
 	json.NewEncoder(responseWriter).Encode(payload)
 }

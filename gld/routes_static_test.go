@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"regexp"
+	"strings"
 	"testing"
 )
 
@@ -52,5 +53,17 @@ func TestStaticNoDirListing(t *testing.T) {
 	}
 	if counter := get("/icons/icon-192.png"); counter != http.StatusOK {
 		t.Errorf("fichier d'icône : %d", counter)
+	}
+}
+
+// La page de l'interface interdit les plugins (object) et n'envoie de formulaire qu'à elle-même.
+func TestPageInterfaceCSPInterditObjetsEtFormulairesExternes(t *testing.T) {
+	mux := http.NewServeMux()
+	routesStatic(mux)
+	enregistreur := httptest.NewRecorder()
+	mux.ServeHTTP(enregistreur, httptest.NewRequest("GET", "/", nil))
+	politiqueObtenue := enregistreur.Header().Get("Content-Security-Policy")
+	if !strings.Contains(politiqueObtenue, "object-src 'none'") || !strings.Contains(politiqueObtenue, "form-action 'self'") {
+		t.Fatalf("CSP incomplète : %q", politiqueObtenue)
 	}
 }

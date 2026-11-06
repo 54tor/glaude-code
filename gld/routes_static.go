@@ -40,7 +40,7 @@ func routesStatic(mux *http.ServeMux) {
 		fmt.Fprintln(os.Stderr, "gld : interface absente du binaire (ui/dist vide) : lancer `make install`")
 	}
 	page := func(responseWriter http.ResponseWriter, request *http.Request) {
-		responseWriter.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; base-uri 'self'; frame-ancestors 'none'")
+		responseWriter.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; form-action 'self'")
 		responseWriter.Header().Set("Content-Type", "text/html; charset=utf-8")
 		responseWriter.Header().Set("Cache-Control", "no-cache") // elle désigne les /assets/ de la version servie
 		responseWriter.Write(index)
