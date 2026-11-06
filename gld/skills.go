@@ -430,7 +430,11 @@ func saveSkill(key, text string, create bool) error {
 		return terr("srv.skills.nomInvalideMinusculesChiffres")
 	}
 	if !create {
-		if previous, _, readErr := readSkill(key); readErr == nil && previous != text {
+		previous, _, readErr := readSkill(key)
+		if readErr != nil && !errors.Is(readErr, fs.ErrNotExist) {
+			return readErr
+		}
+		if readErr == nil && previous != text {
 			if trashErr := saveTrash("k/"+key, filepath.Join(dir, skillFile), "remplacé", previous); trashErr != nil {
 				return trashErr
 			}

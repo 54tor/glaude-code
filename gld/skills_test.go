@@ -290,3 +290,19 @@ func TestRemoveSkillDossierAvecLien(t *testing.T) {
 		t.Fatal("SKILL.md supprimé alors que le dossier reste")
 	}
 }
+
+// Un SKILL.md existant que readSkill refuse (au-delà de skillMaxBytes) ne doit pas être remplacé sans copie en corbeille :
+// l'enregistrement échoue et le fichier reste intact.
+func TestSaveSkillRefuseDeRemplacerUnSkillIllisible(t *testing.T) {
+	cfg := t.TempDir()
+	use(cfg)
+	cheminSkill := filepath.Join(cfg, "skills", "gros", "SKILL.md")
+	contenuAttendu := "---\ndescription: gros\n---\n" + strings.Repeat("x", skillMaxBytes+1)
+	put(t, cheminSkill, contenuAttendu, old)
+	if saveErr := saveSkill("u/gros", "---\ndescription: remplacé\n---\n", false); saveErr == nil {
+		t.Fatal("un SKILL.md illisible a été remplacé")
+	}
+	if contenuObtenu, _ := os.ReadFile(cheminSkill); string(contenuObtenu) != contenuAttendu {
+		t.Fatal("SKILL.md modifié")
+	}
+}
