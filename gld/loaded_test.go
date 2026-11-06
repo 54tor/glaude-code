@@ -134,3 +134,24 @@ func TestAskUserQuestionLisible(t *testing.T) {
 		t.Fatalf("résumé illisible : %+v", messages)
 	}
 }
+
+// Au-delà du plafond, le journal ne garde que sa fin, à partir d'un début de ligne : il ne grossit pas sans fin.
+func TestTrimLogTailGardeLaFinDuFichier(t *testing.T) {
+	cfg := t.TempDir()
+	use(cfg)
+	cheminDuJournal := filepath.Join(cfg, "gld-web.log")
+	ligneAncienne := strings.Repeat("a", 99) + "\n"
+	ligneRecente := strings.Repeat("b", 99) + "\n"
+	contenuInitial := strings.Repeat(ligneAncienne, 50) + strings.Repeat(ligneRecente, 5)
+	os.WriteFile(cheminDuJournal, []byte(contenuInitial), 0o600)
+
+	trimLogTail(cheminDuJournal, 1000, 550)
+
+	contenuObtenu, _ := os.ReadFile(cheminDuJournal)
+	if len(contenuObtenu) > 550 || !strings.HasSuffix(string(contenuObtenu), ligneRecente) || !strings.HasPrefix(string(contenuObtenu), "aaaa") && !strings.HasPrefix(string(contenuObtenu), "bbbb") {
+		t.Fatalf("journal après coupe (%d octets) : %q", len(contenuObtenu), contenuObtenu)
+	}
+	if strings.Count(string(contenuObtenu), "\n") != len(contenuObtenu)/100 {
+		t.Fatal("le journal ne commence pas au début d'une ligne")
+	}
+}

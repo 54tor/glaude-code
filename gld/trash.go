@@ -18,11 +18,18 @@ import (
 
 var journalMu sync.Mutex
 
+const (
+	journalMaxBytes  = 10 << 20
+	journalKeepBytes = 1 << 20
+)
+
 // journal ajoute une ligne horodatée ; une erreur d'écriture n'empêche jamais l'action elle-même.
 func journal(format string, formatArgs ...any) {
 	journalMu.Lock()
 	defer journalMu.Unlock()
-	logFile, err := rOpenFile(cfgDir(), filepath.Join(cfgDir(), "gld-web.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	journalPath := filepath.Join(cfgDir(), "gld-web.log")
+	trimLogTail(journalPath, journalMaxBytes, journalKeepBytes)
+	logFile, err := rOpenFile(cfgDir(), journalPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
 		return
 	}

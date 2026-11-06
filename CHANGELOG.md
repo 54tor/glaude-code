@@ -64,6 +64,8 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - État git : plusieurs requêtes simultanées sur un même dossier ne lancent plus qu'un `git status`.
 - Connexion : seule une clé de sécurité retient la réauthentification 5 minutes, comme le dit la documentation ; après un code TOTP ou de secours, l'action sensible suivante redemande un code.
 - Connexion derrière un proxy non déclaré : son adresse ne devient plus « connue », les verrous de compte s'appliquent de nouveau à ses clients.
+- Fichiers remplacés (espace de travail, réglages, mémoire) : le mode conservé ne donne plus l'écriture au groupe ni aux autres (un 0664 devient 0644 dans l'espace de travail ; réglages et mémoire en 0600 au plus).
+- Journal `gld-web.log` : au-delà de 10 Mio, seul le dernier Mio est gardé.
 - Dépendances : `modernc.org/sqlite` 1.61.1 avec `modernc.org/libc` 1.79.0 (la version qu'il exige) ; interface : vite 8.3.6, vitest 5.1.0, @vitejs/plugin-react 6.2.1, tailwindcss 4.3.4, i18next 26.7.2, react-i18next 17.1.13, lucide-react 1.69, cn 0.5.2.
 
 ## [0.10.2] - 2026-11-03

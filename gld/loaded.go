@@ -5,6 +5,7 @@ package main
 // chargement). On sait alors dans combien de sessions une règle est entrée, et quels fichiers une session a reçus.
 
 import (
+	"bytes"
 	"encoding/json"
 	"io"
 	"os"
@@ -74,20 +75,26 @@ func runLoaded(input io.Reader) int {
 	return 0
 }
 
+// trimLogTail : au-delà de maxBytes, le fichier ne garde que ses keepBytes derniers octets, à partir d'un début de ligne.
+func trimLogTail(logPath string, maxBytes, keepBytes int64) {
+	fileInfo, statErr := os.Stat(logPath)
+	if statErr != nil || fileInfo.Size() <= maxBytes {
+		return
+	}
+	content, readErr := readTrusted(logPath)
+	if readErr != nil || int64(len(content)) <= keepBytes { // le fichier a pu raccourcir depuis le Stat
+		return
+	}
+	content = content[int64(len(content))-keepBytes:]
+	if lineStart := bytes.IndexByte(content, '\n'); lineStart >= 0 {
+		content = content[lineStart+1:]
+	}
+	rWriteAtomic(cfgDir(), logPath, content, 0o600)
+}
+
 func appendLoaded(line []byte) {
 	logPath := loadedFile()
-	if fileInfo, statErr := os.Stat(logPath); statErr == nil && fileInfo.Size() > loadedMax {
-		if content, readErr := readTrusted(logPath); readErr == nil && len(content) > loadedKeep { // le fichier a pu raccourcir depuis le Stat
-			content = content[len(content)-loadedKeep:]
-			for byteIndex, byteValue := range content { // on repart au début d'une ligne
-				if byteValue == '\n' {
-					content = content[byteIndex+1:]
-					break
-				}
-			}
-			rWriteAtomic(cfgDir(), logPath, content, 0o600)
-		}
-	}
+	trimLogTail(logPath, loadedMax, loadedKeep)
 	file, err := rOpenFile(cfgDir(), logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
 		return
