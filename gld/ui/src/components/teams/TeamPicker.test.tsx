@@ -70,7 +70,7 @@ describe("TeamPicker", () => {
     setup()
     await click(screen.getByRole("checkbox", { name: /Fonctionnalité/ }))
     await click(screen.getByRole("checkbox", { name: /Correctif de bug/ }))
-    await screen.findByText("2 team(s) · 2 coéquipier(s)")
+    await screen.findByText("2 teams · 2 coéquipiers")
     expect(screen.getAllByText("Testeur", { selector: "b" })).toHaveLength(1)
     expect(screen.getAllByText("Chef de projet", { selector: "b" })).toHaveLength(1)
   })
@@ -152,7 +152,7 @@ describe("TeamPicker", () => {
       <TeamPicker catalog={catalog} onLaunch={onLaunch} pickDir={pickDir} />
     )
     await click(screen.getByRole("checkbox", { name: /Fonctionnalité/ }))
-    await screen.findByText("1 team(s) · 2 coéquipier(s)")
+    await screen.findByText("1 team · 2 coéquipiers")
     await type(screen.getByRole("textbox"), "x")
     await click(screen.getByRole("button", { name: "Choisir" }))
     await waitFor(() =>
@@ -168,7 +168,7 @@ describe("TeamPicker", () => {
         pickDir={pickDir}
       />
     )
-    await screen.findByText("0 team(s) · 0 coéquipier(s)")
+    await screen.findByText("0 team · 0 coéquipier")
     expect(screen.queryByText("Développement backend", { selector: "b" })).toBeNull()
     expect(
       (screen.getByRole("button", { name: "Lancer" }) as HTMLButtonElement)

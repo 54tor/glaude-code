@@ -136,8 +136,8 @@ export function TeamPicker({
         <h2 className="mb-2 text-sm font-semibold">{t("teams.composition")}</h2>
         <p className="mb-2 text-sm text-muted-foreground">
           {t("teams.count", {
-            teams: sel.length,
-            mates: compo?.mates.length ?? 0,
+            teams: t("teams.teamCount", { count: sel.length }),
+            mates: t("teams.mateCount", { count: compo?.mates.length ?? 0 }),
           })}
         </p>
         {compo && (
