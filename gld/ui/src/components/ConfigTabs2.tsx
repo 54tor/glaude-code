@@ -340,7 +340,8 @@ function Row({ field, value, file, propose }: { field: Field; value: unknown; fi
   const isText = field.kind === "text"
   const current = value === undefined ? "" : String(value)
   const applyText = () => set(isText ? text : Number(text))
-  const canApply = isText ? text !== current : !!text.trim() && text !== current
+  const isEmptyExplicit = isText && value === ""
+  const canApply = isText ? text !== current || (text === "" && value === undefined) : !!text.trim() && text !== current
   const options = enumOptions(field, current, t)
   const changeEnum = (selectedValue: string) => {
     if (selectedValue === "") {
@@ -366,7 +367,7 @@ function Row({ field, value, file, propose }: { field: Field; value: unknown; fi
             value={text}
             onChange={(changeEvent) => setText(changeEvent.target.value)}
             onKeyDown={(keyEvent) => keyEvent.key === "Enter" && canApply && applyText()}
-            placeholder={t("config.settings.default")}
+            placeholder={isEmptyExplicit ? t("config.settings.emptyValue") : t("config.settings.default")}
             className={isText ? "h-7 w-72 text-xs" : "h-7 w-56 text-xs"}
             aria-label={field.label}
           />
