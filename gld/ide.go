@@ -126,7 +126,7 @@ func routesIDE(mux *http.ServeMux) {
 			ideFail(responseWriter, errIdeTooBig)
 			return
 		}
-		file, err := root.Open(rel)
+		file, err := root.OpenFile(rel, os.O_RDONLY|oNonBlock, 0)
 		if err != nil {
 			ideFail(responseWriter, err)
 			return

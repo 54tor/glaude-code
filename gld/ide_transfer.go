@@ -26,7 +26,7 @@ func ideDownload(responseWriter http.ResponseWriter, request *http.Request) {
 		ideFail(responseWriter, errIdePath)
 		return
 	}
-	file, err := root.Open(rel)
+	file, err := root.OpenFile(rel, os.O_RDONLY|oNonBlock, 0)
 	if err != nil {
 		ideFail(responseWriter, err)
 		return
