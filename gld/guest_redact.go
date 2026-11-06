@@ -22,11 +22,12 @@ const (
 	wordBoundaryBefore = `(^|[^A-Za-z0-9_])`
 	wordBoundaryAfter  = `([^A-Za-z0-9_]|$)`
 	minAccountLength   = 3
+	encodedSlash       = "%2F"
 )
 
 var (
 	hostPathRe = regexp.MustCompile(
-		"(^|[\\s\"'(=:@,;<>`]|\\\\[nt])" +
+		`(^|[^A-Za-z0-9._@+%~=/\\-]|\\[nrt]|\\u[0-9A-Fa-f]{4})` +
 			`(/(?:[A-Za-z0-9._@+%~=-]+/)+[A-Za-z0-9._@+%~=-]+)`)
 	appPathPrefixes   = []string{"/v1/", "/assets/", "/icons/", "/guest/", "/invite/"}
 	spareAccountNames = map[string]bool{"user": true, "root": true}
@@ -105,12 +106,17 @@ func isWordByte(character byte) bool {
 	return character == '_' || character >= '0' && character <= '9' || character >= 'a' && character <= 'z' || character >= 'A' && character <= 'Z'
 }
 
+// followsEncodedSlash : le terme suit un « / » encodé pour une URL (%2F), dont le F le collerait sinon à un mot.
+func followsEncodedSlash(content []byte, start int) bool {
+	return start >= len(encodedSlash) && strings.EqualFold(string(content[start-len(encodedSlash):start]), encodedSlash)
+}
+
 // replaceWords remplace les termes d'identité entiers : un terme collé à une lettre ou un chiffre (bobbyx) reste intact.
 func (redactor *pathRedactor) replaceWords(content []byte) []byte {
 	var masked []byte
 	copiedUntil := 0
 	for _, bounds := range redactor.account.FindAllIndex(content, -1) {
-		startsWord := bounds[0] == 0 || !isWordByte(content[bounds[0]-1])
+		startsWord := bounds[0] == 0 || !isWordByte(content[bounds[0]-1]) || followsEncodedSlash(content, bounds[0])
 		endsWord := bounds[1] == len(content) || !isWordByte(content[bounds[1]])
 		if !startsWord || !endsWord {
 			continue

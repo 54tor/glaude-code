@@ -21,6 +21,13 @@ func TestPathRedactorMasqueLHote(t *testing.T) {
 		`/home/bobbyx/Projets/app/a.go`:                       `…/a.go`,
 		`/data/backups/db.sql`:                                `…/db.sql`,
 		`auteur Jean Dupont <jean.dupont@example.com>`:        `auteur guest-ab12 <guest-ab12>`,
+		`{"t":"\u003cpath\u003e/data/backups/db.sql"}`:        `{"t":"\u003cpath\u003e…/db.sql"}`,
+		"     1→/data/backups/db.sql":                         "     1→…/db.sql",
+		`**/srv/clients/a/b.txt**`:                            `**…/b.txt**`,
+		`[/srv/clients/a/b.txt]`:                              `[…/b.txt]`,
+		`ligne\r/srv/clients/a/b.txt`:                         `ligne\r…/b.txt`,
+		`file%3A%2F%2F%2Fhome%2Fbobby%2Fx`:                    `file%3A%2F%2F%2Fhome%2Fguest-ab12%2Fx`,
+		`src/clients/a/b.txt et ./a/b et ~/a/b`:               `src/clients/a/b.txt et ./a/b et ~/a/b`,
 	}
 	for input, expected := range testCases {
 		if obtained := string(redactor.apply([]byte(input))); obtained != expected {
