@@ -4,6 +4,8 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ## [Non publié]
 
+## [0.11.0] - 2026-11-06
+
 ### Ajouté
 - Configuration > Réglages : un groupe « Attribution » pour choisir le texte ajouté par Claude aux commits et aux pull requests (vide : aucune ligne ajoutée).
 - Configuration > Projets : les règles d'un dossier sont regroupées par fichier (global en lecture seule, partagé, perso) et chaque règle indique les hooks et skills du projet qui touchent le même outil ; les dossiers supplémentaires du global s'affichent aussi.
@@ -691,7 +693,8 @@ Première version : `gld`, interface web locale pour parcourir, piloter et confi
 - Terminal intégré désactivé par défaut ; lecture bornée des fichiers de commandes.
 - Refus d'agir quand les sessions ouvertes sont indéterminées.
 
-[Non publié]: https://github.com/54tor/glaude-code/compare/v0.9.1...HEAD
+[Non publié]: https://github.com/54tor/glaude-code/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/54tor/glaude-code/compare/v0.10.2...v0.11.0
 [0.9.1]: https://github.com/54tor/glaude-code/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/54tor/glaude-code/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/54tor/glaude-code/compare/v0.7.1...v0.8.0
