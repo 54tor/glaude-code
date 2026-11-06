@@ -425,7 +425,7 @@ function Shell() {
       case "config":
         return t("shell.app.sub.config")
       case "snippets":
-        return snips?.dir ?? ""
+        return snips ? tilde(snips.dir, home) : ""
       case "memory":
         return t("shell.app.sub.memory")
       case "workspace":
