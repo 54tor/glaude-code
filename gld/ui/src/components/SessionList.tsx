@@ -118,17 +118,6 @@ const Row = memo(function Row({
               !picked && actions.selected.length === 0 && "md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100 pointer-coarse:hidden"
             )}
           />
-          {kids > 0 && (
-            <button
-              onClick={onToggle}
-              aria-expanded={open}
-              aria-label={t("shell.list.subSessions", { count: kids })}
-              className="relative z-10 flex shrink-0 items-center gap-0.5 rounded-sm text-xs text-muted-foreground hover:text-foreground"
-            >
-              <ChevronRight className={cn("size-3.5 transition-transform", open && "rotate-90")} />
-              <span className="tabular-nums">{kids}</span>
-            </button>
-          )}
           <a
             data-row
             data-id={session.id}
@@ -199,6 +188,17 @@ const Row = memo(function Row({
             </span>
             {hit && <Snip text={hit.snip} />}
           </a>
+          {kids > 0 && (
+            <button
+              onClick={onToggle}
+              aria-expanded={open}
+              aria-label={t("shell.list.subSessions", { count: kids })}
+              className="relative z-10 flex h-6 shrink-0 items-center gap-0.5 rounded-sm px-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <ChevronRight className={cn("size-3.5 transition-transform", open && "rotate-90")} />
+              <span className="tabular-nums">{kids}</span>
+            </button>
+          )}
           {/* Actions au-dessus du bouton étiré : visibles au survol, au focus clavier, ou menu ouvert. */}
           <div className="relative z-10 flex items-center gap-1 transition-opacity md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100 md:has-[[data-state=open]]:opacity-100">
             {!group.missing && (
