@@ -120,7 +120,7 @@ func launcherCmd(name, title string, argv []string) (*exec.Cmd, error) {
 	case "gnome-terminal":
 		return with("gnome-terminal", "--tab", "--title="+title, "--"), nil
 	case "konsole":
-		return with("konsole", "--new-tab", "-p", "tabtitle="+title, "-e"), nil
+		return with("konsole", "--new-tab", "-p", "tabtitle="+safeTitle(title), "-e"), nil // -p lit une liste de propriétés séparées par « ; »
 	case "xfce4-terminal":
 		return exec.Command("xfce4-terminal", "--tab", "-T", title, "-e", shJoin(argv)), nil
 	case "tilix":
