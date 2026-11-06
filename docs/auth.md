@@ -109,6 +109,8 @@ Le cookie `gld_token` et `?token=` ne servent plus au navigateur. Le jeton ne va
 
 ### Coupure des flux longs
 
+Un tour de `/v1/sessions/{id}/chat` tourne dans son propre groupe de processus (Unix) : son délai (30 min), « Arrêter », une session révoquée ou un droit retiré arrêtent claude **et** tout ce qu'il a lancé (commandes Bash, y compris en tâche de fond, serveurs MCP). Une tâche de fond qui doit survivre au tour se lance depuis le terminal, pas depuis le chat.
+
 Le terminal web et `/v1/sessions/{id}/chat` sont revérifiés pendant leur durée : session expirée, révoquée, compte désactivé ou droit retiré coupent le flux, et un tour de chat en cours est arrêté. Seul le terminal web **local** est contrôlé à chaque message reçu ; `/v1/sessions/{id}/chat` local et les flux relayés vers un home enfant (terminal, chat) le sont toutes les 5 s : un utilisateur révoqué peut encore agir jusqu'à environ 5 s.
 
 ## Anti essais répétés
