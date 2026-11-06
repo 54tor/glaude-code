@@ -10,8 +10,10 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -88,15 +90,27 @@ var (
 func readHomes() []Home { return readHomesFile(homesFile()) }
 
 func readHomesFile(path string) []Home {
+	homes, _ := readHomesStrict(path)
+	return homes
+}
+
+// readHomesStrict : un fichier absent est vide ; illisible ou invalide, une erreur, pour ne jamais le réécrire par-dessus.
+func readHomesStrict(path string) ([]Home, error) {
 	content, err := readTrusted(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return []Home{}, nil
+	}
 	if err != nil {
-		return []Home{}
+		return []Home{}, err
 	}
 	var homesDocument struct{ Homes []Home }
-	if json.Unmarshal(content, &homesDocument) != nil || homesDocument.Homes == nil {
-		return []Home{}
+	if decodeErr := json.Unmarshal(content, &homesDocument); decodeErr != nil {
+		return []Home{}, decodeErr
 	}
-	return homesDocument.Homes
+	if homesDocument.Homes == nil {
+		return []Home{}, nil
+	}
+	return homesDocument.Homes, nil
 }
 
 // loadHomes attribue et enregistre un identifiant aux homes d'un fichier antérieur qui n'en ont pas.
@@ -172,8 +186,12 @@ func saveHomes(homes []Home) error {
 	homesFileMu.Lock()
 	defer homesFileMu.Unlock()
 	// Un identifiant fourni n'est gardé que s'il existe déjà : un client ne peut pas reprendre celui d'un home supprimé.
+	storedHomes, readErr := readHomesStrict(homesFile())
+	if readErr != nil {
+		return terr("srv.homes.fichierIllisible", "A1", readErr.Error())
+	}
 	byID, byName := map[string]bool{}, map[string]string{}
-	for _, storedHome := range readHomes() {
+	for _, storedHome := range storedHomes {
 		if storedHome.ID != "" {
 			byID[storedHome.ID], byName[storedHome.Name] = true, storedHome.ID
 		}

@@ -259,3 +259,20 @@ func TestEnvironNoAuth(t *testing.T) {
 		}
 	}
 }
+
+// Un fichier des homes illisible (JSON tronqué) n'est jamais réécrit : sinon chaque home recevrait un nouvel identifiant et les
+// droits home_acl, attachés aux anciens, ne s'appliqueraient plus.
+func TestSaveHomesRefuseDeReecrireUnFichierIllisible(t *testing.T) {
+	cfg := t.TempDir()
+	use(cfg)
+	contenuAttendu := `{"homes":[{"id":"h-ancien","name":"Pro","dir":"/x"`
+	if writeErr := os.WriteFile(homesFile(), []byte(contenuAttendu), 0o600); writeErr != nil {
+		t.Fatal(writeErr)
+	}
+	if saveErr := saveHomes([]Home{{Name: "Pro", Dir: t.TempDir()}}); saveErr == nil {
+		t.Fatal("fichier des homes illisible réécrit")
+	}
+	if contenuObtenu, _ := os.ReadFile(homesFile()); string(contenuObtenu) != contenuAttendu {
+		t.Fatalf("fichier des homes modifié : %s", contenuObtenu)
+	}
+}

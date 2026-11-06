@@ -201,6 +201,7 @@
   "srv.ide.erreur": "Erreur d'accès au fichier",
   "srv.homes.dossierDeConfigurationInconnu": "dossier de configuration inconnu",
   "srv.homes.dossierIntrouvable": "« {{.A1}} » : dossier introuvable",
+  "srv.homes.fichierIllisible": "fichier des dossiers de configuration illisible ({{.A1}}) : rien n'est réécrit",
   "srv.homes.indisponible": "dossier de configuration indisponible : voir le journal de gld",
   "srv.homes.leProcessusEnfantNe": "le processus enfant ne répond pas",
   "srv.homes.leProcessusEnfantS": "le processus enfant s'est arrêté",
