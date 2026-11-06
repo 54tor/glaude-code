@@ -276,3 +276,10 @@ html, body, [data-slot="scroll-area-viewport"] { overscroll-behavior: none; }
 
 /* Tableaux ASCII (cadres ┌─┬┐│└┘) : polices à jeu de cadres complet, une seule police pour tous les glyphes, interligne qui joint les traits. */
 .ascii-table { font-family: "DejaVu Sans Mono", Menlo, Consolas, "Liberation Mono", monospace; line-height: normal; font-variant-ligatures: none; font-kerning: none; }
+
+/* Sonner, sous 600 px : width 100 % plus left décalé faisait dépasser le conteneur des toasts du bord droit (défilement horizontal),
+   et sa règle de bureau [data-x-position] (right: 24 px) l'emporte sur sa règle mobile. */
+@media (max-width: 600px) {
+  html [data-sonner-toaster][data-x-position] { width: auto; right: var(--mobile-offset-right); }
+  html [data-sonner-toaster] [data-sonner-toast] { width: 100%; }
+}
