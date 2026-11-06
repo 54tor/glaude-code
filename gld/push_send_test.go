@@ -3,10 +3,12 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"sync"
 	"testing"
+	"time"
 )
 
 var verrouEnvoisPush sync.Mutex
@@ -87,13 +89,13 @@ func TestPushSendUneErreurDEnvoiNArretePasLesAutres(t *testing.T) {
 	envois := installerTransportPushDeTest(t, nil)
 	appelsAvantErreur := 0
 	pushTransport = func(abonnement pushSubscription, corps []byte) (int, error) {
+		verrouEnvoisPush.Lock()
+		defer verrouEnvoisPush.Unlock()
 		appelsAvantErreur++
 		if appelsAvantErreur == 1 {
 			return 0, errors.New("réseau coupé")
 		}
-		verrouEnvoisPush.Lock()
 		*envois = append(*envois, envoiPushEnregistre{abonnement.Endpoint, corps})
-		verrouEnvoisPush.Unlock()
 		return 201, nil
 	}
 	_ = pushSubscriptionUpsert(pushSubscription{Endpoint: "https://push.example.com/a", Asking: true})
@@ -244,5 +246,23 @@ func TestPushCreatorSessionLiveSuitLaSessionCreatrice(t *testing.T) {
 	}
 	if pushCreatorSessionLive(principalCreateur.SessionID) {
 		t.Fatal("une session révoquée ne doit plus recevoir d'envoi")
+	}
+}
+
+// Les envois partent en parallèle : un service push lent ne fait plus attendre la boucle de veille une fois par abonnement.
+func TestPushDispatchEnvoieEnParallele(t *testing.T) {
+	installerTransportPushDeTest(t, nil)
+	const dureeDUnEnvoiLent = 200 * time.Millisecond
+	pushTransport = func(pushSubscription, []byte) (int, error) {
+		time.Sleep(dureeDUnEnvoiLent)
+		return 201, nil
+	}
+	for numeroAbonnement := range pushParallelSends {
+		_ = pushSubscriptionUpsert(pushSubscription{Endpoint: fmt.Sprintf("https://push.example.com/%d", numeroAbonnement), UserID: int64(numeroAbonnement), Asking: true})
+	}
+	debut := time.Now()
+	pushDispatch(pushEvent{HomeID: mainHomeID, SessionID: "s1", Kind: "asking"})
+	if dureeObtenue := time.Since(debut); dureeObtenue > 3*dureeDUnEnvoiLent {
+		t.Fatalf("envois en série : %v pour %d abonnements", dureeObtenue, pushParallelSends)
 	}
 }

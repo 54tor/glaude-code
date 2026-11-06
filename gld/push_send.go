@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"golang.org/x/sync/errgroup"
 	"net/http"
 	"net/url"
 	"time"
@@ -34,6 +35,8 @@ type pushPayload struct {
 	Tag   string `json:"tag"`
 	URL   string `json:"url"`
 }
+
+const pushParallelSends = 8
 
 var (
 	pushTransport   = webpushSend
@@ -132,23 +135,34 @@ func pushDispatch(event pushEvent) {
 		journal("push: abonnements illisibles : %v", loadErr)
 		return
 	}
+	// Envois en parallèle, bornés : un service push lent (15 s au plus par envoi) ne fige plus la boucle de veille N fois.
+	var sendGroup errgroup.Group
+	sendGroup.SetLimit(pushParallelSends)
 	for _, subscription := range subscriptions {
 		if !pushWantsEvent(subscription, event.Kind) || !pushMayRead(subscription.UserID, event.HomeID) || !pushSessionLive(subscription.SessionID) {
 			continue
 		}
-		statusCode, sendErr := pushTransport(subscription, pushPayloadFor(subscription, event))
-		if sendErr != nil {
-			journal("push: envoi échoué : %v", sendErr)
-			continue
+		sendGroup.Go(func() error {
+			pushSendOne(subscription, event)
+			return nil
+		})
+	}
+	sendGroup.Wait()
+}
+
+func pushSendOne(subscription pushSubscription, event pushEvent) {
+	statusCode, sendErr := pushTransport(subscription, pushPayloadFor(subscription, event))
+	if sendErr != nil {
+		journal("push: envoi échoué : %v", sendErr)
+		return
+	}
+	if statusCode == statusGone || statusCode == statusNotFound {
+		if deleteErr := pushSubscriptionDelete(subscription.Endpoint); deleteErr != nil {
+			journal("push: suppression d'un abonnement expiré impossible : %v", deleteErr)
 		}
-		if statusCode == statusGone || statusCode == statusNotFound {
-			if deleteErr := pushSubscriptionDelete(subscription.Endpoint); deleteErr != nil {
-				journal("push: suppression d'un abonnement expiré impossible : %v", deleteErr)
-			}
-			continue
-		}
-		if pushStatusFailed(statusCode) {
-			journal("push: le service push a répondu %d", statusCode)
-		}
+		return
+	}
+	if pushStatusFailed(statusCode) {
+		journal("push: le service push a répondu %d", statusCode)
 	}
 }
