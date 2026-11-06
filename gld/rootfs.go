@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io"
 	"math/rand/v2"
 	"os"
 	"path/filepath"
@@ -103,6 +104,16 @@ func rWriteAtomic(base, path string, content []byte, mode os.FileMode) error {
 	}
 	defer trustedRoot.Close()
 	return rootWriteAtomic(trustedRoot, rel, content, mode)
+}
+
+// rootReadAtMost lit au plus maxBytes+1 octets : l'appelant juge le dépassement sans charger un fichier de taille quelconque.
+func rootReadAtMost(trustedRoot *os.Root, rel string, maxBytes int64) ([]byte, error) {
+	openedFile, err := trustedRoot.Open(rel)
+	if err != nil {
+		return nil, err
+	}
+	defer openedFile.Close()
+	return io.ReadAll(io.LimitReader(openedFile, maxBytes+1))
 }
 
 // rootWriteAtomic : rWriteAtomic dans une racine déjà ouverte (un nom de temporaire fixe suivrait un lien posé à sa place).

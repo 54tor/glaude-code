@@ -533,7 +533,7 @@ func copySkill(key, to string) (string, error) {
 		if fileCount++; fileCount > copyMaxFiles {
 			return terr("srv.skills.tropDeFichiersAu")
 		}
-		content, entryErr := fs.ReadFile(sourceRoot.FS(), walkPath)
+		content, entryErr := rootReadAtMost(sourceRoot, walkPath, copyMaxBytes-totalBytes)
 		if entryErr != nil {
 			return entryErr
 		}
