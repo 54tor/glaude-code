@@ -39,7 +39,10 @@ func watchWaiting(every time.Duration) {
 			return
 		case <-ticker.C:
 		}
-		currentWaiting := waiting()
+		currentWaiting, known := waitingKnown()
+		if !known {
+			continue
+		}
 		fresh := newWaiting(previousWaiting, currentWaiting)
 		previousWaiting = map[string]bool{}
 		for _, sessionID := range currentWaiting {

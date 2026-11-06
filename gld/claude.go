@@ -259,16 +259,22 @@ func alive() map[string]bool {
 // waiting : ids des sessions ouvertes qui attendent (interactive « idle », en arrière-plan « blocked »).
 // Une demande d'autorisation en cours n'est pas distinguée d'un tour terminé.
 var waiting = func() []string {
+	waitingIDs, _ := waitingKnown()
+	return waitingIDs
+}
+
+// waitingKnown : comme waiting, et known faux si `claude agents --json` a échoué : une liste vide n'y veut pas dire « aucune ».
+var waitingKnown = func() (waitingIDs []string, known bool) {
 	agentsJSON, err := claudeAgents()
 	var agents []struct{ SessionId, Status, State string }
-	waitingIDs := []string{}
+	waitingIDs = []string{}
 	if err != nil || json.Unmarshal(agentsJSON, &agents) != nil {
-		return waitingIDs
+		return waitingIDs, false
 	}
 	for _, agent := range agents {
 		if agent.Status == "idle" || agent.State == "blocked" {
 			waitingIDs = append(waitingIDs, agent.SessionId)
 		}
 	}
-	return waitingIDs
+	return waitingIDs, true
 }
