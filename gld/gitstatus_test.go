@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"slices"
 	"sort"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -254,5 +255,32 @@ func TestRunGitRemotesReel(t *testing.T) {
 	want := []GitRemoteSync{{Name: "a", Ahead: 1}, {Name: "b", Missing: true}}
 	if !slices.Equal(got, want) {
 		t.Fatalf("%+v", got)
+	}
+}
+
+// Plusieurs requêtes simultanées sur un dossier périmé ne lancent qu'un `git status` : les suivantes attendent son résultat.
+func TestGitStatesNeRelancePasGitPourUnDossierDejaEnLecture(t *testing.T) {
+	ancienneCommande := gitRun
+	defer func() { gitRun = ancienneCommande; gitMu.Lock(); clear(gitCache); gitMu.Unlock() }()
+	gitMu.Lock()
+	clear(gitCache)
+	gitMu.Unlock()
+	var appelsDeGit atomic.Int32
+	gitRun = func(string) (string, error) {
+		appelsDeGit.Add(1)
+		time.Sleep(100 * time.Millisecond)
+		return "# branch.head dev\x00", nil
+	}
+	var requetesSimultanees sync.WaitGroup
+	for range 8 {
+		requetesSimultanees.Add(1)
+		go func() {
+			defer requetesSimultanees.Done()
+			gitStates([]string{"/depot"})
+		}()
+	}
+	requetesSimultanees.Wait()
+	if nombreObtenu := appelsDeGit.Load(); nombreObtenu != 1 {
+		t.Fatalf("%d git status pour un seul dossier", nombreObtenu)
 	}
 }

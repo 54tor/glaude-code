@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"golang.org/x/sync/singleflight"
 	"net/http"
 	"os"
 	"os/exec"
@@ -209,6 +210,8 @@ func gitPrefix(dir string) string {
 	return prefix
 }
 
+var gitFlight singleflight.Group
+
 // gitStates : l'état de chaque dossier. Ce qui est périmé est relu en parallèle, dans la limite de 2 s ; le reste de la liste
 // arrive à la requête suivante.
 func gitStates(dirs []string) map[string]GitState {
@@ -228,22 +231,25 @@ func gitStates(dirs []string) map[string]GitState {
 		waitGroup.Add(1)
 		go func() {
 			defer waitGroup.Done()
-			gitSem <- struct{}{}
-			defer func() { <-gitSem }()
-			statusOutput, err := gitRun(dir)
-			entry := gitEntry{at: time.Now()}
-			if err == nil {
-				entry.st, entry.ok, entry.out = parseGitStatus(statusOutput), true, statusOutput
-				if entry.st.Branch != "" {
-					entry.st.Remotes = gitRemotesRun(dir, entry.st.Branch)
+			gitFlight.Do(dir, func() (any, error) { // deux requêtes simultanées ne relancent pas git pour le même dossier
+				gitSem <- struct{}{}
+				defer func() { <-gitSem }()
+				statusOutput, err := gitRun(dir)
+				entry := gitEntry{at: time.Now()}
+				if err == nil {
+					entry.st, entry.ok, entry.out = parseGitStatus(statusOutput), true, statusOutput
+					if entry.st.Branch != "" {
+						entry.st.Remotes = gitRemotesRun(dir, entry.st.Branch)
+					}
 				}
-			}
-			gitMu.Lock()
-			if len(gitCache) > gitCacheMaxEntries {
-				clear(gitCache)
-			}
-			gitCache[dir] = entry
-			gitMu.Unlock()
+				gitMu.Lock()
+				if len(gitCache) > gitCacheMaxEntries {
+					clear(gitCache)
+				}
+				gitCache[dir] = entry
+				gitMu.Unlock()
+				return nil, nil
+			})
 		}()
 	}
 	done := make(chan struct{})
