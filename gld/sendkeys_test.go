@@ -223,3 +223,82 @@ func TestBtwOpen(t *testing.T) {
 		t.Fatal("faux positif")
 	}
 }
+
+// installerFauxExecutableQuiAfficheEnv place en tête du PATH un faux exécutable `nom` qui imprime son environnement :
+// on vérifie ainsi ce que gld transmet réellement au processus lancé, sans dépendre du vrai binaire.
+func installerFauxExecutableQuiAfficheEnv(t *testing.T, nom string) {
+	t.Helper()
+	if _, shErr := exec.LookPath("sh"); shErr != nil {
+		t.Skip("sh introuvable")
+	}
+	dossierFaux := t.TempDir()
+	if writeErr := os.WriteFile(filepath.Join(dossierFaux, nom), []byte("#!/bin/sh\nenv\n"), 0o755); writeErr != nil {
+		t.Fatal(writeErr)
+	}
+	t.Setenv("PATH", dossierFaux+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
+// La clé maîtresse fournie par GLD_AUTH_KEY ne doit jamais atteindre tmux : un serveur tmux démarré par gld la copierait
+// dans son environnement global, lisible depuis chaque panneau.
+func TestTmuxRunNeTransmetPasLaCleMaitresse(t *testing.T) {
+	installerFauxExecutableQuiAfficheEnv(t, "tmux")
+	t.Setenv("GLD_AUTH_KEY", strings.Repeat("ab", 32))
+	environnementObtenu, runErr := tmuxRun("")
+	if runErr != nil {
+		t.Fatal(runErr)
+	}
+	if strings.Contains(environnementObtenu, "GLD_AUTH_KEY=") {
+		t.Fatal("GLD_AUTH_KEY transmise à tmux")
+	}
+	if !strings.Contains(environnementObtenu, "PATH=") {
+		t.Fatal("environnement vide : le faux tmux n'a pas tourné")
+	}
+}
+
+// Même exigence pour git, lancé par les routes d'état git (mem_read).
+func TestGitOut1NeTransmetPasLaCleMaitresse(t *testing.T) {
+	installerFauxExecutableQuiAfficheEnv(t, "git")
+	t.Setenv("GLD_AUTH_KEY", strings.Repeat("ab", 32))
+	environnementObtenu, runErr := gitOut1(t.TempDir(), "status")
+	if runErr != nil {
+		t.Fatal(runErr)
+	}
+	if strings.Contains(environnementObtenu, "GLD_AUTH_KEY=") || !strings.Contains(environnementObtenu, "PATH=") {
+		t.Fatalf("environnement transmis à git incorrect")
+	}
+}
+
+// L'émulateur lancé par openTab (ici un faux « terminator ») ne reçoit pas la clé maîtresse : il n'est pas marqué
+// non-dumpable et démarrerait, avec un lanceur « +tmux », un serveur tmux qui la garderait.
+func TestOpenTabNeTransmetPasLaCleMaitresse(t *testing.T) {
+	if _, shErr := exec.LookPath("sh"); shErr != nil {
+		t.Skip("sh introuvable")
+	}
+	dossierFaux := t.TempDir()
+	fichierEnvironnement := filepath.Join(dossierFaux, "env.txt")
+	script := "#!/bin/sh\nenv > \"" + fichierEnvironnement + ".tmp\" && mv \"" + fichierEnvironnement + ".tmp\" \"" + fichierEnvironnement + "\"\n"
+	if writeErr := os.WriteFile(filepath.Join(dossierFaux, "terminator"), []byte(script), 0o755); writeErr != nil {
+		t.Fatal(writeErr)
+	}
+	t.Setenv("PATH", dossierFaux+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("GLD_AUTH_KEY", strings.Repeat("ab", 32))
+	t.Setenv("TMPDIR", dossierFaux) // le fichier de spécification n'est relu par aucun « gld _run » ici : qu'il reste dans le dossier du test
+	if openErr := openTab("terminator", "titre", tabSpec{Cwd: dossierFaux, Args: []string{"claude"}}); openErr != nil {
+		t.Fatal(openErr)
+	}
+	echeance := time.Now().Add(5 * time.Second)
+	var environnementObtenu []byte
+	for time.Now().Before(echeance) {
+		if contenu, readErr := os.ReadFile(fichierEnvironnement); readErr == nil {
+			environnementObtenu = contenu
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !strings.Contains(string(environnementObtenu), "PATH=") {
+		t.Fatal("le faux émulateur n'a pas tourné")
+	}
+	if strings.Contains(string(environnementObtenu), "GLD_AUTH_KEY=") {
+		t.Fatal("GLD_AUTH_KEY transmise à l'émulateur")
+	}
+}
