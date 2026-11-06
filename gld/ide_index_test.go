@@ -233,3 +233,8 @@ func TestFsIndexRequiresFsRead(t *testing.T) {
 		}
 	}
 }
+
+func ideBuildIndex(root *os.Root, limits ideLimits) ([]ideIndexEntry, bool) {
+	entries, _, partial := ideWalk(root, limits)
+	return entries, partial
+}

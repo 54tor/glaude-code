@@ -102,12 +102,6 @@ var tokenTries = struct {
 	by  map[string]*tryWin
 }{by: map[string]*tryWin{}}
 
-func resetTokenTries() {
-	tokenTries.Lock()
-	tokenTries.all, tokenTries.by = tryWin{}, map[string]*tryWin{}
-	tokenTries.Unlock()
-}
-
 // tokenTry réserve un essai, sous le même verrou que le contrôle : des requêtes simultanées ne passent pas toutes avant
 // le premier échec. false : l'adresse ou le serveur a épuisé ses essais. Un essai réussi se rend par tokenRefund.
 func tokenTry(clientAddress string) bool {
