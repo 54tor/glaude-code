@@ -192,6 +192,7 @@ func chatHandler(responseWriter http.ResponseWriter, request *http.Request) {
 	runContext, cancel := context.WithTimeout(context.Background(), chatTurnTimeout)
 	commandArgs := withGuard(append(builtinPromptArgs(), chatArgs(flags, id, payload.Mode, payload.Prompt)...))
 	cmd := withPath(exec.CommandContext(runContext, "claude", commandArgs...))
+	cmd.WaitDelay = time.Second
 	cmd.Dir = cwd
 	var stderr strings.Builder
 	cmd.Stderr = &stderr

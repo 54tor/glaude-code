@@ -65,6 +65,8 @@ func runPlugin(dir string, timeout time.Duration, args ...string) ([]byte, error
 	commandContext, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	cmd := withPath(exec.CommandContext(commandContext, "claude", append([]string{"plugin"}, args...)...)) // #nosec G702 -- exécutable fixe, arguments en tableau, sans shell
+	cmd.WaitDelay = time.Second
+	cmd.Env = append(cmd.Env, "GIT_TERMINAL_PROMPT=0")
 	cmd.Dir = dir
 	if cmd.Dir == "" {
 		cmd.Dir = workDir()

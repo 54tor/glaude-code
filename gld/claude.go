@@ -119,6 +119,7 @@ func helperCmd(callContext context.Context, model, system string) *exec.Cmd {
 var helperSem = make(chan struct{}, 2)
 
 func helperOutput(callContext context.Context, cmd *exec.Cmd) ([]byte, error) {
+	cmd.WaitDelay = time.Second
 	select {
 	case helperSem <- struct{}{}:
 	case <-callContext.Done():
