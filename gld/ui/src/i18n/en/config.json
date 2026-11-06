@@ -118,6 +118,7 @@
     },
     "settings": {
       "default": "(default)",
+      "emptyValue": "(empty)",
       "currentValue": "{{value}} (current value)",
       "reset": "Remove setting (default value)",
       "group": {
