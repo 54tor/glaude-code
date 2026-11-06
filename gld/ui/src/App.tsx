@@ -407,6 +407,7 @@ function Shell() {
           dirs: t("shell.count.dirs", { count: currentProject?.dirs.length ?? 0 }),
           sessions: formatSessionCount(visibleRows.length),
         })
+      case "home":
       case "active": {
         const openCount = activeRows.filter((row) => liveIds.has(row.s.id)).length
         const warmCount = activeRows.filter((row) => !liveIds.has(row.s.id)).length
@@ -435,6 +436,9 @@ function Shell() {
       }
       case "tabs":
         return t("shell.app.sub.tabs")
+      case "teams":
+      case "team":
+        return ""
       case "group": {
         const groupDir = currentVirtualGroup ? tilde(currentVirtualGroup.project, home) : "?"
         return t("shell.app.sub.group", { dir: groupDir, sessions: formatSessionCount(visibleRows.length) })
