@@ -53,6 +53,12 @@ describe("Dashboard — sessions", () => {
     expect(screen.getByText(/Sessions ouvertes \(0\)/)).toBeTruthy()
   })
 
+  it("chaque carte a un titre de niveau 2 qui ne contient pas ses boutons", async () => {
+    await mount()
+    const titresDesCartes = screen.getAllByRole("heading", { level: 2 }).map((titre) => titre.textContent)
+    expect(titresDesCartes).toEqual(["Sessions ouvertes (0)", "Dernières fermées (0)", "Serveurs MCP (0)", "Mise à jour"])
+  })
+
   it("une session : titre, dossier abrégé, ancienneté ; un clic la lit", async () => {
     const { read } = await mount({ open: [row("1", { title: "Migration REST", mtime: NOW - 7200 })] })
     const sessionButton = screen.getByRole("button", { name: /Migration REST/ })

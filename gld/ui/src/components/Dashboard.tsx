@@ -1,19 +1,36 @@
 import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { ArrowUpCircle, ExternalLink, Fan, Keyboard, MessageSquare, Plug, RefreshCw } from "lucide-react"
+import { type LucideIcon, ArrowUpCircle, ExternalLink, Fan, Keyboard, MessageSquare, Plug, RefreshCw } from "lucide-react"
 import { api, type McpServer } from "@/lib/api"
 import { ago, tilde } from "@/lib/format"
 import type { Route } from "@/lib/route"
 import { Button } from "@/components/ui/button"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { toast } from "sonner"
-import { copyText } from "@/lib/utils"
+import { cn, copyText } from "@/lib/utils"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import type { Row } from "./actions"
 import { CM, SessionItems } from "./SessionMenu"
 import { SessionStatusIcon } from "./SessionStatusIcon"
 
 const MAX_ROWS = 8
+
+type DashboardCardProps = React.ComponentProps<"section"> & { icon: LucideIcon; iconClassName?: string; title: string; actions: React.ReactNode }
+
+function DashboardCard({ icon: Icon, iconClassName, title, actions, children, ...sectionProps }: DashboardCardProps) {
+  return (
+    <section {...sectionProps} className="min-w-0 rounded-xl border bg-card p-4 shadow-xs md:p-5">
+      <div className="mb-3 flex items-center gap-2 border-b pb-2">
+        <h2 className="flex min-w-0 items-center gap-2 text-md font-semibold">
+          <Icon className={cn("size-4 shrink-0", iconClassName)} />
+          <span className="truncate">{title}</span>
+        </h2>
+        <div className="ml-auto flex shrink-0 items-center gap-1">{actions}</div>
+      </div>
+      {children}
+    </section>
+  )
+}
 
 // Accueil : ce qui demande un œil maintenant. Sessions ouvertes (celles qui attendent d'abord), dernières fermées encore au
 // cache, état des serveurs MCP et mise à jour disponible.
@@ -50,8 +67,6 @@ export function Dashboard({ open, closed, waiting, now, ttl, home, go, read }: {
   }
   const configuredServerNames = (mcp ?? []).map((server) => server.name)
   const serverNames = [...new Set([...configuredServerNames, ...Object.keys(status ?? {})])].sort()
-  const cardClassName = "rounded-xl border bg-card p-4 shadow-xs md:p-5"
-  const headingClassName = "mb-3 flex items-center gap-2 border-b pb-2 text-md font-semibold"
   const renderSessionList = (rows: Row[], emptyMessage: string) => {
     if (rows.length === 0) return <p className="py-3 text-sm text-muted-foreground">{emptyMessage}</p>
     return (
@@ -60,12 +75,14 @@ export function Dashboard({ open, closed, waiting, now, ttl, home, go, read }: {
           <ContextMenu key={row.s.id}>
             <ContextMenuTrigger asChild>
               <li>
-                <button type="button" onClick={() => read(row.s)} className="flex w-full items-center gap-2 py-1.5 text-left text-sm hover:bg-muted/50">
+                <button type="button" onClick={() => read(row.s)} className="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2 py-1.5 text-left text-sm hover:bg-muted/50">
                   <SessionStatusIcon session={row.s} now={now} ttl={ttl} />
-                  <span className="min-w-0 flex-1 truncate">{row.s.title}</span>
-                  {waiting.has(row.s.id) && <span className="shrink-0 rounded bg-warning/15 px-1 text-2xs text-warning uppercase">{t("shell.dash.waiting")}</span>}
-                  <span className="shrink-0 text-xs text-muted-foreground">{tilde(row.g.project, home)}</span>
-                  <span className="w-14 shrink-0 text-right text-xs text-muted-foreground tabular-nums">{ago(row.s.mtime)}</span>
+                  <span className="truncate">{row.s.title}</span>
+                  {waiting.has(row.s.id) ? <span className="rounded bg-warning/15 px-1 text-2xs text-warning">{t("shell.dash.waiting")}</span> : <span />}
+                  <span className="col-start-2 col-end-4 flex min-w-0 gap-2 text-xs text-muted-foreground">
+                    <span className="truncate">{tilde(row.g.project, home)}</span>
+                    <span className="shrink-0 tabular-nums">· {ago(row.s.mtime)}</span>
+                  </span>
                 </button>
               </li>
             </ContextMenuTrigger>
@@ -81,11 +98,11 @@ export function Dashboard({ open, closed, waiting, now, ttl, home, go, read }: {
     if (mcp === null) return <Fan className="m-3 size-4 animate-spin text-muted-foreground" />
     if (serverNames.length === 0) return <p className="py-3 text-sm text-muted-foreground">{t("shell.dash.noMcp")}</p>
     return (
-      <ul className="grid gap-x-4 sm:grid-cols-2">
+      <ul className="grid grid-cols-[repeat(auto-fill,minmax(12rem,1fr))] gap-x-4">
         {serverNames.map((serverName) => (
           <ContextMenu key={serverName}>
             <ContextMenuTrigger asChild>
-              <li className="flex items-center gap-2 py-1 text-sm" title={status?.[serverName]}>
+              <li className="flex min-w-0 items-center gap-2 py-1 text-sm" title={status?.[serverName]}>
                 <span className={serverStatusColor(serverName)}>●</span>
                 <span className="truncate">{serverName}</span>
               </li>
@@ -126,46 +143,45 @@ export function Dashboard({ open, closed, waiting, now, ttl, home, go, read }: {
   }
   return (
     <ScrollArea className="min-h-0 flex-1">
-      <div className="mx-auto grid max-w-page gap-5 px-3 py-5 md:grid-cols-2 md:px-6">
-        <section className={cardClassName}>
-          <h3 className={headingClassName}>
-            <MessageSquare className="size-4" /> {t("shell.dash.open")} ({open.length})
-            <Button size="xs" variant="ghost" className="ml-auto" onClick={() => go({ kind: "active" })}>{t("shell.dash.all")}</Button>
-          </h3>
+      <div className="@container mx-auto max-w-page px-3 py-5 md:px-6">
+      <div className="grid gap-5 @min-[50rem]:grid-cols-2">
+        <DashboardCard icon={MessageSquare} title={`${t("shell.dash.open")} (${open.length})`} actions={<Button size="xs" variant="ghost" onClick={() => go({ kind: "active" })}>{t("shell.dash.all")}</Button>}>
           {renderSessionList(open, t("shell.dash.noOpen"))}
-        </section>
-        <section className={cardClassName}>
-          <h3 className={headingClassName}>
-            <MessageSquare className="size-4 text-muted-foreground" /> {t("shell.dash.closed")} ({closed.length})
-            <Button size="xs" variant="ghost" className="ml-auto" onClick={() => go({ kind: "recent" })}>{t("shell.dash.all")}</Button>
-          </h3>
+        </DashboardCard>
+        <DashboardCard icon={MessageSquare} iconClassName="text-muted-foreground" title={`${t("shell.dash.closed")} (${closed.length})`} actions={<Button size="xs" variant="ghost" onClick={() => go({ kind: "recent" })}>{t("shell.dash.all")}</Button>}>
           {renderSessionList(closed, t("shell.dash.noClosed"))}
-        </section>
-        <section className={cardClassName}>
-          <h3 className={headingClassName}>
-            <Plug className="size-4" /> {t("shell.dash.mcp")} ({serverNames.length})
-            <Button size="xs" variant="ghost" className="ml-auto" onClick={recheck} disabled={checking} aria-label={t("shell.dash.recheck")}>
-              {checking ? <Fan className="animate-spin" /> : <RefreshCw />}
-            </Button>
-            <Button size="xs" variant="ghost" onClick={() => go({ kind: "extensions" })}>{t("shell.dash.all")}</Button>
-          </h3>
+        </DashboardCard>
+        <DashboardCard
+          icon={Plug}
+          title={`${t("shell.dash.mcp")} (${serverNames.length})`}
+          actions={
+            <>
+              <Button size="xs" variant="ghost" onClick={recheck} disabled={checking} aria-label={t("shell.dash.recheck")}>
+                {checking ? <Fan className="animate-spin" /> : <RefreshCw />}
+              </Button>
+              <Button size="xs" variant="ghost" onClick={() => go({ kind: "extensions" })}>{t("shell.dash.all")}</Button>
+            </>
+          }
+        >
           {renderMcpServers()}
-        </section>
+        </DashboardCard>
         <ContextMenu>
         <ContextMenuTrigger asChild>
-        <section className={cardClassName}>
-          <h3 className={headingClassName}>
-            <ArrowUpCircle className="size-4" /> {t("shell.dash.update")}
-            <Button size="xs" variant="ghost" className="ml-auto" disabled={checkingUpdate} onClick={recheckUpdate}>
+        <DashboardCard
+          icon={ArrowUpCircle}
+          title={t("shell.dash.update")}
+          actions={
+            <Button size="xs" variant="ghost" disabled={checkingUpdate} onClick={recheckUpdate}>
               <RefreshCw className={checkingUpdate ? "animate-spin" : ""} /> {t("shell.dash.updateCheck")}
             </Button>
-          </h3>
+          }
+        >
           {renderGldUpdate()}
           {renderClaudeUpdate()}
           <p className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
-            <Keyboard className="size-3.5" /> {t("shell.dash.paletteHint")}
+            <Keyboard className="size-3.5 shrink-0" /> {t("shell.dash.paletteHint")}
           </p>
-        </section>
+        </DashboardCard>
         </ContextMenuTrigger>
         <ContextMenuContent className="w-64">
           <ContextMenuItem onSelect={recheckUpdate} disabled={checkingUpdate}>
@@ -183,6 +199,7 @@ export function Dashboard({ open, closed, waiting, now, ttl, home, go, read }: {
           )}
         </ContextMenuContent>
         </ContextMenu>
+      </div>
       </div>
     </ScrollArea>
   )
