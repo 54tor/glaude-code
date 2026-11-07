@@ -216,13 +216,14 @@ export function Memory({
     onPick(key)
   }
   const [prompt, setPrompt] = useState<PromptAsk | null>(null)
-  const rename = (memFile: MemFile) =>
-    setPrompt({
-      title: t("memory.fileMenu.renameTitle", { name: memFile.name }),
-      value: memFile.name,
+  const rename = (memFile: MemFile) => {
+    const nameWithoutRulesPrefix = memFile.name.replace(/^rules\//, "")
+    return setPrompt({
+      title: t("memory.fileMenu.renameTitle", { name: nameWithoutRulesPrefix }),
+      value: nameWithoutRulesPrefix,
       confirm: t("memory.fileMenu.rename"),
       run: async (name) => {
-        if (name === memFile.name) return true
+        if (name === nameWithoutRulesPrefix) return true
         let newFileKey = ""
         const ok = await reportAction(async () => {
           const renameResponse = await api.memoryRename(memFile.key, name)
@@ -236,6 +237,7 @@ export function Memory({
         return ok
       },
     })
+  }
   const move = async (key: string, to: string, copyIt = false) => {
     let newFileKey = ""
     const ok = await reportAction(async () => {
