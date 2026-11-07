@@ -576,6 +576,9 @@ func toolArg(toolInput json.RawMessage) string {
 	return cut(string(toolInput), previewMaxRunes)
 }
 
+// askAnsweredPrefix : début du résultat d'un AskUserQuestion répondu ; ces réponses restent visibles même outils masqués.
+const askAnsweredPrefix = "User has answered your questions"
+
 // askSummary : les questions d'un AskUserQuestion, une par ligne, options à la suite, au lieu du JSON brut tronqué.
 func askSummary(toolInput json.RawMessage) string {
 	var ask struct {
@@ -687,8 +690,9 @@ func lineMsgsMode(lineBytes []byte, tools, anchors bool) []Msg {
 				messages = append(messages, Msg{R: "tool", Ts: parsedLine.Timestamp})
 			}
 		case "tool_result":
-			if tools {
-				messages = append(messages, Msg{R: "tool", T: "↳ " + cut(strings.TrimSpace(flat(block.Content)), toolResultMaxRunes), Ts: parsedLine.Timestamp})
+			resultText := strings.TrimSpace(flat(block.Content))
+			if tools || strings.HasPrefix(resultText, askAnsweredPrefix) {
+				messages = append(messages, Msg{R: "tool", T: "↳ " + cut(resultText, toolResultMaxRunes), Ts: parsedLine.Timestamp})
 			}
 		}
 	}
