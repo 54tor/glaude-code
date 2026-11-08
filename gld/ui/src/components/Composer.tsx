@@ -812,8 +812,16 @@ function TerminalPanel({ id, onAsk, onSent, extra }: { id: string; onAsk?: (aski
   const [typing, setTyping] = useState<string | null>(null) // option à réponse libre en cours de saisie
   const [answer, setAnswer] = useState("")
   const editLen = useRef(0) // réponse libre déjà saisie dans le terminal : à effacer avant de renvoyer le texte modifié
+  const closeFreeAnswer = () => {
+    setTyping(null)
+    setAnswer("")
+    editLen.current = 0
+  }
   const choose = async (option: Opt) => {
-    if (!option.text && !option.chat) return press(...option.keys)
+    if (!option.text && !option.chat) {
+      closeFreeAnswer()
+      return press(...option.keys)
+    }
     setTyping(option.label)
     setAnswer(option.edit ?? "")
     editLen.current = option.edit?.length ?? 0
@@ -852,6 +860,7 @@ function TerminalPanel({ id, onAsk, onSent, extra }: { id: string; onAsk?: (aski
   if (lastQuestionKey !== questionKey) {
     setLastQuestionKey(questionKey)
     setQuestionCollapsed(false)
+    closeFreeAnswer()
   }
   const ask = useRef(onAsk) // le parent passe une flèche neuve à chaque rendu : l'effet ne doit suivre que asking
   useEffect(() => {

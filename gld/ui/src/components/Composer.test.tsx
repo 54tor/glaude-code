@@ -17,11 +17,11 @@ vi.mock("@/lib/auth", async (orig) => ({ ...(await orig<typeof import("@/lib/aut
 const item = (qItem: Partial<QItem>): QItem => ({ id: "i1", text: "bonjour", author: "host", state: "queued", at: 1, ...qItem })
 const rmOk = (text: string) => ({ text }) as Awaited<ReturnType<typeof api.queueRm>>
 
-function mount(items: QItem[], thinking = false) {
+function mount(items: QItem[], thinking = false, screenText = "") {
   vi.spyOn(api, "queue").mockResolvedValue({ items })
   vi.spyOn(api, "sendInfo").mockResolvedValue({ ids: ["s1"], why: "" })
   vi.spyOn(api, "slashCommands").mockResolvedValue({ commands: [] })
-  vi.spyOn(api, "screen").mockResolvedValue({ text: "" })
+  vi.spyOn(api, "screen").mockResolvedValue({ text: screenText })
   const st = { open: true, thinking } as never
   return render(<Composer dir="/d" id="s1" args="" defaultChoice={{ model: "", effort: "" } as never} live liveState={{ st, open: true }} onSent={() => {}} turn={null} setTurn={() => {}} onDone={() => {}} />)
 }
@@ -181,5 +181,40 @@ describe("Composer claude -p, file serveur", () => {
     expect(screen.queryByRole("button", { name: i18n.t("conversation.composer.sendNext") })).toBeNull()
     expect(screen.getByRole("button", { name: i18n.t("conversation.composer.resend") })).toBeTruthy()
     expect(screen.getByRole("button", { name: i18n.t("conversation.composer.dequeue") })).toBeTruthy()
+  })
+})
+
+const ECRAN_CASES_A_COCHER = `
+←  ☐ Couleurs  ✔ Submit  →
+Quelles couleurs veux-tu sélectionner ?
+❯ 1. [ ] Rouge
+  2. [ ] Bleu
+  3. [ ] Type something
+     Submit
+────────────────────────────────────────────────────────────────────────────────────────────
+  4. Chat about this
+Enter to select · ↑/↓ to navigate · Esc to cancel`
+
+describe("Composer, question à cases avec saisie libre", () => {
+  it("choisir une option proposée après avoir commencé une réponse libre referme le champ et vide le texte", async () => {
+    let touchesEnvoyees = 0
+    vi.spyOn(api, "sessionKey").mockImplementation(async () => {
+      touchesEnvoyees++
+      return undefined as never
+    })
+    mount([], false, ECRAN_CASES_A_COCHER)
+    vi.spyOn(api, "screen").mockImplementation(async () => ({ text: ECRAN_CASES_A_COCHER + " ".repeat(touchesEnvoyees) }))
+    fireEvent.click(await screen.findByRole("button", { name: /Type something/ }))
+    const champReponseLibre = await screen.findByRole("textbox", { name: i18n.t("conversation.composer.answerAria") })
+    fireEvent.change(champReponseLibre, { target: { value: "ma réponse commencée" } })
+
+    await waitFor(() => expect((screen.getByRole("button", { name: /Rouge/ }) as HTMLButtonElement).disabled).toBe(false))
+    fireEvent.click(screen.getByRole("button", { name: /Rouge/ }))
+
+    await waitFor(() => expect(screen.queryByRole("textbox", { name: i18n.t("conversation.composer.answerAria") })).toBeNull())
+    await waitFor(() => expect((screen.getByRole("button", { name: /Type something/ }) as HTMLButtonElement).disabled).toBe(false))
+    fireEvent.click(screen.getByRole("button", { name: /Type something/ }))
+    const champRouvert = (await screen.findByRole("textbox", { name: i18n.t("conversation.composer.answerAria") })) as HTMLTextAreaElement
+    expect(champRouvert.value).toBe("")
   })
 })
