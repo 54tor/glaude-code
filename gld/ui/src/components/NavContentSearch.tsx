@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { Brain, FileText, MessageSquare } from "lucide-react"
-import { api, type Hit, type Session } from "@/lib/api"
+import { Brain, FileText, FolderKanban, MessageSquare } from "lucide-react"
+import { api, type Hit, type Project, type Session } from "@/lib/api"
+import type { Row } from "@/components/actions"
 import type { Route } from "@/lib/route"
 
 const MIN_QUERY_LENGTH = 2
@@ -11,7 +12,8 @@ type ContentHits = { query: string; sessions: Hit[]; memory: [string, string][];
 
 type Props = {
   query: string
-  findSession: (sessionId: string) => Session | undefined
+  findSession: (sessionId: string) => Row | undefined
+  projects: Project[]
   read: (session: Session) => void
   go: (route: Route) => void
 }
@@ -36,7 +38,7 @@ function ResultRow({ label, excerpt, onClick }: { label: string; excerpt: string
   )
 }
 
-export function NavContentSearch({ query, findSession, read, go }: Props) {
+export function NavContentSearch({ query, findSession, projects, read, go }: Props) {
   const { t } = useTranslation()
   const [found, setFound] = useState<ContentHits | null>(null)
   const isLongEnough = query.length >= MIN_QUERY_LENGTH
@@ -68,14 +70,24 @@ export function NavContentSearch({ query, findSession, read, go }: Props) {
   if (found?.query !== query) return <p className="px-3 py-2 text-xs text-muted-foreground">{t("shell.sidebar.searching")}…</p>
 
   const sessionRows = found.sessions.flatMap((hit) => {
-    const session = findSession(hit.id)
-    return session ? [{ hit, session }] : []
+    const row = findSession(hit.id)
+    return row ? [{ hit, session: row.s, folder: row.g.project }] : []
   })
+  const sessionRowsByProject = projects
+    .map((projectItem) => ({ name: projectItem.name, rows: sessionRows.filter((sessionRow) => projectItem.dirs.includes(sessionRow.folder)) }))
+    .filter((projectResult) => projectResult.rows.length > 0)
   const hasNoResult = sessionRows.length + found.memory.length + found.snippets.length === 0
   if (hasNoResult) return <p className="px-3 py-2 text-xs text-muted-foreground">{t("shell.sidebar.contentNone")}</p>
 
   return (
     <div className="px-2 pb-3">
+      {sessionRowsByProject.map((projectResult) => (
+        <ResultSection key={projectResult.name} title={projectResult.name} icon={FolderKanban}>
+          {projectResult.rows.map(({ hit, session }) => (
+            <ResultRow key={hit.id} label={session.title} excerpt={hit.snip} onClick={() => read(session)} />
+          ))}
+        </ResultSection>
+      ))}
       {sessionRows.length > 0 && (
         <ResultSection title={t("shell.sidebar.contentSessions")} icon={MessageSquare}>
           {sessionRows.map(({ hit, session }) => (

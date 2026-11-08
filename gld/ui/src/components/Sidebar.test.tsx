@@ -71,6 +71,7 @@ const baseProps = (overrides: Partial<SidebarProps> = {}): SidebarProps => ({
   groupCount: () => 4,
   read: vi.fn(),
   findSession: () => undefined,
+  projects: [],
   tree: [],
   hot: [],
   now: NOW,
