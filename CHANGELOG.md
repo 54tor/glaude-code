@@ -4,6 +4,15 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ## [Non publié]
 
+## [0.12.0] - 2026-11-08
+
+### Corrigé
+- Lecteur de session : les réponses aux questions de Claude (AskUserQuestion) restent visibles quand les outils sont masqués.
+- Saisie d'une question : la réponse libre se referme quand une autre option est choisie ou que la question change.
+- Écran « Nouvelle version disponible » : le bouton Recharger est cliquable même au-dessus d'une fenêtre modale.
+- PWA sur iPhone : la navigation remplace les entrées d'historique au lieu d'en ajouter, le balayage arrière ne ramène plus à une page précédente.
+- Mémoire : le renommage d'une règle n'est plus prérempli avec le préfixe d'affichage `rules/`.
+
 ## [0.11.0] - 2026-11-06
 
 ### Ajouté
