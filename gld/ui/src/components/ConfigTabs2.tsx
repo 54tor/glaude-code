@@ -3,7 +3,7 @@ import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import type { TFunction } from "i18next"
 import { Check, Copy, FolderOpen, Globe, Pencil, Plus, RotateCcw, Search, Sparkles, Trash2, X } from "lucide-react"
-import type { BackupInfo, CfgEdit, CfgOverview, PermSuggest } from "@/lib/api"
+import type { BackupInfo, CfgEdit, CfgOverview, OutputStyle, PermSuggest } from "@/lib/api"
 import { api } from "@/lib/api"
 import { describeKey } from "@/lib/configKeys"
 import { cn, copyText } from "@/lib/utils"
@@ -269,7 +269,14 @@ type Field = { key: string; path?: string[]; label: string; kind: "bool" | "numb
 // reste affichée et choisie (voir Row) ; « (par défaut) » retire le réglage.
 const LANGUAGES: Opt[] = ["French", "English", "Spanish", "German", "Italian", "Portuguese", "Dutch", "Japanese", "Chinese", "Korean"].map((language) => [language, language] as const)
 
-const fieldGroups = (t: TFunction): { title: string; fields: Field[] }[] => {
+const outputStyleOptions = (styles: OutputStyle[], t: TFunction): Opt[] =>
+  styles.map((style) => {
+    if (style.scope === "builtin") return [style.name, `${style.name} : ${t(`config.settings.style.${style.name}`)}`] as const
+    const scopeLabel = t(`config.settings.styleScope.${style.scope}`, { project: style.project?.split("/").pop() ?? "" })
+    return [style.name, `${style.name} (${scopeLabel})${style.description ? ` : ${style.description}` : ""}`] as const
+  })
+
+const fieldGroups = (t: TFunction, outputStyles: OutputStyle[]): { title: string; fields: Field[] }[] => {
   const translatedOptions = (group: string, items: [string, string][]): Opt[] =>
     items.map(([optionValue, labelId]) => [optionValue, t(`config.settings.${group}.${labelId}`)] as const)
   const makeField = (key: string, kind: Field["kind"], options?: Opt[], path?: string[]): Field => {
@@ -288,6 +295,14 @@ const fieldGroups = (t: TFunction): { title: string; fields: Field[] }[] => {
         makeField("fileCheckpointingEnabled", "bool"),
         makeField("switchModelsOnFlag", "bool"),
         makeField("cleanupPeriodDays", "number"),
+        makeField("alwaysThinkingEnabled", "bool"),
+        makeField("fastMode", "bool"),
+        makeField("autoMemoryEnabled", "bool"),
+        makeField("includeGitInstructions", "bool"),
+        makeField("respectGitignore", "bool"),
+        makeField("plansDirectory", "text"),
+        makeField("defaultShell", "enum", [["bash", "bash"], ["powershell", "powershell"]]),
+        makeField("autoUpdatesChannel", "enum", [["stable", "stable"], ["latest", "latest"]]),
       ],
     },
     {
@@ -302,6 +317,18 @@ const fieldGroups = (t: TFunction): { title: string; fields: Field[] }[] => {
         makeField("agentPushNotifEnabled", "bool"),
         makeField("teammateMode", "enum", [["auto", "auto"], ["in-process", t("config.settings.teammate.inProcess")], ["tmux", t("config.settings.teammate.tmux")]]),
         makeField("feedbackDrafts", "enum", translatedOptions("drafts", [["notify", "notify"], ["quiet", "quiet"], ["off", "off"]])),
+        makeField("showThinkingSummaries", "bool"),
+        makeField("showTurnDuration", "bool"),
+        makeField("spinnerTipsEnabled", "bool"),
+        makeField("terminalProgressBarEnabled", "bool"),
+        makeField("prefersReducedMotion", "bool"),
+        makeField("autoScrollEnabled", "bool"),
+        makeField("verbose", "bool"),
+        makeField("viewMode", "enum", [["default", "default"], ["verbose", "verbose"], ["focus", "focus"]]),
+        makeField("outputStyle", "enum", outputStyleOptions(outputStyles, t)),
+        makeField("autoConnectIde", "bool"),
+        makeField("diffTool", "enum", [["auto", "auto"], ["terminal", "terminal"]]),
+        makeField("askUserQuestionTimeout", "enum", [["60s", "60s"], ["5m", "5m"], ["10m", "10m"], ["never", "never"]]),
       ],
     },
     {
@@ -394,7 +421,15 @@ export function SettingsTab({ file, doc, plugins, propose }: { file: string; doc
   const [query, setQuery] = useState("")
   const lowerQuery = query.trim().toLowerCase()
   const hit = (...candidates: string[]) => !lowerQuery || candidates.some((candidate) => candidate.toLowerCase().includes(lowerQuery))
-  const groups = fieldGroups(t)
+  const [outputStyles, setOutputStyles] = useState<OutputStyle[]>([])
+  useEffect(() => {
+    let isMounted = true
+    api.configOutputStyles().then((response) => isMounted && setOutputStyles(response.styles), () => undefined)
+    return () => {
+      isMounted = false
+    }
+  }, [])
+  const groups = fieldGroups(t, outputStyles)
     .map((group) => ({ ...group, fields: group.fields.filter((field) => hit(field.label, field.key, describeKey(field.key) ?? "")) }))
     .filter((group) => group.fields.length)
   const valueAt = (field: Field) => at(doc, ...(field.path ?? [field.key]))

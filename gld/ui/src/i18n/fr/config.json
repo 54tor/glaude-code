@@ -154,7 +154,27 @@
         "skipWorkflowUsageWarning": "Ne pas avertir de l'usage des workflows",
         "workflowKeywordTriggerEnabled": "Déclenchement des workflows par mot-clé",
         "remoteControlAtStartup": "Contrôle à distance au démarrage",
-        "useAutoModeDuringPlan": "Mode auto pendant un plan"
+        "useAutoModeDuringPlan": "Mode auto pendant un plan",
+        "alwaysThinkingEnabled": "Réflexion étendue par défaut",
+        "fastMode": "Mode rapide",
+        "autoMemoryEnabled": "Mémoire automatique",
+        "includeGitInstructions": "Instructions git intégrées",
+        "respectGitignore": "Respecter .gitignore dans le sélecteur @",
+        "plansDirectory": "Dossier des plans",
+        "defaultShell": "Shell des commandes !",
+        "autoUpdatesChannel": "Canal de mise à jour",
+        "showThinkingSummaries": "Résumés de réflexion",
+        "showTurnDuration": "Durée de chaque tour",
+        "spinnerTipsEnabled": "Astuces pendant l'attente",
+        "terminalProgressBarEnabled": "Barre de progression du terminal",
+        "prefersReducedMotion": "Animations réduites",
+        "autoScrollEnabled": "Défilement automatique",
+        "verbose": "Sorties d'outils complètes",
+        "viewMode": "Mode d'affichage du transcript",
+        "outputStyle": "Style de sortie",
+        "autoConnectIde": "Connexion automatique à l'IDE",
+        "diffTool": "Affichage des diffs",
+        "askUserQuestionTimeout": "Délai de reprise des questions"
       },
       "model": {
         "fable": "fable : le plus capable, tâches longues",
@@ -190,6 +210,16 @@
         "plan": "plan : propose sans modifier",
         "auto": "auto : le classificateur décide",
         "bypassPermissions": "bypassPermissions : tout sans demander (risqué)"
+      },
+      "style": {
+        "default": "réponses standard",
+        "Proactive": "prend l'initiative",
+        "Explanatory": "explique ses choix",
+        "Learning": "vous fait coder des parties"
+      },
+      "styleScope": {
+        "user": "personnel",
+        "project": "projet {{project}}"
       },
       "teammate": {
         "inProcess": "dans le terminal principal",
@@ -540,7 +570,27 @@
       "envVar": "Variable d'environnement {{name}} : valeur donnée à chaque session.",
       "plugin": "Plugin {{name}} : activé (true) ou désactivé (false).",
       "pluginConfig": "Options du plugin {{name}}.",
-      "marketplace": "Place de marché de plugins : {{name}}."
+      "marketplace": "Place de marché de plugins : {{name}}.",
+      "alwaysThinkingEnabled": "Active la réflexion étendue par défaut dans toutes les sessions.",
+      "fastMode": "Mode rapide : sortie plus rapide avec Claude Opus, pour un coût par jeton plus élevé et sans passer à un modèle plus petit. Nécessite l'usage supplémentaire activé ; bascule aussi avec /fast.",
+      "autoMemoryEnabled": "Sauvegardes automatiques de mémoire dans ~/.claude/projects/<projet>/memory/ (dérivé du dépôt git, partagé entre worktrees). La variable CLAUDE_CODE_DISABLE_AUTO_MEMORY (1 pour désactiver, 0 pour activer) a le même effet.",
+      "includeGitInstructions": "Inclut dans le prompt système de Claude les instructions intégrées pour les commits et les pull requests. La variable CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS=1 les retire aussi.",
+      "respectGitignore": "Le sélecteur de fichiers @ exclut les fichiers couverts par .gitignore (vrai par défaut).",
+      "plansDirectory": "Où sont stockés les fichiers de plan. Chemin relatif à la racine du projet (par défaut : ~/.claude/plans).",
+      "defaultShell": "Shell des commandes saisies avec ! : bash (défaut) ou powershell. powershell exige CLAUDE_CODE_USE_POWERSHELL_TOOL=1 et pwsh dans le PATH (Windows).",
+      "autoUpdatesChannel": "Canal des mises à jour : stable (version d'environ une semaine, sans les versions à régression majeure) ou latest (défaut, la plus récente). DISABLE_AUTOUPDATER=1 coupe les mises à jour de fond.",
+      "showThinkingSummaries": "Affiche les résumés de réflexion dans la vue transcript (Ctrl+O). Ils ne sont pas générés par défaut en session interactive ; mettre à vrai pour les rétablir.",
+      "showTurnDuration": "Affiche la durée après chaque réponse (ex. « Cooked for 1m 6s »). Faux pour la masquer (défaut : vrai).",
+      "spinnerTipsEnabled": "Affiche des astuces dans l'indicateur d'attente pendant que Claude travaille (défaut : vrai).",
+      "terminalProgressBarEnabled": "Barre de progression du terminal, dans les terminaux qui la gèrent comme Windows Terminal et iTerm2 (défaut : vrai).",
+      "prefersReducedMotion": "Réduit ou coupe les animations de l'interface (indicateurs, scintillements, flashs), pour l'accessibilité.",
+      "autoScrollEnabled": "En affichage plein écran, suit la sortie jusqu'en bas de la conversation. Les demandes de permission défilent quand même quand c'est désactivé.",
+      "verbose": "Affiche la sortie complète des outils au lieu de résumés tronqués. L'option --verbose l'emporte pour une session.",
+      "viewMode": "Mode d'affichage du transcript : default (vue standard), verbose (détails d'outils développés) ou focus (prompt, résumés d'outils d'une ligne et réponse finale ; bascule avec Ctrl+O).",
+      "outputStyle": "Style des réponses de l'assistant, à choisir parmi les styles intégrés et ceux que vous avez déposés dans ~/.claude/output-styles/ ou .claude/output-styles/ (un fichier .md par style, nom et description dans l'en-tête).",
+      "autoConnectIde": "Se connecte automatiquement à un IDE en cours quand Claude Code démarre depuis un terminal externe (défaut : faux). La variable CLAUDE_CODE_AUTO_CONNECT_IDE l'emporte si elle est définie.",
+      "diffTool": "Où afficher les diffs quand un IDE est connecté : auto (défaut, dans la vue de diff de l'IDE) ou terminal.",
+      "askUserQuestionTimeout": "Délai d'inactivité avant qu'une question sans réponse reprenne avec les options déjà cochées : 60s, 5m, 10m ou never (défaut : attend votre réponse). Lu seulement dans les réglages utilisateur."
     }
   }
 }

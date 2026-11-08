@@ -178,6 +178,7 @@
   "srv.configwrite.unBooleenEstAttendu": "{{.A1}} : un booléen est attendu",
   "srv.configwrite.unEntierPositifEst": "{{.A1}} : un entier positif est attendu",
   "srv.configwrite.unTexteCourtEst": "{{.A1}} : un texte court est attendu",
+  "srv.configwrite.valeurNonPermise": "{{.A1}} : valeur non permise (attendu : {{.A2}})",
   "srv.configwrite.variableDEnvironnementUn": "variable d'environnement : un texte sur une ligne est attendu",
   "srv.convpage.messageIntrouvable": "message introuvable",
   "srv.extra.dossierDeProjetInvalide": "dossier de projet invalide ou en double",

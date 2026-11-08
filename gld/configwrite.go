@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -35,6 +36,20 @@ var simpleKeys = map[string]string{
 	"fileCheckpointingEnabled": "bool", "remoteControlAtStartup": "bool", "skipDangerousModePermissionPrompt": "bool",
 	"switchModelsOnFlag": "bool", "inputNeededNotifEnabled": "bool", "agentPushNotifEnabled": "bool",
 	"useAutoModeDuringPlan": "bool", "workflowKeywordTriggerEnabled": "bool", "skipWorkflowUsageWarning": "bool",
+	"alwaysThinkingEnabled": "bool", "fastMode": "bool", "autoMemoryEnabled": "bool", "includeGitInstructions": "bool",
+	"respectGitignore": "bool", "showThinkingSummaries": "bool", "showTurnDuration": "bool", "spinnerTipsEnabled": "bool",
+	"terminalProgressBarEnabled": "bool", "prefersReducedMotion": "bool", "autoScrollEnabled": "bool", "verbose": "bool",
+	"autoConnectIde": "bool", "viewMode": "string", "outputStyle": "string", "plansDirectory": "string", "defaultShell": "string",
+	"autoUpdatesChannel": "string", "diffTool": "string", "askUserQuestionTimeout": "string",
+}
+
+// Réglages à valeurs fixes : tout autre texte est refusé.
+var enumValues = map[string][]string{
+	"viewMode":               {"default", "verbose", "focus"},
+	"defaultShell":           {"bash", "powershell"},
+	"autoUpdatesChannel":     {"stable", "latest"},
+	"diffTool":               {"auto", "terminal"},
+	"askUserQuestionTimeout": {"60s", "5m", "10m", "never"},
 }
 
 var (
@@ -72,6 +87,16 @@ func (edit *CfgEdit) validate() error {
 			if !isString || text == "" || len(text) > 100 || strings.ContainsAny(text, "\n\r") {
 				return terr("srv.configwrite.unTexteCourtEst", "A1", path[0])
 			}
+			if allowed, hasFixedValues := enumValues[path[0]]; hasFixedValues && !slices.Contains(allowed, text) {
+				return terr("srv.configwrite.valeurNonPermise", "A1", path[0], "A2", strings.Join(allowed, ", "))
+			}
+		}
+	case len(path) == 2 && path[0] == "attribution" && (path[1] == "commit" || path[1] == "pr"):
+		if edit.Op == "delete" {
+			return nil
+		}
+		if text, isString := edit.Value.(string); edit.Op != "set" || !isString || len(text) > 2000 {
+			return terr("srv.configwrite.unTexteCourtEst", "A1", strings.Join(path, "."))
 		}
 	case len(path) == 2 && path[0] == "env" && envName.MatchString(path[1]):
 		if edit.Op == "delete" {

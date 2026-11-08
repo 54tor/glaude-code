@@ -10,6 +10,9 @@ const PLAIN = new Set([
   "awaySummaryEnabled", "dialogExpiry", "pluginConfigs", "skipDangerousModePermissionPrompt", "skipWorkflowUsageWarning", "preferredNotifChannel",
   "autoCompactEnabled", "idleCompaction", "switchModelsOnFlag", "fileCheckpointingEnabled", "teammateMode", "remoteControlAtStartup",
   "crossSessionInbound", "inputNeededNotifEnabled", "agentPushNotifEnabled", "useAutoModeDuringPlan", "autoMode",
+  "alwaysThinkingEnabled", "fastMode", "autoMemoryEnabled", "includeGitInstructions", "respectGitignore", "showThinkingSummaries",
+  "showTurnDuration", "spinnerTipsEnabled", "terminalProgressBarEnabled", "prefersReducedMotion", "autoScrollEnabled", "verbose",
+  "autoConnectIde", "viewMode", "outputStyle", "plansDirectory", "defaultShell", "autoUpdatesChannel", "diffTool", "askUserQuestionTimeout",
 ])
 const DOTTED: Record<string, string> = {
   "attribution.commit": "attributionCommit",
