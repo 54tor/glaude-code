@@ -70,7 +70,7 @@ var routeRights = map[string]Right{
 
 	// Lecture du home et état d'interface par home.
 	"GET /v1/config": RightMemRead, "GET /v1/config/projects": RightMemRead, "GET /v1/config/effective": RightMemRead,
-	"GET /v1/config/mcp": RightMemRead, "GET /v1/slash-commands": RightMemRead,
+	"GET /v1/config/mcp": RightMemRead, "GET /v1/config/output-styles": RightMemRead, "GET /v1/slash-commands": RightMemRead,
 	"GET /v1/git/status": RightMemRead, "GET /v1/git/changes": RightMemRead, "GET /v1/git/remotes": RightMemRead,
 	"GET /v1/update": RightMemRead, "GET /v1/cleanup-warning": RightMemRead, "GET /v1/tabs": RightMemRead, "GET /v1/keepwarm": RightMemRead,
 	"GET /v1/builtin-rules": RightMemRead, "PUT /v1/builtin-rules": RightConfigWrite,
