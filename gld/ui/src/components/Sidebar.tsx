@@ -29,7 +29,7 @@ import { segs } from "@/lib/paths"
 import { CM, GroupItems, SessionItems } from "./SessionMenu"
 import { nest } from "./SessionList"
 import { api } from "@/lib/api"
-import type { Session, VGroup } from "@/lib/api"
+import type { Project, Session, VGroup } from "@/lib/api"
 import { useActions, type Row } from "./actions"
 
 
@@ -235,7 +235,8 @@ export type SidebarProps = {
   favGroups: { vg: VGroup; key: string }[] // groupes favoris, avec la clé de leur dossier
   groupCount: (vg: VGroup) => number
   read: (s: Session) => void
-  findSession: (sessionId: string) => Session | undefined
+  findSession: (sessionId: string) => Row | undefined
+  projects: Project[]
   tree: Node[]
   hot: Row[] // sessions dont le cache des prompts est encore chaud
   now: number
@@ -402,7 +403,7 @@ export function Sidebar({ searchRef, ...props }: SidebarProps) {
 
       {isContentSearch ? (
         <ScrollArea className="min-h-0 flex-1">
-          <NavContentSearch query={navQuery.trim()} findSession={props.findSession} read={props.read} go={props.go} />
+          <NavContentSearch query={navQuery.trim()} findSession={props.findSession} projects={props.projects} read={props.read} go={props.go} />
         </ScrollArea>
       ) : (
       <ScrollArea className="min-h-0 flex-1">

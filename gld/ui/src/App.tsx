@@ -572,7 +572,8 @@ function Shell() {
           favRows={favRows}
           favGroups={favGroups}
           groupCount={(virtualGroup) => groupRows(virtualGroup).length}
-          findSession={(sessionId) => allRowsById.get(sessionId)?.s}
+          findSession={(sessionId) => allRowsById.get(sessionId)}
+          projects={projects ?? []}
           read={(session) => {
             setNavOpen(false)
             openSession(session)
