@@ -1,0 +1,36 @@
+name: Bug
+description: Quelque chose ne fonctionne pas comme prévu
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Pour une faille de sécurité, ne créez pas d'issue publique : voir SECURITY.md.
+  - type: input
+    id: version
+    attributes:
+      label: Version de Glaude Code
+    validations:
+      required: true
+  - type: dropdown
+    id: plateforme
+    attributes:
+      label: Où l'utilisez-vous ?
+      options: [Linux, macOS, Windows, Navigateur mobile, Application installée (PWA)]
+    validations:
+      required: true
+  - type: textarea
+    id: etapes
+    attributes:
+      label: Étapes pour reproduire
+    validations:
+      required: true
+  - type: textarea
+    id: attendu
+    attributes:
+      label: Comportement attendu et obtenu
+    validations:
+      required: true
+  - type: textarea
+    id: journaux
+    attributes:
+      label: Journaux ou capture (sans jeton ni donnée personnelle)

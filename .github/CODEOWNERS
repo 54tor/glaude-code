@@ -1,0 +1,6 @@
+*                      @54tor
+/gld/auth*.go          @54tor
+/gld/rootfs*.go        @54tor
+/gld/guest*.go         @54tor
+/.github/              @54tor
+SECURITY.md            @54tor
