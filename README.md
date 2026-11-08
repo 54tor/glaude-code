@@ -6,6 +6,20 @@
 navigateur ou votre téléphone, partagez-les avec un collègue, et gardez la main sur votre mémoire, vos règles, vos skills
 et vos réglages. Tout reste sur votre machine : Glaude Code lit simplement le dossier `~/.claude`.
 
+<p align="center">
+  <img src="docs/screenshots/bureau-sessions.png" alt="Toutes les sessions, rangées par date et par projet" width="49%">
+  <img src="docs/screenshots/bureau-conversation.png" alt="Relecture d'une session avec ses outils repliés et la zone de réponse" width="49%">
+</p>
+<p align="center">
+  <img src="docs/screenshots/mobile-sessions.png" alt="La liste des sessions sur téléphone" width="22%">
+  <img src="docs/screenshots/mobile-conversation.png" alt="Une session sur téléphone" width="22%">
+  <img src="docs/screenshots/mobile-permissions.png" alt="Les permissions de Claude Code sur téléphone" width="22%">
+</p>
+
+Autres écrans : [permissions](docs/screenshots/bureau-permissions.png), [mémoire](docs/screenshots/bureau-memoire.png),
+[extensions](docs/screenshots/bureau-extensions.png), [teams](docs/screenshots/bureau-equipes.png),
+[thème sombre](docs/screenshots/bureau-sombre.png).
+
 ## Glaude Code face à la CLI et à Claude.ai (Remote Control, web, mobile)
 
 | Besoin | CLI seule | Claude.ai (Remote Control, appli mobile, web) | Glaude Code |
