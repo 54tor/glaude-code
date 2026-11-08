@@ -860,8 +860,12 @@ function TerminalPanel({ id, onAsk, onSent, extra }: { id: string; onAsk?: (aski
   if (lastQuestionKey !== questionKey) {
     setLastQuestionKey(questionKey)
     setQuestionCollapsed(false)
-    closeFreeAnswer()
+    setTyping(null)
+    setAnswer("")
   }
+  useEffect(() => {
+    editLen.current = 0
+  }, [questionKey])
   const ask = useRef(onAsk) // le parent passe une flèche neuve à chaque rendu : l'effet ne doit suivre que asking
   useEffect(() => {
     ask.current = onAsk
