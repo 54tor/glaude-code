@@ -32,7 +32,7 @@ func scanOutputStyles(base, scope, project string) []OutputStyle {
 			continue
 		}
 		style := OutputStyle{Name: strings.TrimSuffix(fileName, ".md"), Scope: scope, Project: project}
-		if content, contentErr := readTrusted(filepath.Join(base, fileName)); contentErr == nil && len(content) <= skillMaxBytes {
+		if content := readSmall(filepath.Join(base, fileName)); content != nil {
 			if meta, _ := parseMeta(string(content)); meta != nil {
 				if declaredName := textField(meta, "name"); declaredName != "" {
 					style.Name = declaredName
