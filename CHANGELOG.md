@@ -7,6 +7,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 ## [0.12.0] - 2026-11-08
 
 ### Ajouté
+- Configuration > Réglages : une vingtaine de réglages en plus (réflexion permanente, mode rapide, mémoire automatique, instructions git, `.gitignore`, dossier des plans, shell par défaut, canal de mises à jour, résumés de réflexion, durée des tours, astuces, barre de progression, animations réduites, défilement automatique, mode d'affichage, connexion IDE, outil de diff, délai des questions) et le choix du style de sortie, parmi les styles intégrés, les vôtres et ceux des projets.
 - README : captures d'écran du bureau et du mobile, réalisées sur une instance de démonstration jetable.
 - Tests : couverture des fuites vers un invité par les commandes d'outils développées et par le relais du dossier personnel enfant.
 
