@@ -53,11 +53,12 @@ document.addEventListener(
   { passive: false }
 )
 
-// PWA iPhone : si le geste de retour passe quand même (touchstart sur un contrôle, bord plus large), on reste sur la page :
-// une entrée d'historique factice absorbe le retour et est aussitôt remise.
-if (window.matchMedia("(display-mode: standalone)").matches) {
-  history.pushState(null, "", location.href)
-  window.addEventListener("popstate", () => history.pushState(null, "", location.href))
+// PWA iPhone : sans entrée d'historique avant la page courante, WebKit n'a aucune page précédente à faire glisser au balayage du bord.
+// La navigation de l'application remplace donc l'entrée au lieu d'en empiler une.
+const isStandalonePwa = window.matchMedia("(display-mode: standalone)").matches
+const isAppleTouchDevice = /iPhone|iPad/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1)
+if (isStandalonePwa && isAppleTouchDevice) {
+  history.pushState = (...pushStateArguments) => history.replaceState(...pushStateArguments)
 }
 
 // Service worker : cache des ressources statiques et clic sur les notifications (contexte sécurisé : HTTPS ou localhost).
