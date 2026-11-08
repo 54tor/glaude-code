@@ -1007,6 +1007,23 @@ paths:
           $ref: '#/components/responses/Error'
         '403':
           $ref: '#/components/responses/Error'
+  /v1/config/output-styles:
+    get:
+      tags:
+      - config
+      operationId: getConfigOutputStyles
+      x-gld-right: mem_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
   /v1/config/permissions/suggestions:
     get:
       tags:
