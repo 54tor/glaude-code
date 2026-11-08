@@ -178,6 +178,7 @@
   "srv.configwrite.unBooleenEstAttendu": "{{.A1}}: a boolean is expected",
   "srv.configwrite.unEntierPositifEst": "{{.A1}}: a positive integer is expected",
   "srv.configwrite.unTexteCourtEst": "{{.A1}}: a short text is expected",
+  "srv.configwrite.valeurNonPermise": "{{.A1}}: value not allowed (expected: {{.A2}})",
   "srv.configwrite.variableDEnvironnementUn": "environment variable: a single-line text is expected",
   "srv.convpage.messageIntrouvable": "message not found",
   "srv.extra.dossierDeProjetInvalide": "invalid or duplicated project folder",

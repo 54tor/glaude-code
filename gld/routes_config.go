@@ -90,6 +90,9 @@ func routesConfig(mux *http.ServeMux) {
 		}
 		writeJSON(responseWriter, 200, map[string]any{"servers": servers})
 	})
+	mux.HandleFunc("GET /v1/config/output-styles", func(responseWriter http.ResponseWriter, request *http.Request) {
+		writeJSON(responseWriter, 200, map[string]any{"styles": listOutputStyles()})
+	})
 	mux.HandleFunc("GET /v1/config/permissions/suggestions", func(responseWriter http.ResponseWriter, request *http.Request) {
 		_, raw := allConfigs()
 		var have []string

@@ -467,3 +467,91 @@ func TestBashSegments(t *testing.T) {
 		}
 	}
 }
+
+func TestEcritureAttributionAutoriseLaValeurVide(t *testing.T) {
+	cfg := t.TempDir()
+	use(cfg)
+	put(t, filepath.Join(cfg, "settings.json"), "{\n  \"model\": \"opus\"\n}\n", old)
+
+	for _, cleAttribution := range []string{"commit", "pr"} {
+		_, contenuObtenu, erreurObtenue := configEdit(CfgEdit{File: "u", Op: "set", Path: []string{"attribution", cleAttribution}, Value: "", Dry: true})
+		if erreurObtenue != nil || !strings.Contains(contenuObtenu, `"`+cleAttribution+`": ""`) {
+			t.Fatalf("attribution.%s : %q %v", cleAttribution, contenuObtenu, erreurObtenue)
+		}
+	}
+	if _, _, erreurObtenue := configEdit(CfgEdit{File: "u", Op: "set", Path: []string{"attribution", "autre"}, Value: "x", Dry: true}); erreurObtenue == nil {
+		t.Fatal("une clé d'attribution inconnue a été acceptée")
+	}
+}
+
+func TestEcritureReglagesNouveauxValeursFixes(t *testing.T) {
+	cfg := t.TempDir()
+	use(cfg)
+	put(t, filepath.Join(cfg, "settings.json"), "{\n  \"model\": \"opus\"\n}\n", old)
+
+	casDeTest := []struct {
+		nomReglage     string
+		valeur         any
+		estAccepte     bool
+		fragmentSortie string
+	}{
+		{"viewMode", "focus", true, `"viewMode": "focus"`},
+		{"viewMode", "plein", false, ""},
+		{"defaultShell", "powershell", true, `"defaultShell": "powershell"`},
+		{"defaultShell", "zsh", false, ""},
+		{"autoUpdatesChannel", "stable", true, `"autoUpdatesChannel": "stable"`},
+		{"autoUpdatesChannel", "beta", false, ""},
+		{"diffTool", "terminal", true, `"diffTool": "terminal"`},
+		{"diffTool", "ide", false, ""},
+		{"askUserQuestionTimeout", "never", true, `"askUserQuestionTimeout": "never"`},
+		{"askUserQuestionTimeout", "2h", false, ""},
+		{"outputStyle", "Learning", true, `"outputStyle": "Learning"`},
+		{"plansDirectory", ".plans", true, `"plansDirectory": ".plans"`},
+		{"fastMode", true, true, `"fastMode": true`},
+		{"fastMode", "oui", false, ""},
+		{"verbose", false, true, `"verbose": false`},
+	}
+	for _, casCourant := range casDeTest {
+		_, contenuObtenu, erreurObtenue := configEdit(CfgEdit{File: "u", Op: "set", Path: []string{casCourant.nomReglage}, Value: casCourant.valeur, Dry: true})
+		if casCourant.estAccepte {
+			if erreurObtenue != nil || !strings.Contains(contenuObtenu, casCourant.fragmentSortie) {
+				t.Errorf("%s=%v : %q %v", casCourant.nomReglage, casCourant.valeur, contenuObtenu, erreurObtenue)
+			}
+			continue
+		}
+		if erreurObtenue == nil {
+			t.Errorf("%s=%v accepté à tort", casCourant.nomReglage, casCourant.valeur)
+		}
+	}
+}
+
+func TestListeDesStylesDeSortie(t *testing.T) {
+	cfg := t.TempDir()
+	use(cfg)
+	dossierStyles := filepath.Join(cfg, "output-styles")
+	if err := os.MkdirAll(dossierStyles, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	put(t, filepath.Join(dossierStyles, "concis.md"), "---\nname: Concis\ndescription: Réponses très courtes\n---\ncorps\n", old)
+	put(t, filepath.Join(dossierStyles, "sansnom.md"), "juste du texte\n", old)
+	put(t, filepath.Join(dossierStyles, "ignore.txt"), "x", old)
+
+	nomsObtenus := map[string]OutputStyle{}
+	for _, styleCourant := range listOutputStyles() {
+		nomsObtenus[styleCourant.Name] = styleCourant
+	}
+	for _, nomAttendu := range builtinOutputStyles {
+		if nomsObtenus[nomAttendu].Scope != "builtin" {
+			t.Errorf("style intégré absent : %s", nomAttendu)
+		}
+	}
+	if styleConcis := nomsObtenus["Concis"]; styleConcis.Scope != "user" || styleConcis.Description != "Réponses très courtes" {
+		t.Errorf("style personnalisé : %+v", styleConcis)
+	}
+	if nomsObtenus["sansnom"].Scope != "user" {
+		t.Errorf("le nom de fichier doit servir de nom : %+v", nomsObtenus)
+	}
+	if _, trouve := nomsObtenus["ignore"]; trouve {
+		t.Error("un fichier non .md a été listé")
+	}
+}
