@@ -6,6 +6,10 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ## [0.12.0] - 2026-11-08
 
+### Ajouté
+- README : captures d'écran du bureau et du mobile, réalisées sur une instance de démonstration jetable.
+- Tests : couverture des fuites vers un invité par les commandes d'outils développées et par le relais du dossier personnel enfant.
+
 ### Corrigé
 - Lecteur de session : les réponses aux questions de Claude (AskUserQuestion) restent visibles quand les outils sont masqués.
 - Saisie d'une question : la réponse libre se referme quand une autre option est choisie ou que la question change.
