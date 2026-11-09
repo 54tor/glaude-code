@@ -576,8 +576,18 @@ func toolArg(toolInput json.RawMessage) string {
 	return cut(string(toolInput), previewMaxRunes)
 }
 
-// askAnsweredPrefix : début du résultat d'un AskUserQuestion répondu ; ces réponses restent visibles même outils masqués.
-const askAnsweredPrefix = "User has answered your questions"
+// askAnsweredPrefixes : débuts du résultat d'un AskUserQuestion répondu (ancienne et nouvelle formulation de Claude Code) ;
+// ces réponses restent visibles même outils masqués.
+var askAnsweredPrefixes = []string{"User has answered your questions", "Your questions have been answered"}
+
+func isAskAnswered(resultText string) bool {
+	for _, prefix := range askAnsweredPrefixes {
+		if strings.HasPrefix(resultText, prefix) {
+			return true
+		}
+	}
+	return false
+}
 
 // askSummary : les questions d'un AskUserQuestion, une par ligne, options à la suite, au lieu du JSON brut tronqué.
 func askSummary(toolInput json.RawMessage) string {
@@ -691,7 +701,7 @@ func lineMsgsMode(lineBytes []byte, tools, anchors bool) []Msg {
 			}
 		case "tool_result":
 			resultText := strings.TrimSpace(flat(block.Content))
-			if tools || strings.HasPrefix(resultText, askAnsweredPrefix) {
+			if tools || isAskAnswered(resultText) {
 				messages = append(messages, Msg{R: "tool", T: "↳ " + cut(resultText, toolResultMaxRunes), Ts: parsedLine.Timestamp})
 			}
 		}
