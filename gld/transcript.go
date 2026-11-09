@@ -578,7 +578,22 @@ func toolArg(toolInput json.RawMessage) string {
 
 // askAnsweredPrefixes : débuts du résultat d'un AskUserQuestion répondu (ancienne et nouvelle formulation de Claude Code) ;
 // ces réponses restent visibles même outils masqués.
-var askAnsweredPrefixes = []string{"User has answered your questions", "Your questions have been answered"}
+var askAnsweredPrefixes = []string{"User has answered your questions", "Your questions have been answered", "The user answered"}
+
+var askAnswerPair = regexp.MustCompile(`"((?:[^"\\]|\\.)*)"="((?:[^"\\]|\\.)*)"`)
+
+// askAnswersSummary : « question → réponse » par ligne, sans la consigne en anglais ajoutée par Claude Code.
+func askAnswersSummary(resultText string) string {
+	pairs := askAnswerPair.FindAllStringSubmatch(resultText, -1)
+	if len(pairs) == 0 {
+		return resultText
+	}
+	var lines []string
+	for _, pair := range pairs {
+		lines = append(lines, "• "+pair[1]+"\n   → "+pair[2])
+	}
+	return strings.Join(lines, "\n")
+}
 
 func isAskAnswered(resultText string) bool {
 	for _, prefix := range askAnsweredPrefixes {
@@ -701,7 +716,11 @@ func lineMsgsMode(lineBytes []byte, tools, anchors bool) []Msg {
 			}
 		case "tool_result":
 			resultText := strings.TrimSpace(flat(block.Content))
-			if tools || isAskAnswered(resultText) {
+			isAnswer := isAskAnswered(resultText)
+			if isAnswer {
+				resultText = askAnswersSummary(resultText)
+			}
+			if tools || isAnswer {
 				messages = append(messages, Msg{R: "tool", T: "↳ " + cut(resultText, toolResultMaxRunes), Ts: parsedLine.Timestamp})
 			}
 		}

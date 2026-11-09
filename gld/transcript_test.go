@@ -10,7 +10,7 @@ func TestLineMsgsGardeLesReponsesAskUserQuestionOutilsMasques(t *testing.T) {
 
 	messagesObtenus := lineMsgs(ligneResultat, false)
 
-	if len(messagesObtenus) != 1 || !strings.Contains(messagesObtenus[0].T, "\"Quel choix ?\"=\"A\"") {
+	if len(messagesObtenus) != 1 || !strings.Contains(messagesObtenus[0].T, "Quel choix ?") {
 		t.Fatalf("réponse AskUserQuestion absente outils masqués : %+v", messagesObtenus)
 	}
 }
@@ -20,7 +20,18 @@ func TestLineMsgsGardeLesReponsesAskUserQuestionNouvelleFormulation(t *testing.T
 
 	messagesObtenus := lineMsgs(ligneResultat, false)
 
-	if len(messagesObtenus) != 1 || !strings.Contains(messagesObtenus[0].T, "\"Quel choix ?\"=\"A\"") {
+	if len(messagesObtenus) != 1 || !strings.Contains(messagesObtenus[0].T, "Quel choix ?") {
 		t.Fatalf("réponse AskUserQuestion (nouvelle formulation) absente outils masqués : %+v", messagesObtenus)
+	}
+}
+
+func TestLineMsgsAfficheLesReponsesAskUserQuestionLisiblement(t *testing.T) {
+	ligneResultat := []byte(`{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"The user answered: \"Quel choix ?\"=\"A\". Read the answers carefully."}]}}`)
+
+	messagesObtenus := lineMsgs(ligneResultat, false)
+
+	valeurAttendue := "↳ • Quel choix ?\n   → A"
+	if len(messagesObtenus) != 1 || messagesObtenus[0].T != valeurAttendue {
+		t.Fatalf("obtenu %+v, attendu %q", messagesObtenus, valeurAttendue)
 	}
 }
