@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -58,5 +59,16 @@ func TestBgKilled(t *testing.T) {
 		if bgKilled(path) != want {
 			t.Fatalf("%q", body)
 		}
+	}
+}
+
+func TestBgOutputPathSuitClaudeCodeTmpdir(t *testing.T) {
+	t.Setenv("CLAUDE_CODE_TMPDIR", "/tmp/cc")
+	transcriptPath := "/home/u/.claude/projects/-home-u-p/88ff150d-1017-4dc6-9be0-350f74f97c0a.jsonl"
+
+	cheminObtenu := bgOutputPath(transcriptPath, "abc1")
+
+	if !bgOutRe.MatchString(cheminObtenu) || !strings.HasPrefix(cheminObtenu, "/tmp/cc/claude-") {
+		t.Fatalf("chemin de sortie hors du dossier temporaire de Claude Code : %q", cheminObtenu)
 	}
 }
