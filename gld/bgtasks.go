@@ -38,7 +38,7 @@ type BgTask struct {
 }
 
 var (
-	bgOutRe  = regexp.MustCompile(`^/tmp/claude-\d+/[^/]+/[0-9a-fA-F-]{36}/tasks/[A-Za-z0-9]+\.output$`)
+	bgOutRe  = regexp.MustCompile(`^/(?:[A-Za-z0-9._-]+/)*claude-\d+/[^/]+/[0-9a-fA-F-]{36}/tasks/[A-Za-z0-9]+\.output$`)
 	bgTagRe  = regexp.MustCompile(`<(task-id|tool-use-id|output-file|status|summary)>([^<]*)</`)
 	bgCache  sync.Mutex
 	bgCached = map[string]struct {
@@ -223,11 +223,26 @@ var bgStoppedRe = regexp.MustCompile(`Successfully stopped task: ([A-Za-z0-9]{1,
 
 var bgSafeID = regexp.MustCompile(`^[A-Za-z0-9]{1,40}$`)
 
+// claudeTmpDir : le dossier temporaire de Claude Code, qui peut être déplacé par CLAUDE_CODE_TMPDIR (environnement ou « env » de settings.json).
+func claudeTmpDir() string {
+	if tmpDir := os.Getenv("CLAUDE_CODE_TMPDIR"); tmpDir != "" {
+		return tmpDir
+	}
+	settingsBytes, err := os.ReadFile(filepath.Join(cfgDir(), "settings.json"))
+	if err == nil {
+		var settings struct{ Env map[string]string }
+		if json.Unmarshal(settingsBytes, &settings) == nil && settings.Env["CLAUDE_CODE_TMPDIR"] != "" {
+			return settings.Env["CLAUDE_CODE_TMPDIR"]
+		}
+	}
+	return os.TempDir()
+}
+
 // bgOutputPath : l'emplacement habituel de la sortie d'une tâche, d'après le transcript (<tmp>/claude-<uid>/<dossier>/<session>/tasks).
 func bgOutputPath(transcript, id string) string {
 	sessionID := strings.TrimSuffix(filepath.Base(transcript), ".jsonl")
 	projectDir := filepath.Base(filepath.Dir(transcript))
-	return filepath.Join(os.TempDir(), "claude-"+strconv.Itoa(os.Getuid()), projectDir, sessionID, "tasks", id+".output")
+	return filepath.Join(claudeTmpDir(), "claude-"+strconv.Itoa(os.Getuid()), projectDir, sessionID, "tasks", id+".output")
 }
 
 // bgOutputOK : un fichier ordinaire (ni lien symbolique, ni répertoire) qui appartient à l'utilisateur de gld, au chemin que Claude Code lui donne.
