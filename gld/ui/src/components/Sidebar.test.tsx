@@ -210,7 +210,17 @@ describe("Sidebar — recherche de navbar", () => {
     expect(screen.queryByRole("button", { name: "Effacer la recherche" })).toBeNull()
     const search = screen.getByLabelText(/Rechercher dans les titres/) as HTMLInputElement
     fireEvent.change(search, { target: { value: "xyz" } })
-    fireEvent.click(screen.getByRole("button", { name: "Effacer la recherche" }))
+    fireEvent.click(screen.getAllByRole("button", { name: "Effacer la recherche" })[0])
+    expect(search.value).toBe("")
+  })
+
+  it("propose d'effacer la recherche après les éléments restants", async () => {
+    await mount()
+    const search = screen.getByLabelText(/Rechercher dans les titres/) as HTMLInputElement
+    fireEvent.change(search, { target: { value: "xyz" } })
+    const boutonsEffacer = screen.getAllByRole("button", { name: "Effacer la recherche" })
+    expect(boutonsEffacer).toHaveLength(2)
+    fireEvent.click(boutonsEffacer[1])
     expect(search.value).toBe("")
   })
 

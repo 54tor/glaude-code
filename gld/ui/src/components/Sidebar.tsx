@@ -500,6 +500,7 @@ export function Sidebar({ searchRef, ...props }: SidebarProps) {
             />
           )}
           </DropZone>
+          {normalizedNavQuery && <NavItem icon={X} label={t("shell.sidebar.clearSearch")} active={false} onClick={clearNavQuery} />}
         </nav>
       </ScrollArea>
       )}
