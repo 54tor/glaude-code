@@ -4,6 +4,21 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ## [Non publié]
 
+## [0.13.0] - 2026-11-10
+
+### Ajouté
+- Recherche de la barre latérale : les résultats de contenu sont regroupés par projet et une section « Sessions locales » liste toutes les sessions locales.
+- Recherche de la barre latérale : une entrée « Effacer la recherche » s'affiche après les éléments restants tant qu'une recherche est active.
+- Lecteur de session : les réponses aux questions de Claude (AskUserQuestion) s'affichent en lignes question et réponse.
+- Dépôt : guide de contribution, politique de sécurité, modèles de PR et d'issues, CODEOWNERS et Dependabot.
+
+### Corrigé
+- Lecteur de session : les réponses aux questions de Claude restent visibles avec le nouveau libellé de résultat de Claude Code.
+- Tâches de fond : la sortie des tâches est lue sous `CLAUDE_CODE_TMPDIR` au lieu du dossier temporaire par défaut.
+
+### Modifié
+- Dépendances : actions GitHub (checkout 7, upload-artifact 7, attest-build-provenance 4), jsdom 31 et `@types/node` 26 pour l'interface.
+
 ## [0.12.0] - 2026-11-08
 
 ### Ajouté
