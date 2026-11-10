@@ -9,6 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { api, type GuestShare, type LiveState, type Msg, type QItem } from "@/lib/api"
 import { ApiError, errMsg } from "@/lib/apiError"
 import { setAuth } from "@/lib/auth"
+import { cn } from "@/lib/utils"
 import { GuestFiles } from "./GuestFiles"
 import { LiveBar } from "./LiveStatus"
 import { Message } from "./Message"
@@ -394,8 +395,8 @@ function GuestSession({ handle }: { handle: string }) {
         <div className="border-t bg-muted/20 px-4 py-3">
           <section aria-label={t("conversation.guest.queue")} className="mx-auto max-w-page space-y-2">
             <div className="flex justify-end">
-              <Button variant={tools ? "secondary" : "ghost"} size="xs" className="text-muted-foreground max-md:hidden" onClick={() => setTools(!tools)} aria-pressed={tools}>
-                <Wrench /> {tools ? t("conversation.view.toolsShown") : t("conversation.view.toolsHidden")}
+              <Button variant="ghost" size="xs" className={cn("max-md:hidden", tools ? "text-primary" : "text-muted-foreground opacity-50")} onClick={() => setTools(!tools)} aria-pressed={tools}>
+                <Wrench /> {t("conversation.view.tools")}
               </Button>
             </div>
             {!rw && <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">{t("conversation.guest.readOnly")}</p>}

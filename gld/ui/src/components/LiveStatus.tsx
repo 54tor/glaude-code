@@ -369,8 +369,8 @@ function SubView({ dir, id, sub, running, onClose }: { dir: string; id: string; 
           <DialogTitle className="truncate pr-6">{sub?.desc || sub?.type}</DialogTitle>
           <DialogDescription className="sr-only">{t("conversation.live.subNote")}</DialogDescription>
           <div>
-            <Button size="sm" variant={tools ? "secondary" : "ghost"} onClick={() => setTools(!tools)} aria-pressed={tools}>
-              <Wrench /> {tools ? t("conversation.view.toolsShown") : t("conversation.view.toolsHidden")}
+            <Button size="sm" variant="ghost" className={tools ? "text-primary" : "text-muted-foreground opacity-50"} onClick={() => setTools(!tools)} aria-pressed={tools}>
+              <Wrench /> {t("conversation.view.tools")}
             </Button>
           </div>
         </DialogHeader>

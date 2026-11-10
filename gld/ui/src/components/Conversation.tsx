@@ -641,8 +641,8 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
                     <Bug /> {t("conversation.composer.rawScreen")}
                   </Button>
                 )}
-                <Button variant={tools ? "secondary" : "ghost"} size="xs" className="text-muted-foreground max-md:hidden" onClick={() => setTools(!tools)} aria-pressed={tools}>
-                  <Wrench /> {tools ? t("conversation.view.toolsShown") : t("conversation.view.toolsHidden")}
+                <Button variant="ghost" size="xs" className={cn("max-md:hidden", tools ? "text-primary" : "text-muted-foreground opacity-50")} onClick={() => setTools(!tools)} aria-pressed={tools}>
+                  <Wrench /> {t("conversation.view.tools")}
                 </Button>
               </>
             }
