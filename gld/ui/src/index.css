@@ -14,6 +14,9 @@
 @import "@fontsource/comic-relief/cyrillic-700.css";
 
 @custom-variant dark (&:is(.dark *));
+/* Téléphone en paysage (plus de 767 px de large, moins de 500 px de haut) : mise en page mobile, comme en portrait. */
+@custom-variant md (@media (min-width: 48rem) and (not ((pointer: coarse) and (max-height: 31.25rem))));
+@custom-variant max-md (@media (not ((min-width: 48rem) and (not ((pointer: coarse) and (max-height: 31.25rem))))));
 
 @theme inline {
     --container-page: 120rem;

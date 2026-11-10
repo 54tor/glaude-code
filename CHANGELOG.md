@@ -11,6 +11,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Questions de Claude à onglets et choix multiples : la carte de réponse s'affiche aussi sur les onglets intermédiaires (ligne « Next »), sans devoir passer par le terminal.
 - Ajout d'un dossier à un projet : les dossiers déjà connus reçoivent l'autorisation sans l'erreur « projet invalide ».
 - Ajout d'un dossier sans session : il est enregistré et apparaît dans la liste (« Sessions locales » ou son projet).
+- iPhone en paysage : l'interface passe en mise en page mobile (tiroir, en-tête compact, clavier) au lieu de la disposition bureau, trop haute pour 390 px.
 
 ## [0.13.0] - 2026-11-10
 

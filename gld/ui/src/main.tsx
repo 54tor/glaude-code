@@ -11,9 +11,9 @@ import { TrustDialog } from "@/components/TrustDialog"
 import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { EDGE } from "@/lib/swipe"
+import { MD } from "@/components/Sidebar"
 
 const KEYBOARD_OPEN_SCREEN_RATIO = 0.6
-const MOBILE_MEDIA_QUERY = "(max-width: 767px)"
 const TOUCH_CONTROLS_SELECTOR = "button,a,input,textarea,select,label,[role=button]"
 
 // PWA iPhone : dvh y reste parfois plus court que l'écran (bande morte en bas) ; --app-h prend alors la hauteur de l'écran.
@@ -29,7 +29,7 @@ if (visualViewport) {
     const isInstalledPortrait = window.matchMedia("(display-mode: standalone) and (orientation: portrait)").matches
     const appHeight = isInstalledPortrait && !isKeyboardCoveringScreen ? Math.max(visualViewport.height, window.screen.height) : visualViewport.height
     rootElement.style.setProperty("--app-h", `${appHeight}px`)
-    const isMobileWidth = window.matchMedia(MOBILE_MEDIA_QUERY).matches
+    const isMobileWidth = !window.matchMedia(MD).matches
     rootElement.toggleAttribute("data-kb", isKeyboardCoveringScreen && isMobileWidth)
   }
   visualViewport.addEventListener("resize", fitToVisualViewport)

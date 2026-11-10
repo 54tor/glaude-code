@@ -247,7 +247,7 @@ export type SidebarProps = {
 }
 
 // Seuil md de Tailwind : en dessous, le menu est un tiroir.
-export const MD = "(min-width: 768px)"
+export const MD = "(min-width: 768px) and (not ((pointer: coarse) and (max-height: 500px)))"
 const onWide = (onChange: () => void) => {
   const wideQuery = matchMedia(MD)
   wideQuery.addEventListener("change", onChange)
