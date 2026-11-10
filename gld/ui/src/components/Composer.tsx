@@ -11,7 +11,7 @@ import { useLocal } from "@/hooks/useLocal"
 import { draftOf, setDraft, useDraft } from "@/hooks/useDraft"
 import { setWaitIdle, useWaitIdle } from "@/hooks/useWaitIdle"
 import { Checkbox } from "@/components/ui/checkbox"
-import { efforts, models, withChoice, type Choice } from "@/lib/models"
+import { efforts, modelKeyOf, models, withChoice, type Choice } from "@/lib/models"
 import { ModelPicker } from "./ModelPicker"
 import { useMention } from "./Mention"
 import { Choose } from "./Choose"
@@ -522,7 +522,7 @@ function LiveSend({ id, dir, onSent, liveState, onAsk, bar, compactHint, coldHin
   if (asking) headOfQueueLabel = t("conversation.composer.afterQuestion")
   else if (working) headOfQueueLabel = t("conversation.composer.whenIdle")
   const settingsDisabled = working || asking || busy
-  const sessionModel = models().find(([modelKey]) => modelKey && liveState.st?.model?.toLowerCase().includes(modelKey))?.[0] ?? ""
+  const sessionModel = modelKeyOf(liveState.st?.model)
   const postSetting = async (command: string, value: string) => {
     if (!value) return
     const posted = await post(`${command} ${value}`)

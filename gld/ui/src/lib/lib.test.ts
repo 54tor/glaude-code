@@ -4,7 +4,7 @@ import type { Data, Group, Session } from "./api"
 import { argAt, body } from "./commands"
 import { describeKey } from "./configKeys"
 import { ago, bucket, compact, size, tilde, tokTotal } from "./format"
-import { withChoice } from "./models"
+import { modelKeyOf, withChoice } from "./models"
 import { join, segs } from "./paths"
 import { AUTO, buildView, cut, plural } from "./sessionsView"
 import { buildTree, find, under } from "./tree"
@@ -311,5 +311,17 @@ describe("parseBtw", () => {
     const scr = "x\n    /btw ma question\n\n      Une réponse\n      - point\n\n    ↑/↓ to scroll · c to copy · f to fork · Esc to close\n"
     expect(parseBtw(scr)).toEqual({ question: "ma question", answer: "Une réponse\n- point" })
     expect(parseBtw("❯ \n")).toBeNull()
+  })
+})
+
+describe("modelKeyOf", () => {
+  it("retourneLaVersionPreciseDeLaSessionPlutotQueLaFamille", () => {
+    const valeurObtenue = modelKeyOf("claude-opus-4-1-20250805")
+    expect(valeurObtenue).toBe("claude-opus-4-1")
+  })
+
+  it("retourneLAliasQuandLaVersionNEstPasListee", () => {
+    const valeurObtenue = modelKeyOf("claude-opus-5-5")
+    expect(valeurObtenue).toBe("opus")
   })
 })

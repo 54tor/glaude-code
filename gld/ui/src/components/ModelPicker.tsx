@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils"
 import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { api } from "@/lib/api"
-import { efforts, models, type Choice } from "@/lib/models"
+import { efforts, modelKeyOf, models, type Choice } from "@/lib/models"
 import { Choose } from "./Choose"
 
 // Modèle que claude utilisera sans --model : "model" des réglages utilisateur, sinon ANTHROPIC_MODEL.
@@ -37,8 +37,8 @@ export function ModelPicker({
   const [defaultModelName, setDefaultModelName] = useState("")
   useEffect(() => void defaultModel().then(setDefaultModelName), [])
   const defaultModelLabel = () => {
-    const matchingModel = models().find(([modelValue]) => modelValue && defaultModelName.toLowerCase().includes(modelValue))
-    return matchingModel?.[1] ?? defaultModelName
+    const matchingKey = modelKeyOf(defaultModelName)
+    return models().find(([modelValue]) => modelValue === matchingKey)?.[1] ?? defaultModelName
   }
   const labelOption = ([modelValue, modelLabel]: ReturnType<typeof models>[number]) => {
     const isDefaultOption = !modelValue && defaultModelName
