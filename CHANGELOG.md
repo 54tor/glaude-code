@@ -4,6 +4,9 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ## [Non publié]
 
+### Modifié
+- Réponses aux questions de Claude : affichées dans une carte dédiée (question, réponse choisie) au lieu d'une ligne grise « ↳ • … → … ».
+
 ### Corrigé
 - Questions de Claude à onglets et choix multiples : la carte de réponse s'affiche aussi sur les onglets intermédiaires (ligne « Next »), sans devoir passer par le terminal.
 - Ajout d'un dossier à un projet : les dossiers déjà connus reçoivent l'autorisation sans l'erreur « projet invalide ».

@@ -535,7 +535,7 @@ func computeDetail(path string) Detail {
 // --- lecture d'une conversation ---------------------------------------------
 
 type Msg struct {
-	R  string `json:"r"` // user | assistant | tool | doc (fichier écrit : T = chemin)
+	R  string `json:"r"` // user | assistant | tool | doc (fichier écrit : T = chemin) | ask (réponses AskUserQuestion : T = JSON [{q,a}])
 	T  string `json:"t"`
 	Ts string `json:"ts,omitempty"`
 	// O/N : décalage de la ligne du transcript et rang du message dans cette ligne. Clé stable : quand on
@@ -582,17 +582,25 @@ var askAnsweredPrefixes = []string{"User has answered your questions", "Your que
 
 var askAnswerPair = regexp.MustCompile(`"((?:[^"\\]|\\.)*)"="((?:[^"\\]|\\.)*)"`)
 
-// askAnswersSummary : « question → réponse » par ligne, sans la consigne en anglais ajoutée par Claude Code.
-func askAnswersSummary(resultText string) string {
-	pairs := askAnswerPair.FindAllStringSubmatch(resultText, -1)
-	if len(pairs) == 0 {
-		return resultText
+type askAnswer struct {
+	Question string `json:"q"`
+	Answer   string `json:"a"`
+}
+
+// askAnswersJSON : paires question/réponse d'un AskUserQuestion répondu, en JSON (message « ask »), sans la consigne en anglais de Claude Code ; "" si aucune paire.
+func askAnswersJSON(resultText string) string {
+	var answers []askAnswer
+	for _, pair := range askAnswerPair.FindAllStringSubmatch(resultText, -1) {
+		answers = append(answers, askAnswer{Question: pair[1], Answer: pair[2]})
 	}
-	var lines []string
-	for _, pair := range pairs {
-		lines = append(lines, "• "+pair[1]+"\n   → "+pair[2])
+	if len(answers) == 0 {
+		return ""
 	}
-	return strings.Join(lines, "\n")
+	encoded, err := json.Marshal(answers)
+	if err != nil {
+		return ""
+	}
+	return string(encoded)
 }
 
 func isAskAnswered(resultText string) bool {
@@ -718,7 +726,10 @@ func lineMsgsMode(lineBytes []byte, tools, anchors bool) []Msg {
 			resultText := strings.TrimSpace(flat(block.Content))
 			isAnswer := isAskAnswered(resultText)
 			if isAnswer {
-				resultText = askAnswersSummary(resultText)
+				if answersJSON := askAnswersJSON(resultText); answersJSON != "" {
+					messages = append(messages, Msg{R: "ask", T: answersJSON, Ts: parsedLine.Timestamp})
+					continue
+				}
 			}
 			if tools || isAnswer {
 				messages = append(messages, Msg{R: "tool", T: "↳ " + cut(resultText, toolResultMaxRunes), Ts: parsedLine.Timestamp})

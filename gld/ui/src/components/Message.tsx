@@ -3,7 +3,7 @@ import { memo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
-import { ChevronRight, CornerDownRight, Download, ExternalLink, OctagonX, Wrench } from "lucide-react"
+import { Check, ChevronRight, CornerDownRight, Download, ExternalLink, MessageCircleQuestion, OctagonX, Wrench } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -247,6 +247,7 @@ function MessageView({ m: message, conv }: { m: Msg; conv?: Conv }) {
         </div>
       </div>
     )
+  if (message.r === "ask") return <AskAnswers title={title} json={message.t} />
   if (message.r === "tool") {
     // « ↳ … » : résultat d'un appel ; sinon l'appel lui-même (« Outil  argument »).
     const result = message.t.startsWith("↳")
@@ -264,6 +265,40 @@ function MessageView({ m: message, conv }: { m: Msg; conv?: Conv }) {
   return (
     <div title={title} className="msg leading-relaxed break-words">
       <Markdown t={message.t} />
+    </div>
+  )
+}
+
+type AskAnswer = { q: string; a: string }
+
+function parseAskAnswers(json: string): AskAnswer[] {
+  try {
+    const parsed: unknown = JSON.parse(json)
+    return Array.isArray(parsed) ? (parsed as AskAnswer[]) : []
+  } catch {
+    return []
+  }
+}
+
+// Réponses données à un AskUserQuestion : une carte, une ligne question/réponse par question.
+function AskAnswers({ title, json }: { title?: string; json: string }) {
+  const { t } = useTranslation()
+  const answers = parseAskAnswers(json)
+  return (
+    <div title={title} className="msg rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 text-sm">
+      <p className="mb-2 flex items-center gap-2 font-medium text-primary">
+        <MessageCircleQuestion className="size-4" aria-hidden /> {t("conversation.message.askAnswered")}
+      </p>
+      <dl className="space-y-2">
+        {answers.map((answer, answerIndex) => (
+          <div key={answerIndex}>
+            <dt className="text-muted-foreground">{answer.q}</dt>
+            <dd className="mt-0.5 flex items-start gap-1.5 font-medium break-words whitespace-pre-wrap">
+              <Check className="mt-0.5 size-3.5 shrink-0 text-primary" aria-hidden /> {answer.a}
+            </dd>
+          </div>
+        ))}
+      </dl>
     </div>
   )
 }

@@ -77,6 +77,7 @@
       "imageAlt": "Conversation image",
       "interrupted": "Interrupted by the user",
       "interruptedTool": "Interrupted by the user during a tool call",
+      "askAnswered": "Answers given",
       "toolResult": "tool result",
       "showDoc": "Show the document",
       "docFail": "Could not read the document",

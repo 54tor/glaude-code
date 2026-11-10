@@ -30,8 +30,8 @@ func TestLineMsgsAfficheLesReponsesAskUserQuestionLisiblement(t *testing.T) {
 
 	messagesObtenus := lineMsgs(ligneResultat, false)
 
-	valeurAttendue := "↳ • Quel choix ?\n   → A"
-	if len(messagesObtenus) != 1 || messagesObtenus[0].T != valeurAttendue {
+	valeurAttendue := `[{"q":"Quel choix ?","a":"A"}]`
+	if len(messagesObtenus) != 1 || messagesObtenus[0].R != "ask" || messagesObtenus[0].T != valeurAttendue {
 		t.Fatalf("obtenu %+v, attendu %q", messagesObtenus, valeurAttendue)
 	}
 }
