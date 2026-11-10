@@ -41,8 +41,10 @@ export function ProjectHead({ project: fixed, missing: fixedMissing, dirs, proje
     const dirsToAllow = concernedDirs.filter((concernedDir) => concernedDir !== pickedDir && !isMissingFolder(concernedDir))
     if (parentProjects.length) actions.projectActs.addToProjects(pickedDir, parentProjects.map((parentProject) => parentProject.name))
     for (const dirToAllow of dirsToAllow) {
+      const transcriptsDir = actions.folder(dirToAllow)?.sessions[0]?.dir
+      if (!transcriptsDir) continue
       try {
-        await api.configEdit({ file: "l/" + dirToAllow, op: "add", path: ["permissions", "additionalDirectories"], value: pickedDir })
+        await api.configEdit({ file: "l/" + transcriptsDir, op: "add", path: ["permissions", "additionalDirectories"], value: pickedDir })
       } catch (error) {
         toast.error(errMsg(error))
       }
