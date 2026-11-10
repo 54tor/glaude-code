@@ -231,7 +231,7 @@ function MessageView({ m: message, conv }: { m: Msg; conv?: Conv }) {
     )
   if (message.r === "user" && isTagged(message.t))
     return (
-      <div title={title} className="msg ml-auto max-w-[85%]">
+      <div title={title} className="msg max-w-[85%]">
         <Tagged
           t={message.t}
           md={(markdownText) => <Markdown t={markdownText} />}

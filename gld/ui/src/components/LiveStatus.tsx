@@ -109,10 +109,10 @@ export function LiveBar({ live: { st, open }, id }: { live: Live; id: string }) 
   return (
     <div className="space-y-2">
       {st.queue?.map((queuedMessage) => (
-        <div key={queuedMessage.ts + queuedMessage.t} className="mb-3 flex justify-end" title={new Date(queuedMessage.ts).toLocaleString(loc())}>
+        <div key={queuedMessage.ts + queuedMessage.t} className={cn("mb-3 flex", !isServiceMsg(queuedMessage.t) && "justify-end")} title={new Date(queuedMessage.ts).toLocaleString(loc())}>
           <div className={cn("msg relative max-w-[85%] break-words text-muted-foreground", isServiceMsg(queuedMessage.t) ? "w-full" : "rounded-lg bg-muted/30 px-4 py-2.5 whitespace-pre-wrap outline-1 -outline-offset-1 outline-dashed outline-border")}>
             {isServiceMsg(queuedMessage.t) ? <Tagged t={queuedMessage.t} md={(markdownText) => <Markdown t={markdownText} />} /> : queuedMessage.t}
-            <span className="absolute top-full right-2 mt-0.5 text-2xs font-medium tracking-wide whitespace-nowrap uppercase">{t("conversation.live.queued")}</span>
+            <span className={cn("absolute top-full mt-0.5 text-2xs font-medium tracking-wide whitespace-nowrap uppercase", isServiceMsg(queuedMessage.t) ? "left-2" : "right-2")}>{t("conversation.live.queued")}</span>
           </div>
         </div>
       ))}

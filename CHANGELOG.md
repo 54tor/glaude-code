@@ -9,6 +9,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Réponses aux questions de Claude : affichées dans une carte dédiée (question, réponse choisie) au lieu d'une ligne grise « ↳ • … → … ».
 
 ### Corrigé
+- Notifications de tâche et messages de service (équipiers, autres sessions) : alignés à gauche, comme ce que Claude produit, au lieu de la droite réservée à ce que tu tapes ; vaut aussi pour la file d'attente.
 - Questions de Claude à onglets et choix multiples : la carte de réponse s'affiche aussi sur les onglets intermédiaires (ligne « Next »), sans devoir passer par le terminal.
 - Ajout d'un dossier à un projet : les dossiers déjà connus reçoivent l'autorisation sans l'erreur « projet invalide ».
 - Ajout d'un dossier sans session : il est enregistré et apparaît dans la liste (« Sessions locales » ou son projet).
