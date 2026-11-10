@@ -255,7 +255,7 @@ function parseLines(src: string[]): Prompt | null {
 }
 
 // Question à choix multiples : « N. [ ] option » (ou [✔]), une ligne « Submit » sans numéro, puis « Chat about this » sous un séparateur.
-// Le curseur (❯) se déplace aux flèches ; la touche chiffre coche sans déplacer le curseur ; Entrée sur « Submit » valide.
+// Le curseur (❯) se déplace aux flèches ; la touche chiffre coche sans déplacer le curseur ; Entrée sur « Submit » (« Next » tant qu'il reste des onglets) valide.
 function multiSelect(screenLines: string[], above: (at: number) => string, recapAt: (head: number) => string | undefined): Prompt | null {
   // Signature stricte : les touches envoyées sont aveugles (Bas…Entrée), donc un texte qui imiterait des cases ne doit pas passer pour la vraie
   // question. Il faut l'en-tête « ← … Submit → », le pied « Enter to select » dans les 3 dernières lignes, et aucune demande d'autorisation
@@ -271,7 +271,7 @@ function multiSelect(screenLines: string[], above: (at: number) => string, recap
   let cursorRow = -1
   lines.forEach((line, at) => {
     const optionMatch = /^\s*(❯)?\s*(\d)[.)]\s+(?:\[(.)\]\s+)?(\S.*)$/.exec(line)
-    const submitMatch = /^\s*(❯)?\s*Submit\s*$/.exec(line)
+    const submitMatch = /^\s*(❯)?\s*(?:Submit|Next)\s*$/.exec(line)
     const isCheckbox = optionMatch !== null && optionMatch[3] !== undefined
     if (isCheckbox) {
       rows.push({ at, kind: "box", n: optionMatch[2], label: optionMatch[4].trim(), checked: optionMatch[3] !== " " })

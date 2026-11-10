@@ -4,6 +4,9 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ## [Non publié]
 
+### Corrigé
+- Questions de Claude à onglets et choix multiples : la carte de réponse s'affiche aussi sur les onglets intermédiaires (ligne « Next »), sans devoir passer par le terminal.
+
 ## [0.13.0] - 2026-11-10
 
 ### Ajouté

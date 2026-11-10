@@ -48,6 +48,18 @@ Quelles couleurs veux-tu sélectionner ?
 ────────────────────────────────────────────────────────────────────────────────────────────
   5. Chat about this
 Enter to select · ↑/↓ to navigate · Esc to cancel`,
+  multiNext: `
+←  ☒ Correctifs  ☐ Socket  ✔ Submit  →
+Quels points veux-tu corriger ?
+❯ 1. [✔] Serial SOA
+         Remplacer le serial par un timestamp epoch.
+  2. [✔] Parsing ACL IPv6
+         Ne séparer l'action que si le suffixe est connu.
+  3. [ ] Type something
+     Next
+────────────────────────────────────────────────────────────────────────────────────────────
+  4. Chat about this
+Enter to select · Tab/Arrow keys to navigate · Esc to cancel`,
   single: ` ☐ Couleur
 Quelle couleur préfères-tu ?
 ❯ 1. Rouge
@@ -266,6 +278,16 @@ describe("parsePrompt : captures réelles", () => {
     expect(prompt.submit).toEqual(["Down", "Down", "Down", "Enter"])
     expect(prompt.options[3].reach).toEqual(["Down", "Down"])
     expect(prompt.options[0].reach).toEqual(["Up"])
+  })
+  it("choix multiples : la ligne « Next » d'un onglet intermédiaire valide comme « Submit »", () => {
+    const prompt = parsePrompt(real.multiNext)!
+    expect(prompt.options.filter((opt) => opt.checked !== undefined).map((opt) => [opt.label, opt.checked])).toEqual([
+      ["Serial SOA", true],
+      ["Parsing ACL IPv6", true],
+      ["Type something", false],
+    ])
+    expect(prompt.submit).toEqual(["Down", "Down", "Down", "Enter"])
+    expect(prompt.tabs).toEqual([{ label: "Correctifs", done: true }, { label: "Socket", done: false }])
   })
   it("choix unique avec champ libre et discussion", () => {
     const prompt = parsePrompt(real.single)!
