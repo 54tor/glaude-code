@@ -32,6 +32,7 @@ export type MemFile = {
   gld?: boolean // règle livrée par gld (metadata.source: gld)
   warn?: string // front matter invalide
 }
+export type DocEntry = { path: string; name: string; ts?: string; size: number; missing?: boolean; tooBig?: boolean }
 export type LoadEvent = { at: number; session: string; file: string; type?: string; reason?: string; globs?: string[]; trigger?: string }
 export type FileLoads = { sessions: number; last: number }
 // Skills (skills.go)
@@ -284,6 +285,7 @@ export const api = {
   memoryMerge: (body: { keys: string[]; out?: string; launch: boolean; prompt?: string; args?: string }) => http.post<Said & { prompt: string }>("/memory/merges", body),
   memoryTokens: (keys: string[]) => http.post<{ counts: Record<string, number>; errors: Record<string, string>; cost: number }>("/memory/token-counts", { keys }),
   memoryLint: (scope: string) => http.post<{ findings: Finding[]; cost?: number }>("/memory/lints", { scope }),
+  sessionDocuments: (id: string, dir: string) => http.get<{ documents: DocEntry[] }>(`/sessions/${seg(id)}/conversation/documents${qs({ dir })}`),
   sessionLoaded: (id: string) => http.get<{ files: LoadEvent[] }>(`/sessions/${seg(id)}/loaded`),
   sessionLoadedFile: (id: string, file: string) => http.get<{ text?: string }>(`/sessions/${seg(id)}/loaded/files/${seg(file)}`),
   configRaw: (file: string) => http.get<{ text: string }>(`/config/raw${qs({ file })}`),

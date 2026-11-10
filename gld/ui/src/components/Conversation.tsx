@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next"
 import { useStickToBottom } from "use-stick-to-bottom"
 import { cn } from "cn"
 import { swipeHandlers } from "@/lib/swipe"
-import { ArrowDown, SquareChevronsDown, ArrowUpToLine, Copy, Undo2, BarChart3, Bug, ChevronLeft, ChevronRight, FolderOpen, Power, FileText, Fan, MessageSquarePlus, MoreHorizontal, MessagesSquare, GalleryHorizontalEnd, SquareTerminal, Wrench, RefreshCcwDot } from "lucide-react"
+import { ArrowDown, SquareChevronsDown, ArrowUpToLine, Copy, Undo2, BarChart3, Bug, ChevronLeft, ChevronRight, FolderOpen, Power, FileText, FileStack, Fan, MessageSquarePlus, MoreHorizontal, MessagesSquare, GalleryHorizontalEnd, SquareTerminal, Wrench, RefreshCcwDot } from "lucide-react"
 import { focusRow } from "@/lib/focusRow"
 import { type Choice } from "@/lib/models"
 import { api, type Detail, type Msg, type Session } from "@/lib/api"
@@ -29,6 +29,7 @@ import { Composer, focusComposer, type Turn } from "./Composer"
 import { LiveTasks } from "./LiveTasks"
 import { LiveAgents, LiveBar, LiveStats, StatsButton, useLive } from "./LiveStatus"
 import { LoadedDialog } from "./LoadedDialog"
+import { DocumentsDialog } from "./DocumentsDialog"
 import { CacheState, KeepWarmBanner, KeepWarmItem } from "./KeepWarm"
 import { useLocal } from "@/hooks/useLocal"
 import { useGit } from "@/hooks/useGit"
@@ -128,6 +129,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
   useEffect(() => {
     api.termInfo().then((terminalInfo) => setTermOn(terminalInfo.enabled), () => {})
   }, [])
+  const [documentsOpen, setDocumentsOpen] = useState(false)
   const [loadedOpen, setLoadedOpen] = useState(false) // instructions réellement chargées (hook InstructionsLoaded)
   const [statsOpen, setStatsOpen] = useState(false)
   // Les messages sont rangés avec la clé (session, outils) qui les a produits : tant qu'elle ne correspond
@@ -477,6 +479,9 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
                 </div>
                 <div className="flex items-center gap-1 md:-mr-[38px]">
                   <StatsButton live={live} s={session} onClick={() => setStatsOpen(true)} />
+                  <Button variant="outline" size="xs" onClick={() => setDocumentsOpen(true)} title={t("conversation.documents.buttonTitle")}>
+                    <FileStack /> <span className="max-md:hidden">{t("conversation.documents.button")}</span>
+                  </Button>
                   {row && !row.g.missing && (
                     <Button variant="outline" size="xs" className="max-md:hidden" onClick={() => actions.newSession(row.g.project)} title={t("conversation.view.newSessionTitle")}>
                       <MessageSquarePlus /> {t("conversation.view.newSession")}
@@ -668,6 +673,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
           />
         )}
         <Confirm ask={ask} onClose={() => setAsk(null)} />
+        <DocumentsDialog id={id} dir={session?.dir ?? ""} open={documentsOpen} onClose={() => setDocumentsOpen(false)} />
         <LoadedDialog id={id} home={actions.home} open={loadedOpen} onClose={() => setLoadedOpen(false)} />
       </DialogContent>
     </Dialog>

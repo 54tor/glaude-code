@@ -137,7 +137,7 @@ const INTERRUPTED = /^\s*\[Request interrupted by user( for tool use)?\]\s*$/
 const BYTES_PER_KILOBYTE = 1024
 
 // Fichier écrit par Claude (md, html, image, pdf) : relu à la demande par le serveur, qui ne sert que les chemins du transcript.
-function WrittenDoc({ conv, path }: { conv: Conv; path: string }) {
+export function WrittenDoc({ conv, path }: { conv: Conv; path: string }) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [md, setMd] = useState<string | null>(null)
@@ -196,7 +196,7 @@ function WrittenDoc({ conv, path }: { conv: Conv; path: string }) {
 
 // Mémoïsé (voir plus bas) : la conversation se redessine pour l'état de la session, pas pour chacun de ses messages.
 // guest : vue invitée, sans document ni lecture de fichier (routes refusées à l'invité).
-type Conv = { dir: string; id: string; tools?: boolean; guest?: boolean }
+export type Conv = { dir: string; id: string; tools?: boolean; guest?: boolean }
 
 function MessageView({ m: message, conv }: { m: Msg; conv?: Conv }) {
   const { t } = useTranslation()

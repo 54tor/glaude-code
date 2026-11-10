@@ -4,6 +4,9 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ## [Non publié]
 
+### Ajouté
+- Lecteur de session : un bouton « Documents » ouvre la liste des fichiers (Markdown, HTML, PDF, images) que Claude a écrits ou cités dans la session, à afficher ou à télécharger.
+
 ### Modifié
 - Bouton des outils : libellé fixe « Outils », en couleur primaire quand ils sont affichés et grisé quand ils sont masqués, au lieu de changer de texte.
 - Choix du modèle : en plus des familles (Opus, Sonnet, Haiku), des versions précises sont proposées (Opus 4, 4.1, 4.5, Sonnet 4, 4.5, Haiku 4.5) pour les prompts, le modèle de session et les agents.

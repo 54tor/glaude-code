@@ -67,6 +67,17 @@
       "toEndAria": "Aller à la fin de la conversation",
       "following": "Suit la fin de la conversation"
     },
+    "documents": {
+      "title": "Documents de la session",
+      "description": "Fichiers écrits ou cités par Claude dans cette session : à afficher ou à télécharger.",
+      "empty": "Aucun document dans cette session.",
+      "missing": "Fichier introuvable",
+      "tooBig": "Trop volumineux pour être affiché",
+      "download": "Télécharger",
+      "button": "Documents",
+      "buttonTitle": "Documents écrits dans cette session",
+      "loadFail": "Liste des documents illisible"
+    },
     "message": {
       "pasted_one": "Texte collé · {{count}} ligne",
       "pasted_other": "Texte collé · {{count}} lignes",

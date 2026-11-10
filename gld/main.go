@@ -377,6 +377,7 @@ func handler() http.Handler {
 	routesSlash(mux)
 	routesImages(mux)
 	routesDocs(mux)
+	routesDocsList(mux)
 	routesPair(mux)
 	routesQueue(mux)
 	routesShare(mux)

@@ -67,6 +67,17 @@
       "toEndAria": "Go to the end of the conversation",
       "following": "Following the end of the conversation"
     },
+    "documents": {
+      "title": "Session documents",
+      "description": "Files written or mentioned by Claude in this session: view or download them.",
+      "empty": "No documents in this session.",
+      "missing": "File not found",
+      "tooBig": "Too large to display",
+      "download": "Download",
+      "button": "Documents",
+      "buttonTitle": "Documents written in this session",
+      "loadFail": "Could not read the document list"
+    },
     "message": {
       "pasted_one": "Pasted text · {{count}} line",
       "pasted_other": "Pasted text · {{count}} lines",
