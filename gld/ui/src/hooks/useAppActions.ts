@@ -405,14 +405,14 @@ export function useAppActions(context: {
     toast.success(i18n.t("shell.act.childDirsAdded", { count: addedCount }))
   }
 
-  const addDirPath = async (path: string) => {
+  const addDirPath = async (path: string, stayOnPage = false) => {
     try {
       await api.dirsAdd(path)
     } catch (error) {
       return void toast.error(errMsg(error))
     }
     await reload()
-    go({ kind: "dir", key: segs(path, home).join("/") })
+    if (!stayOnPage) go({ kind: "dir", key: segs(path, home).join("/") })
   }
 
   const hotMinutesLeft = (session: { mtime: number }) => {

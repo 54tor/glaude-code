@@ -39,6 +39,7 @@ export function ProjectHead({ project: fixed, missing: fixedMissing, dirs, proje
     if (!pickedDir) return
     const concernedDirs = [...new Set([project, ...parentProjects.flatMap((parentProject) => parentProject.dirs)])]
     const dirsToAllow = concernedDirs.filter((concernedDir) => concernedDir !== pickedDir && !isMissingFolder(concernedDir))
+    if (!actions.folder(pickedDir)) await actions.addDirPath(pickedDir, true)
     if (parentProjects.length) actions.projectActs.addToProjects(pickedDir, parentProjects.map((parentProject) => parentProject.name))
     for (const dirToAllow of dirsToAllow) {
       const transcriptsDir = actions.folder(dirToAllow)?.sessions[0]?.dir
