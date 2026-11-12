@@ -2,16 +2,15 @@ import { useCallback, useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { dismissGitPush, gitPushOutputTail, setGitPushTerminalOpen, useGitPushRun, type GitPushRun } from "@/hooks/useGitPush"
+import { GitPushPill } from "./GitPushPill"
 import { GitPushSendDialog } from "./GitPushSendDialog"
 import { GitPushTerminal } from "./GitPushTerminal"
 
 const TOAST_ID = "git-push"
 const TOAST_TAIL_LINES = 3
-const TOAST_REFRESH_MS = 1000
 const TOAST_SUCCESS_MS = 6000
 
-// Monté une fois dans l'application : affiche le push en cours sous forme de toast persistant (les dernières lignes de sa sortie,
-// puis son résultat), le terminal complet à la demande, et l'envoi de l'échec à Claude.
+// Monté une fois dans l'application : affiche le push en cours sous forme de pastille (les toasts gênaient l'interface), puis son résultat en toast, le terminal complet à la demande, et l'envoi de l'échec à Claude.
 export function GitPushHost() {
   const run = useGitPushRun()
   const [isSendOpen, setIsSendOpen] = useState(false)
@@ -20,6 +19,7 @@ export function GitPushHost() {
   return (
     <>
       <GitPushTerminal />
+      {run?.status === "running" && !run.isTerminalOpen && <GitPushPill run={run} />}
       {run && <GitPushSendDialog run={run} open={isSendOpen} onOpenChange={setIsSendOpen} />}
     </>
   )
@@ -44,7 +44,7 @@ function useGitPushToast(run: GitPushRun | null, requestSend: () => void) {
   const branch = run?.branch
   const remote = run?.remote
   useEffect(() => {
-    if (!status || !branch || !remote) {
+    if (!status || status === "running" || !branch || !remote) {
       toast.dismiss(TOAST_ID)
       return
     }
@@ -56,16 +56,9 @@ function useGitPushToast(run: GitPushRun | null, requestSend: () => void) {
       },
     }
     const shared = { id: TOAST_ID, duration: Infinity, onDismiss: dismissGitPush }
-    const showToast = () => {
-      const tail = status === "error" ? errorMessage : gitPushOutputTail(TOAST_TAIL_LINES)
-      const description = <ToastBody tail={tail} openLabel={t("conversation.gitPush.openTerminal")} />
-      if (status === "running") toast.loading(t("conversation.gitPush.toastRunning", { branch, remote }), { ...shared, description, dismissible: false })
-      else if (status === "succeeded") toast.success(t("conversation.gitPush.toastDone", { branch, remote }), { ...shared, description, duration: TOAST_SUCCESS_MS, onAutoClose: dismissGitPush })
-      else toast.error(t("conversation.gitPush.toastFailed", { remote, code: exitCode ?? "?" }), { ...shared, description, action: sendToClaude })
-    }
-    showToast()
-    if (status !== "running") return
-    const refreshTimer = setInterval(showToast, TOAST_REFRESH_MS)
-    return () => clearInterval(refreshTimer)
+    const tail = status === "error" ? errorMessage : gitPushOutputTail(TOAST_TAIL_LINES)
+    const description = <ToastBody tail={tail} openLabel={t("conversation.gitPush.openTerminal")} />
+    if (status === "succeeded") toast.success(t("conversation.gitPush.toastDone", { branch, remote }), { ...shared, description, duration: TOAST_SUCCESS_MS, onAutoClose: dismissGitPush })
+    else toast.error(t("conversation.gitPush.toastFailed", { remote, code: exitCode ?? "?" }), { ...shared, description, action: sendToClaude })
   }, [status, exitCode, errorMessage, branch, remote, requestSend, t])
 }
