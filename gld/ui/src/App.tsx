@@ -41,6 +41,7 @@ import { Dashboard } from "@/components/Dashboard"
 import { segs } from "@/lib/paths"
 import { Compose, type ComposeAsk } from "@/components/Compose"
 import { AuthScreen } from "@/components/auth/Login"
+import { GitPushHost } from "@/components/GitPushHost"
 import { boot, useAuth } from "@/lib/auth"
 import { importLocalQueues } from "@/hooks/importQueues"
 
@@ -631,6 +632,7 @@ function Shell() {
       <DirPicker pick={picker} home={home} />
       <Confirm ask={ask} onClose={() => setAsk(null)} />
       <BanAlert />
+      <GitPushHost />
       <Prompt ask={prompt} onClose={() => setPrompt(null)} />
       <Compose ask={compose} onClose={() => setCompose(null)} />
       <SessionInfo row={info} onClose={() => setInfo(null)} />

@@ -9,7 +9,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ### Modifié
 - Images de la conversation (images collées, images écrites par Claude) : un clic les ouvre en grand dans une modale au lieu d'un nouvel onglet.
-- Bouton « Pousser » : la sortie de git (hook local pre-push compris) s'affiche en direct dans un terminal en lecture seule, suivie du code de retour de git ; un hook qui refuse montre son message et le code au lieu d'une simple notification.
+- Bouton « Pousser » : la sortie de git (hook local pre-push compris) s'affiche en direct dans un terminal en lecture seule, suivie du code de retour de git ; un hook qui refuse montre son message et le code au lieu d'une simple notification. Le push peut être réduit : il continue en arrière-plan sous forme de toast (dernières lignes, résultat), qu'on rouvre en terminal ; un hook long (jusqu'à 15 minutes) n'est plus interrompu ; en cas d'échec, « Envoyer à Claude » transmet le code de retour et la sortie à une session du même dossier ou à une nouvelle session.
 - Notifications de tâche : carte teintée selon le statut (vert et coche si terminée, rouge et alerte si échouée, ambre pour les autres cas).
 - Bouton des outils : libellé fixe « Outils », en couleur primaire quand ils sont affichés et grisé quand ils sont masqués, au lieu de changer de texte.
 - Choix du modèle : en plus des familles (Opus, Sonnet, Haiku), des versions précises sont proposées (Opus 4, 4.1, 4.5, Sonnet 4, 4.5, Haiku 4.5) pour les prompts, le modèle de session et les agents.
