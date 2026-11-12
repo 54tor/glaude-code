@@ -70,12 +70,6 @@ func stripUserinfo(raw string) string {
 	return raw
 }
 
-func gitOut(dir string, args ...string) (string, error) {
-	var combinedOutput bytes.Buffer
-	err := gitStreamTo(dir, &combinedOutput, args...)
-	return strings.TrimSpace(combinedOutput.String()), err
-}
-
 // gitStreamTo exécute git dans dir ; stdout et stderr vont vers output, au fil de l'eau.
 func gitStreamTo(dir string, output io.Writer, args ...string) error {
 	commandContext, cancel := context.WithTimeout(context.Background(), gitPushTimeout)
