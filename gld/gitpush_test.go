@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestMaskURL(t *testing.T) {
@@ -135,4 +136,35 @@ func decodeFrames(t *testing.T, dir, remote string) streamedPush {
 		}
 	}
 	return streamed
+}
+
+// Un hook silencieux et lent : des lignes vides ({}) maintiennent le flux ouvert, puis le code de retour arrive quand même.
+func TestStreamGitPushSendsHeartbeatsDuringSlowSilentHook(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git absent")
+	}
+	previousInterval := heartbeatInterval
+	heartbeatInterval = 20 * time.Millisecond
+	defer func() { heartbeatInterval = previousInterval }()
+	root := t.TempDir()
+	bareRemote, workDir := root+"/remote.git", root+"/work"
+	git(t, root, "init", "-q", "--bare", bareRemote)
+	git(t, root, "init", "-q", "-b", "main", workDir)
+	git(t, workDir, "remote", "add", "origin", bareRemote)
+	git(t, workDir, "commit", "-q", "--allow-empty", "-m", "un")
+	slowHook := "#!/bin/sh\nsleep 0.3\nexit 0\n"
+	if err := os.WriteFile(workDir+"/.git/hooks/pre-push", []byte(slowHook), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	recorder := httptest.NewRecorder()
+	streamGitPush(recorder, workDir, "origin")
+
+	emptyFrames := strings.Count(recorder.Body.String(), "{}\n")
+	if emptyFrames < 2 {
+		t.Errorf("signaux de vie attendus pendant le hook, obtenu %d dans %q", emptyFrames, recorder.Body.String())
+	}
+	if !strings.Contains(recorder.Body.String(), `"exit":0`) {
+		t.Errorf("code de retour 0 attendu : %q", recorder.Body.String())
+	}
 }

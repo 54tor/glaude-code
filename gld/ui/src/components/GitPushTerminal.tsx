@@ -20,12 +20,14 @@ export function GitPushTerminal({ dir, remote, branch, onClose }: { dir: string;
     const terminal = new Terminal({ fontSize: 13, disableStdin: true, convertEol: true, scrollback: 2000, cursorInactiveStyle: "none" })
     terminal.open(terminalHost)
     let isDisposed = false
-    streamGitPush(dir, remote, (chunk) => terminal.write(chunk)).then(
+    const abortController = new AbortController()
+    streamGitPush(dir, remote, (chunk) => terminal.write(chunk), abortController.signal).then(
       (exitCode) => !isDisposed && setOutcome({ kind: "finished", exitCode }),
       (pushError) => !isDisposed && setOutcome({ kind: "error", message: errMsg(pushError) })
     ).finally(refreshGit)
     return () => {
       isDisposed = true
+      abortController.abort()
       terminal.dispose()
     }
   }, [dir, remote, terminalHost])
@@ -33,7 +35,7 @@ export function GitPushTerminal({ dir, remote, branch, onClose }: { dir: string;
   const isRunning = outcome.kind === "running"
   const isSuccess = outcome.kind === "finished" && outcome.exitCode === 0
   return (
-    <Dialog open onOpenChange={(isOpen) => !isOpen && !isRunning && onClose()}>
+    <Dialog open onOpenChange={(isOpen) => !isOpen && onClose()}>
       <DialogContent className="min-w-0 sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>{t("conversation.gitPush.terminalTitle", { branch, remote })}</DialogTitle>

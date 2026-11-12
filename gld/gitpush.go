@@ -22,7 +22,7 @@ import (
 
 const (
 	schemeSeparator = "://"
-	gitPushTimeout  = 60 * time.Second
+	gitPushTimeout  = 15 * time.Minute // un hook pre-push peut lancer un build ou des tests
 	gitPushBodyMax  = 1 << 10
 	ndjsonMediaType = "application/x-ndjson"
 	exitCodeUnknown = -1
@@ -177,16 +177,41 @@ type ndjsonFrame struct {
 
 // ndjsonWriter envoie chaque écriture de git au client sans attendre la fin du push.
 type ndjsonWriter struct {
+	mu         sync.Mutex // la sortie de git et le signal de vie écrivent en même temps
 	encoder    *json.Encoder
 	controller *http.ResponseController
 }
 
+func (frameWriter *ndjsonWriter) send(frame ndjsonFrame) error {
+	frameWriter.mu.Lock()
+	defer frameWriter.mu.Unlock()
+	if err := frameWriter.encoder.Encode(frame); err != nil {
+		return err
+	}
+	return frameWriter.controller.Flush()
+}
+
 func (frameWriter *ndjsonWriter) Write(chunk []byte) (int, error) {
-	if err := frameWriter.encoder.Encode(ndjsonFrame{Out: chunk}); err != nil {
+	if err := frameWriter.send(ndjsonFrame{Out: chunk}); err != nil {
 		return 0, err
 	}
-	frameWriter.controller.Flush()
 	return len(chunk), nil
+}
+
+// heartbeatInterval : une ligne vide ({}) à ce rythme pendant un hook silencieux, pour qu'un proxy ou un tunnel ne coupe pas le flux.
+var heartbeatInterval = 15 * time.Second
+
+func (frameWriter *ndjsonWriter) beat(stop <-chan struct{}) {
+	ticker := time.NewTicker(heartbeatInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-stop:
+			return
+		case <-ticker.C:
+			frameWriter.send(ndjsonFrame{})
+		}
+	}
 }
 
 func streamGitPush(responseWriter http.ResponseWriter, dir, remote string) {
@@ -196,10 +221,12 @@ func streamGitPush(responseWriter http.ResponseWriter, dir, remote string) {
 	headers.Set("X-Content-Type-Options", "nosniff")
 	headers.Set("X-Accel-Buffering", "no")
 	responseWriter.WriteHeader(http.StatusOK)
-	frameWriter := &ndjsonWriter{json.NewEncoder(responseWriter), http.NewResponseController(responseWriter)}
+	frameWriter := &ndjsonWriter{encoder: json.NewEncoder(responseWriter), controller: http.NewResponseController(responseWriter)}
+	stopBeat := make(chan struct{})
+	go frameWriter.beat(stopBeat)
 	exitCode := exitCodeOf(gitPushTo(dir, remote, frameWriter))
-	frameWriter.encoder.Encode(ndjsonFrame{Exit: &exitCode})
-	frameWriter.controller.Flush()
+	close(stopBeat)
+	frameWriter.send(ndjsonFrame{Exit: &exitCode})
 }
 
 func routesGitPush(mux *http.ServeMux) {

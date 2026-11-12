@@ -19,6 +19,6 @@ describe("GitPushTerminal", () => {
     render(<GitPushTerminal dir="/depot" remote="origin" branch="main" onClose={() => {}} />)
 
     expect(await screen.findByRole("alert")).toBeTruthy()
-    expect(streamGitPush).toHaveBeenCalledWith("/depot", "origin", expect.any(Function))
+    expect(streamGitPush).toHaveBeenCalledWith("/depot", "origin", expect.any(Function), expect.any(AbortSignal))
   })
 })

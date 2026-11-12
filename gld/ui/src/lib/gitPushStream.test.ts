@@ -24,6 +24,16 @@ describe("streamGitPush", () => {
     expect(exitCode).toBe(1)
   })
 
+  it("ignore les lignes vides de signal de vie", async () => {
+    vi.mocked(authFetch).mockResolvedValue(streamedResponse(["{}", "{}", JSON.stringify({ exit: 0 })]))
+    const receivedChunks: Uint8Array[] = []
+
+    const exitCode = await streamGitPush("/depot", "origin", (chunk) => receivedChunks.push(chunk))
+
+    expect(receivedChunks).toEqual([])
+    expect(exitCode).toBe(0)
+  })
+
   it("rend 0 quand le push réussit", async () => {
     vi.mocked(authFetch).mockResolvedValue(streamedResponse([JSON.stringify({ exit: 0 })]))
 
