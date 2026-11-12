@@ -53,7 +53,6 @@ export function DocumentsDialog({ id, dir, open, onClose }: { id: string; dir: s
   useEffect(() => {
     if (!open || !id) return
     let isStillMounted = true
-    setDocuments(null)
     api.sessionDocuments(id, dir).then(
       (documentsResponse) => isStillMounted && setDocuments(documentsResponse.documents),
       () => {
@@ -64,6 +63,7 @@ export function DocumentsDialog({ id, dir, open, onClose }: { id: string; dir: s
     )
     return () => {
       isStillMounted = false
+      setDocuments(null)
     }
   }, [open, id, dir, t])
   return (
