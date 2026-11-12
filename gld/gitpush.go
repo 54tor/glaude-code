@@ -195,8 +195,8 @@ func (frameWriter *ndjsonWriter) Write(chunk []byte) (int, error) {
 // heartbeatInterval : une ligne vide ({}) à ce rythme pendant un hook silencieux, pour qu'un proxy ou un tunnel ne coupe pas le flux.
 var heartbeatInterval = 15 * time.Second
 
-func (frameWriter *ndjsonWriter) beat(stop <-chan struct{}) {
-	ticker := time.NewTicker(heartbeatInterval)
+func (frameWriter *ndjsonWriter) beat(interval time.Duration, stop <-chan struct{}) {
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
 		select {
@@ -217,7 +217,7 @@ func streamGitPush(responseWriter http.ResponseWriter, dir, remote string) {
 	responseWriter.WriteHeader(http.StatusOK)
 	frameWriter := &ndjsonWriter{encoder: json.NewEncoder(responseWriter), controller: http.NewResponseController(responseWriter)}
 	stopBeat := make(chan struct{})
-	go frameWriter.beat(stopBeat)
+	go frameWriter.beat(heartbeatInterval, stopBeat)
 	exitCode := exitCodeOf(gitPushTo(dir, remote, frameWriter))
 	close(stopBeat)
 	frameWriter.send(ndjsonFrame{Exit: &exitCode})
