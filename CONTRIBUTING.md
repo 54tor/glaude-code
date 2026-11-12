@@ -5,7 +5,7 @@ Merci de votre intérêt. Ouvrez d'abord une issue pour toute nouveauté importa
 ## Préparer l'environnement
 
 - Go (version de `gld/go.mod`), Node 22, `tmux`.
-- `make check` lance les vérifications de l'interface et du code ; `make test` les tests Go ; `make cover` la couverture.
+- `make check` lance les vérifications de l'interface et du code ; `make test` les tests Go ; `make cover` la couverture ; `make hooks` active le hook de pré-push qui lance `make check-ui`.
 - La CI (`.github/workflows/ci.yml`) doit être verte : `go vet`, `gofmt`, `staticcheck`, `govulncheck`, `gosec`, `osv-scanner`, `gitleaks`, couverture Go et interface.
 
 ## Règles du projet

@@ -5,6 +5,7 @@
 # make macos   : gld-darwin-arm64 pour macOS Apple Silicon (M1 et suivants ; l'interface est construite avant, sans cgo)
 # make test    : tests Go (le dossier dist peut être vide : seul l'interface en dépend)
 # make check   : go vet + tests Go (-race) + tsc + eslint + tests de l'interface (rien n'est modifié) ; check-ui : la partie interface seule
+# make hooks  : active .githooks/pre-push (lance check-ui avant chaque push) via .git/hooks, sans remplacer les hooks globaux
 # make cover   : tests Go sous -race avec couverture ; échoue sous COVER_MIN % (relevé : 80,7 % le 2026-10-22)
 # make fuzz    : chaque cible de fuzzing de gld pendant FUZZTIME (60s par défaut) ; corpus dans le cache de go
 BIN ?= $(HOME)/.local/bin
@@ -56,4 +57,8 @@ check-ui: check-commonpw
 check-commonpw:
 	cd gld/ui && { [ -d node_modules ] || npm ci; } && node scripts/gen-commonpw.mjs "$${TMPDIR:-/tmp}/commonpw.check" >/dev/null && cmp "$${TMPDIR:-/tmp}/commonpw.check" ../auth_commonpw.txt || { echo "auth_commonpw.txt périmé : make commonpw"; exit 1; }
 
-.PHONY: ui commonpw check-commonpw install windows macos test check check-ui fuzz cover
+# Lien dans .git/hooks plutôt que core.hooksPath : un hooksPath local remplacerait les hooks globaux de l'opérateur.
+hooks:
+	ln -sf ../../.githooks/pre-push "$$(git rev-parse --git-common-dir)/hooks/pre-push"
+
+.PHONY: hooks ui commonpw check-commonpw install windows macos test check check-ui fuzz cover
