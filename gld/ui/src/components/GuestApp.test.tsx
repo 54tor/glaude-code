@@ -344,13 +344,14 @@ describe("GuestApp", () => {
     })
   })
 
-  it("images : src et lien portent share=<poignée> en mode invité, rien côté hôte", async () => {
+  it("images : src et modale portent share=<poignée> en mode invité, rien côté hôte", async () => {
     rich = true
     await mount()
     await tick(2100)
     const img = document.querySelector("img")!
     expect(img.getAttribute("src")).toContain(`share=${H}`)
-    expect(document.querySelector("a[href*='/conversation/images/']")!.getAttribute("href")).toContain(`share=${H}`)
+    fireEvent.click(img.closest("button")!)
+    expect(document.querySelector("[role=dialog] img")!.getAttribute("src")).toContain(`share=${H}`)
     cleanup()
     setAuth({ share: undefined })
     render(<Message m={{ r: "user", t: "", img: "1", o: 1, k: 0 }} conv={{ dir: "/d", id: "s1", tools: false }} />)
