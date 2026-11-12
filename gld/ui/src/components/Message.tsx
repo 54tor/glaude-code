@@ -12,6 +12,7 @@ import { authFetch, getAuth } from "@/lib/auth"
 import { qs, seg, v1 } from "@/lib/apiError"
 import { size } from "@/lib/format"
 import { noBreak, rehypeNoBreak } from "@/lib/noBreak"
+import { ImageModal } from "./ImageModal"
 import { CompactSummary, isCompactSummary, isTagged, Tagged } from "./Tagged"
 import { setDraft } from "@/hooks/useDraft"
 
@@ -71,9 +72,9 @@ function UserText({ t: text, conv }: { t: string; conv?: Conv }) {
       if (before) parts.push(<PlainText key={`${key}t${from}`} t={before} />)
       const src = v1(`/sessions/${seg(conv.id)}/conversation/uploads/${seg(uploadMatch[1])}${qs({ dir: conv.dir })}`)
       parts.push(
-        <a key={`${key}i${uploadMatch.index}`} href={src} target="_blank" rel="noopener noreferrer" title={t("conversation.message.openImage")} className="my-1 block w-fit">
+        <ImageModal key={`${key}i${uploadMatch.index}`} src={src} className="my-1 block w-fit">
           <img src={src} loading="lazy" alt={t("conversation.message.imageAlt")} className="max-h-80 max-w-full rounded-lg border bg-muted/30 object-contain" />
-        </a>
+        </ImageModal>
       )
       from = uploadMatch.index + uploadMatch[0].length
     }
@@ -171,6 +172,10 @@ export function WrittenDoc({ conv, path }: { conv: Conv; path: string }) {
           <a href={downloadSrc} download={fileName} title={t("conversation.message.downloadDoc")} className="text-muted-foreground hover:text-foreground">
             <Download className="size-3.5" aria-hidden />
           </a>
+        ) : isImage ? (
+          <ImageModal src={src} name={fileName} className="text-muted-foreground hover:text-foreground">
+            <ExternalLink className="size-3.5" aria-hidden />
+          </ImageModal>
         ) : (
           <a href={src} target="_blank" rel="noopener noreferrer" title={t("conversation.message.openImage")} className="text-muted-foreground hover:text-foreground">
             <ExternalLink className="size-3.5" aria-hidden />
@@ -208,9 +213,9 @@ function MessageView({ m: message, conv }: { m: Msg; conv?: Conv }) {
     const src = v1(`/sessions/${seg(conv.id)}/conversation/images/${message.o ?? 0}-${message.k ?? 0}${qs({ dir: conv.dir, share })}`)
     return (
       <div title={title} className={`msg flex ${message.r === "user" ? "justify-end" : ""}`}>
-        <a href={src} target="_blank" rel="noopener noreferrer" title={t("conversation.message.openImage")}>
+        <ImageModal src={src}>
           <img src={src} loading="lazy" alt={t("conversation.message.imageAlt")} className="max-h-80 max-w-full rounded-xl border bg-muted/30 object-contain" />
-        </a>
+        </ImageModal>
       </div>
     )
   }
