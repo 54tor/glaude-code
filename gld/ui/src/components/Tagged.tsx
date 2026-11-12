@@ -1,5 +1,5 @@
 import { useContext, useLayoutEffect, useRef, useState } from "react"
-import { Bell, Minimize2, Reply, Send, Users } from "lucide-react"
+import { AlertTriangle, Bell, CheckCircle2, Minimize2, Reply, Send, Users } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import { Badge } from "@/components/ui/badge"
 import { ActionsCtx } from "./actions"
@@ -21,6 +21,19 @@ const USAGE_LABELS: Record<string, string> = {
   total_tokens: "conversation.tagged.usage.tokens",
   tool_uses: "conversation.tagged.usage.toolUses",
   duration_ms: "conversation.tagged.usage.duration",
+}
+// Style de la carte de notification selon le statut de la tâche ; sans statut, carte neutre.
+const NOTIFICATION_STYLES = {
+  completed: { Icon: CheckCircle2, card: "border-l-4 border-l-emerald-500 bg-emerald-500/5", icon: "text-emerald-600 dark:text-emerald-400" },
+  failed: { Icon: AlertTriangle, card: "border-l-4 border-l-destructive bg-destructive/5", icon: "text-destructive" },
+  other: { Icon: Bell, card: "border-l-4 border-l-amber-500 bg-amber-500/5", icon: "text-amber-600 dark:text-amber-400" },
+  none: { Icon: Bell, card: "bg-muted/40", icon: "" },
+}
+const notificationStyleOf = (status?: string) => {
+  if (!status) return NOTIFICATION_STYLES.none
+  if (status === "completed") return NOTIFICATION_STYLES.completed
+  if (status === "failed") return NOTIFICATION_STYLES.failed
+  return NOTIFICATION_STYLES.other
 }
 const TEXT_FIELDS = new Set(["summary", "result", "status", "usage"])
 
@@ -141,10 +154,12 @@ function Card({ tag, attrs, body, md, onReply }: { tag: string; attrs: string; b
       </div>
     )
   }
+  const notificationStyle = notificationStyleOf(status)
+  const NotificationIcon = notificationStyle.Icon
   return (
-    <div className="rounded-lg border bg-muted/40 px-4 py-3 text-sm">
+    <div className={`rounded-lg border px-4 py-3 text-sm ${notificationStyle.card}`}>
       <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-        <Bell className="size-3.5" />
+        <NotificationIcon className={`size-3.5 ${notificationStyle.icon}`} />
         {NAMES[tag] ? t(NAMES[tag]) : tag}
         {status && (
           <Badge variant={status === "completed" ? "secondary" : "outline"} className="ml-auto">
