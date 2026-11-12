@@ -68,7 +68,7 @@ export function DocumentsDialog({ id, dir, open, onClose }: { id: string; dir: s
   }, [open, id, dir, t])
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <DialogContent className="max-h-[90vh] min-w-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden sm:max-w-2xl">
+      <DialogContent className="max-h-[90vh] min-w-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden sm:max-w-5xl">
         <DialogHeader>
           <DialogTitle>{t("conversation.documents.title")}</DialogTitle>
           <DialogDescription>{t("conversation.documents.description")}</DialogDescription>
