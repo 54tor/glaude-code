@@ -4,6 +4,8 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ## [Non publié]
 
+## [0.14.0] - 2026-11-12
+
 ### Ajouté
 - Lecteur de session : un bouton « Documents » ouvre la liste des fichiers (Markdown, HTML, PDF, images) que Claude a écrits ou cités dans la session, à afficher ou à télécharger.
 
@@ -742,8 +744,15 @@ Première version : `gld`, interface web locale pour parcourir, piloter et confi
 - Terminal intégré désactivé par défaut ; lecture bornée des fichiers de commandes.
 - Refus d'agir quand les sessions ouvertes sont indéterminées.
 
-[Non publié]: https://github.com/54tor/glaude-code/compare/v0.11.0...HEAD
+[Non publié]: https://github.com/54tor/glaude-code/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/54tor/glaude-code/compare/v0.13.0...v0.14.0
+[0.13.0]: https://github.com/54tor/glaude-code/compare/v0.12.0...v0.13.0
+[0.12.0]: https://github.com/54tor/glaude-code/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/54tor/glaude-code/compare/v0.10.2...v0.11.0
+[0.10.2]: https://github.com/54tor/glaude-code/compare/v0.10.1...v0.10.2
+[0.10.1]: https://github.com/54tor/glaude-code/compare/v0.10.0...v0.10.1
+[0.10.0]: https://github.com/54tor/glaude-code/compare/v0.9.2...v0.10.0
+[0.9.2]: https://github.com/54tor/glaude-code/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/54tor/glaude-code/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/54tor/glaude-code/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/54tor/glaude-code/compare/v0.7.1...v0.8.0
