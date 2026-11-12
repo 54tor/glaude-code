@@ -8,6 +8,7 @@ import { GitPushTerminal } from "./GitPushTerminal"
 const TOAST_ID = "git-push"
 const TOAST_TAIL_LINES = 3
 const TOAST_REFRESH_MS = 1000
+const TOAST_SUCCESS_MS = 6000
 
 // Monté une fois dans l'application : affiche le push en cours sous forme de toast persistant (les dernières lignes de sa sortie,
 // puis son résultat), le terminal complet à la demande, et l'envoi de l'échec à Claude.
@@ -59,7 +60,7 @@ function useGitPushToast(run: GitPushRun | null, requestSend: () => void) {
       const tail = status === "error" ? errorMessage : gitPushOutputTail(TOAST_TAIL_LINES)
       const description = <ToastBody tail={tail} openLabel={t("conversation.gitPush.openTerminal")} />
       if (status === "running") toast.loading(t("conversation.gitPush.toastRunning", { branch, remote }), { ...shared, description, dismissible: false })
-      else if (status === "succeeded") toast.success(t("conversation.gitPush.toastDone", { branch, remote }), { ...shared, description })
+      else if (status === "succeeded") toast.success(t("conversation.gitPush.toastDone", { branch, remote }), { ...shared, description, duration: TOAST_SUCCESS_MS, onAutoClose: dismissGitPush })
       else toast.error(t("conversation.gitPush.toastFailed", { remote, code: exitCode ?? "?" }), { ...shared, description, action: sendToClaude })
     }
     showToast()
