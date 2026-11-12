@@ -601,9 +601,11 @@
       "toPush_other": "{{count}} à pousser"
     },
     "gitPush": {
-      "pushing": "Poussée de {{branch}} vers {{remote}}…",
-      "pushed": "{{branch}} poussée vers {{remote}}",
-      "failed": "Échec de la poussée vers {{remote}}",
+      "terminalTitle": "Poussée de « {{branch}} » vers {{remote}}",
+      "terminalHint": "Sortie de git en lecture seule, hook local compris",
+      "running": "Poussée en cours…",
+      "exitOk": "Poussée réussie (code de retour 0)",
+      "exitFailed": "Poussée refusée ou échouée, code de retour {{code}}",
       "noUpstream": "Branche sans amont : la poussée la lie au remote choisi",
       "button": "Pousser",
       "label": "Pousser « {{branch}} » vers :",

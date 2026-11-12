@@ -4,8 +4,12 @@ package main
 // un identifiant demandé fait échouer le push avec le message de git au lieu de bloquer.
 
 import (
+	"bytes"
 	"cmp"
 	"context"
+	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -20,6 +24,8 @@ const (
 	schemeSeparator = "://"
 	gitPushTimeout  = 60 * time.Second
 	gitPushBodyMax  = 1 << 10
+	ndjsonMediaType = "application/x-ndjson"
+	exitCodeUnknown = -1
 )
 
 type GitRemote struct {
@@ -65,6 +71,13 @@ func stripUserinfo(raw string) string {
 }
 
 func gitOut(dir string, args ...string) (string, error) {
+	var combinedOutput bytes.Buffer
+	err := gitStreamTo(dir, &combinedOutput, args...)
+	return strings.TrimSpace(combinedOutput.String()), err
+}
+
+// gitStreamTo exécute git dans dir ; stdout et stderr vont vers output, au fil de l'eau.
+func gitStreamTo(dir string, output io.Writer, args ...string) error {
 	commandContext, cancel := context.WithTimeout(context.Background(), gitPushTimeout)
 	defer cancel()
 	gitArgs := append([]string{"--no-optional-locks", "-c", "core.fsmonitor=false", "-C", dir}, args...)
@@ -77,8 +90,9 @@ func gitOut(dir string, args ...string) (string, error) {
 		}
 	}
 	applyRunAs(cmd)
-	combinedOutput, err := cmd.CombinedOutput()
-	return strings.TrimSpace(string(combinedOutput)), err
+	cmd.Stdout = output
+	cmd.Stderr = output
+	return cmd.Run()
 }
 
 func gitOut1(dir string, args ...string) (string, error) {
@@ -108,16 +122,26 @@ func gitRemotes(dir string) []GitRemote {
 
 var pushMu sync.Mutex // un push à la fois : deux pushes du même dépôt se marcheraient dessus
 
-// gitPush pousse la branche courante vers remote (qui doit exister dans le dépôt). Sans amont, la branche est liée au remote (-u).
+// gitPush pousse la branche courante vers remote et rend la sortie complète de git (hooks compris).
 func gitPush(dir, remote string) (string, error) {
+	var pushOutput bytes.Buffer
+	err := gitPushTo(dir, remote, &pushOutput)
+	return strings.TrimSpace(pushOutput.String()), err
+}
+
+// gitPushTo pousse la branche courante vers remote (qui doit exister dans le dépôt) et écrit la sortie au fil de l'eau dans output.
+// Sans amont, la branche est liée au remote (-u).
+func gitPushTo(dir, remote string, output io.Writer) error {
 	isKnownRemote := slices.ContainsFunc(gitRemotes(dir), func(listedRemote GitRemote) bool {
 		return listedRemote.Name == remote
 	})
 	if !isKnownRemote {
-		return L("srv.gitpush.unknownRemote", "A1", remote), os.ErrInvalid
+		io.WriteString(output, L("srv.gitpush.unknownRemote", "A1", remote))
+		return os.ErrInvalid
 	}
 	if branch, _ := gitOut1(dir, "symbolic-ref", "--short", "-q", "HEAD"); branch == "" {
-		return L("srv.gitpush.detached"), os.ErrInvalid
+		io.WriteString(output, L("srv.gitpush.detached"))
+		return os.ErrInvalid
 	}
 	args := []string{"push"}
 	if upstream, _ := gitOut1(dir, "rev-parse", "--abbrev-ref", "@{u}"); upstream == "" {
@@ -125,11 +149,57 @@ func gitPush(dir, remote string) (string, error) {
 	}
 	pushMu.Lock()
 	defer pushMu.Unlock()
-	pushOutput, err := gitOut(dir, append(args, "--", remote, "HEAD")...)
+	err := gitStreamTo(dir, output, append(args, "--", remote, "HEAD")...)
 	gitMu.Lock()
 	delete(gitCache, dir) // l'avance sur l'amont a changé : relu au prochain passage
 	gitMu.Unlock()
-	return pushOutput, err
+	return err
+}
+
+// exitCodeOf : le code de sortie de git, exitCodeUnknown si le processus n'a pas pu démarrer ou a été interrompu.
+func exitCodeOf(err error) int {
+	if err == nil {
+		return 0
+	}
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) && exitErr.ExitCode() >= 0 {
+		return exitErr.ExitCode()
+	}
+	return exitCodeUnknown
+}
+
+// ndjsonFrame : une ligne du flux de poussée. out porte des octets bruts (base64 en JSON) pour ne jamais couper un caractère UTF-8 ;
+// exit n'apparaît qu'une fois, en dernière ligne.
+type ndjsonFrame struct {
+	Out  []byte `json:"out,omitempty"`
+	Exit *int   `json:"exit,omitempty"`
+}
+
+// ndjsonWriter envoie chaque écriture de git au client sans attendre la fin du push.
+type ndjsonWriter struct {
+	encoder    *json.Encoder
+	controller *http.ResponseController
+}
+
+func (frameWriter *ndjsonWriter) Write(chunk []byte) (int, error) {
+	if err := frameWriter.encoder.Encode(ndjsonFrame{Out: chunk}); err != nil {
+		return 0, err
+	}
+	frameWriter.controller.Flush()
+	return len(chunk), nil
+}
+
+func streamGitPush(responseWriter http.ResponseWriter, dir, remote string) {
+	headers := responseWriter.Header()
+	headers.Set("Content-Type", ndjsonMediaType)
+	headers.Set("Cache-Control", "no-store")
+	headers.Set("X-Content-Type-Options", "nosniff")
+	headers.Set("X-Accel-Buffering", "no")
+	responseWriter.WriteHeader(http.StatusOK)
+	frameWriter := &ndjsonWriter{json.NewEncoder(responseWriter), http.NewResponseController(responseWriter)}
+	exitCode := exitCodeOf(gitPushTo(dir, remote, frameWriter))
+	frameWriter.encoder.Encode(ndjsonFrame{Exit: &exitCode})
+	frameWriter.controller.Flush()
 }
 
 func routesGitPush(mux *http.ServeMux) {
@@ -148,6 +218,10 @@ func routesGitPush(mux *http.ServeMux) {
 		}
 		if !knownRepo(payload.Dir) {
 			writeErr(responseWriter, http.StatusBadRequest, "bad_request", L("srv.routes_sessions.dossierInvalide"))
+			return
+		}
+		if request.Header.Get("Accept") == ndjsonMediaType {
+			streamGitPush(responseWriter, payload.Dir, payload.Remote)
 			return
 		}
 		pushOutput, err := gitPush(payload.Dir, payload.Remote)

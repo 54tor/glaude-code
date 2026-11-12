@@ -1720,6 +1720,9 @@ paths:
       tags:
       - git
       operationId: postGitPushes
+      description: |-
+        Avec l'en-tête Accept application/x-ndjson, la réponse est un flux de lignes JSON (200) :
+        {"out":"<octets base64 de la sortie de git, hooks compris>"} au fil de l'eau, puis {"exit":N} avec le code de retour de git.
       requestBody:
         content:
           application/json:

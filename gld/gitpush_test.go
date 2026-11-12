@@ -1,6 +1,9 @@
 package main
 
 import (
+	"encoding/json"
+	"net/http/httptest"
+	"os"
 	"os/exec"
 	"strings"
 	"testing"
@@ -75,4 +78,61 @@ func TestGitPush(t *testing.T) {
 	if _, err := gitPush(work, "origin"); err == nil {
 		t.Fatal("HEAD détaché poussé")
 	}
+}
+
+// Un hook pre-push qui refuse : sa sortie arrive dans le flux, suivie du code de retour non nul de git ; un push sans hook rend 0.
+func TestStreamGitPushReportsHookOutputAndExitCode(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git absent")
+	}
+	root := t.TempDir()
+	bareRemote, workDir := root+"/remote.git", root+"/work"
+	git(t, root, "init", "-q", "--bare", bareRemote)
+	git(t, root, "init", "-q", "-b", "main", workDir)
+	git(t, workDir, "remote", "add", "origin", bareRemote)
+	git(t, workDir, "commit", "-q", "--allow-empty", "-m", "un")
+	hookPath := workDir + "/.git/hooks/pre-push"
+	if err := os.WriteFile(hookPath, []byte("#!/bin/sh\necho hook-refuse-le-push >&2\nexit 7\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	hookRefusedFrames := decodeFrames(t, workDir, "origin")
+	if !strings.Contains(hookRefusedFrames.output, "hook-refuse-le-push") {
+		t.Errorf("sortie du hook absente : %q", hookRefusedFrames.output)
+	}
+	if hookRefusedFrames.exit == nil || *hookRefusedFrames.exit == 0 {
+		t.Errorf("code de retour attendu non nul, obtenu %v", hookRefusedFrames.exit)
+	}
+
+	if err := os.Remove(hookPath); err != nil {
+		t.Fatal(err)
+	}
+	acceptedFrames := decodeFrames(t, workDir, "origin")
+	if acceptedFrames.exit == nil || *acceptedFrames.exit != 0 {
+		t.Errorf("code de retour attendu 0, obtenu %v (%q)", acceptedFrames.exit, acceptedFrames.output)
+	}
+}
+
+type streamedPush struct {
+	output string
+	exit   *int
+}
+
+func decodeFrames(t *testing.T, dir, remote string) streamedPush {
+	t.Helper()
+	recorder := httptest.NewRecorder()
+	streamGitPush(recorder, dir, remote)
+	var streamed streamedPush
+	decoder := json.NewDecoder(recorder.Body)
+	for decoder.More() {
+		var frame ndjsonFrame
+		if err := decoder.Decode(&frame); err != nil {
+			t.Fatal(err)
+		}
+		streamed.output += string(frame.Out)
+		if frame.Exit != nil {
+			streamed.exit = frame.Exit
+		}
+	}
+	return streamed
 }

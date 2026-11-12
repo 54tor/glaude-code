@@ -601,9 +601,11 @@
       "toPush_other": "{{count}} to push"
     },
     "gitPush": {
-      "pushing": "Pushing {{branch}} to {{remote}}…",
-      "pushed": "{{branch}} pushed to {{remote}}",
-      "failed": "Push to {{remote}} failed",
+      "terminalTitle": "Pushing “{{branch}}” to {{remote}}",
+      "terminalHint": "Read-only git output, local hook included",
+      "running": "Push in progress…",
+      "exitOk": "Push succeeded (exit code 0)",
+      "exitFailed": "Push rejected or failed, exit code {{code}}",
       "noUpstream": "Branch without upstream: pushing links it to the chosen remote",
       "button": "Push",
       "label": "Push “{{branch}}” to:",

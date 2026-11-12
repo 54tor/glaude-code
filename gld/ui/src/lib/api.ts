@@ -364,7 +364,6 @@ export const api = {
   notesSentRemove: (key: string, id: string) => http.del<Said>(`/notes/sent${qs({ key, id })}`),
   tabsSave: (name: string) => http.put<Said & { n: number }>("/tabs", { name }),
   tabsRm: (at: string) => http.del<Said>(`/tabs/${seg(at)}`),
-  gitPush: (dir: string, remote: string) => http.post<Said>("/git/pushes", { dir, remote }, 90_000),
   trashRestore: (id: string) => http.patch<Said & { key: string }>(`/trash/memory/${seg(id)}`, { trashed: false }),
   trashPurge: (id?: string) => http.del<Said>(`/trash/memory${qs(id ? { item: id } : { all: true })}`),
   inviteCreate: (id: string, dir: string, title?: string, name?: string) =>
