@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useState } from "react"
 import { Terminal } from "@xterm/xterm"
 import "@xterm/xterm/css/xterm.css"
 import { useTranslation } from "react-i18next"
@@ -12,13 +12,13 @@ type PushOutcome = { kind: "running" } | { kind: "finished"; exitCode: number } 
 // Terminal en lecture seule qui montre la sortie du push (hook local compris), puis le code de retour de git.
 export function GitPushTerminal({ dir, remote, branch, onClose }: { dir: string; remote: string; branch: string; onClose: () => void }) {
   const { t } = useTranslation()
-  const containerRef = useRef<HTMLDivElement | null>(null)
+  const [terminalHost, setTerminalHost] = useState<HTMLDivElement | null>(null)
   const [outcome, setOutcome] = useState<PushOutcome>({ kind: "running" })
 
   useEffect(() => {
-    if (!containerRef.current) return
+    if (!terminalHost) return
     const terminal = new Terminal({ fontSize: 13, disableStdin: true, convertEol: true, scrollback: 2000, cursorInactiveStyle: "none" })
-    terminal.open(containerRef.current)
+    terminal.open(terminalHost)
     let isDisposed = false
     streamGitPush(dir, remote, (chunk) => terminal.write(chunk)).then(
       (exitCode) => !isDisposed && setOutcome({ kind: "finished", exitCode }),
@@ -28,7 +28,7 @@ export function GitPushTerminal({ dir, remote, branch, onClose }: { dir: string;
       isDisposed = true
       terminal.dispose()
     }
-  }, [dir, remote])
+  }, [dir, remote, terminalHost])
 
   const isRunning = outcome.kind === "running"
   const isSuccess = outcome.kind === "finished" && outcome.exitCode === 0
@@ -40,7 +40,7 @@ export function GitPushTerminal({ dir, remote, branch, onClose }: { dir: string;
           <DialogDescription className="sr-only">{t("conversation.gitPush.terminalHint")}</DialogDescription>
         </DialogHeader>
         <div className="h-72 overflow-hidden rounded-md bg-black p-2">
-          <div ref={containerRef} className="h-full w-full" />
+          <div ref={setTerminalHost} className="h-full w-full" />
         </div>
         {isRunning && <p className="text-sm text-muted-foreground">{t("conversation.gitPush.running")}</p>}
         {isSuccess && <p role="status" className="text-sm font-medium text-green-600">{t("conversation.gitPush.exitOk")}</p>}
