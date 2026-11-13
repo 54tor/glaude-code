@@ -6,6 +6,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ### Corrigé
 - Questions de Claude : les tableaux dessinés en caractères de cadre (┌─┬┐) dans le contexte s'affichent en vrais tableaux dont les cellules se replient, au lieu d'un bloc ASCII à défilement horizontal.
+- Fenêtre de poussée git : le terminal s'adapte à la hauteur de la fenêtre, la dernière ligne de la sortie n'est plus coupée.
 - Session dont claude reste « occupé » alors que l'écran est au repos : le compteur « en cours » disparaît (prompt suivi d'une espace insécable, et longue liste de coéquipiers sous le prompt).
 
 ## [0.14.0] - 2026-11-12

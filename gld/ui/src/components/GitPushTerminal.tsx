@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import { Terminal } from "@xterm/xterm"
+import { FitAddon } from "@xterm/addon-fit"
 import "@xterm/xterm/css/xterm.css"
 import { Minimize2 } from "lucide-react"
 import { useTranslation } from "react-i18next"
@@ -18,10 +19,16 @@ export function GitPushTerminal() {
   useEffect(() => {
     if (!terminalHost) return
     const terminal = new Terminal({ fontSize: 13, disableStdin: true, convertEol: true, scrollback: 2000, cursorInactiveStyle: "none" })
+    const fitAddon = new FitAddon()
+    terminal.loadAddon(fitAddon)
     terminal.open(terminalHost)
+    fitAddon.fit()
+    const resizeObserver = new ResizeObserver(() => fitAddon.fit())
+    resizeObserver.observe(terminalHost)
     readGitPushChunks().forEach((chunk) => terminal.write(chunk))
     const unsubscribe = subscribeGitPushOutput((chunk) => terminal.write(chunk))
     return () => {
+      resizeObserver.disconnect()
       unsubscribe()
       terminal.dispose()
     }

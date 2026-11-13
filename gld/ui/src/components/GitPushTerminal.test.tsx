@@ -3,8 +3,10 @@ import { act, cleanup, render, screen } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 const writtenToTerminal: Uint8Array[] = []
-vi.mock("@xterm/xterm", () => ({ Terminal: class { open() {} write(chunk: Uint8Array) { writtenToTerminal.push(chunk) } dispose() {} } }))
+vi.mock("@xterm/xterm", () => ({ Terminal: class { loadAddon() {} open() {} write(chunk: Uint8Array) { writtenToTerminal.push(chunk) } dispose() {} } }))
+vi.mock("@xterm/addon-fit", () => ({ FitAddon: class { fit() {} } }))
 vi.mock("@xterm/xterm/css/xterm.css", () => ({}))
+globalThis.ResizeObserver = class { observe() {} disconnect() {} unobserve() {} }
 vi.mock("@/hooks/useGit", () => ({ refreshGit: vi.fn() }))
 vi.mock("@/lib/gitPushStream", () => ({ streamGitPush: vi.fn() }))
 
