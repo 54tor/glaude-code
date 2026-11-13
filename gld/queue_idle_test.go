@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -18,6 +19,17 @@ func TestScreenIdleDetectsEmptyPromptWithStaleBackgroundTasks(t *testing.T) {
 	}
 	if screenIdle("texte\n❯ du texte tapé\n") {
 		t.Fatal("prompt non vide pris pour du repos")
+	}
+}
+
+func TestScreenIdleIgnoresLongTeammateListBelowPrompt(t *testing.T) {
+	teammateRows := strings.Repeat("  ◯ impl  Tâche coéquipier\n", 20)
+	screenWithLongTeammateList := "texte\n────\n❯ \n────\n  ⏵⏵ auto mode on\n\n  ● main\n" + teammateRows
+	if !screenIdle(screenWithLongTeammateList) {
+		t.Fatal("liste de coéquipiers sous le prompt prise pour de l'activité")
+	}
+	if screenIdle("esc to interrupt\n────\n❯ \n" + teammateRows) {
+		t.Fatal("écran occupé pris pour du repos")
 	}
 }
 

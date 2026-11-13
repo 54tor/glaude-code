@@ -8,8 +8,9 @@ import (
 )
 
 const (
-	idleScreenTailLines = 14
-	idleScreenSettle    = 20 * time.Second
+	idleScreenTailLines        = 60
+	idleScreenLinesAbovePrompt = 14
+	idleScreenSettle           = 20 * time.Second
 )
 
 var (
@@ -25,13 +26,17 @@ func screenIdle(screen string) bool {
 	if len(lines) > idleScreenTailLines {
 		lines = lines[len(lines)-idleScreenTailLines:]
 	}
-	hasEmptyPrompt := false
-	for _, line := range lines {
+	promptLineIndex := -1
+	for lineIndex, line := range lines {
 		if idlePrompt.MatchString(line) {
-			hasEmptyPrompt = true
+			promptLineIndex = lineIndex
 		}
 	}
-	return hasEmptyPrompt && !askBusy.MatchString(strings.Join(lines, "\n"))
+	if promptLineIndex < 0 {
+		return false
+	}
+	firstLineChecked := max(0, promptLineIndex-idleScreenLinesAbovePrompt)
+	return !askBusy.MatchString(strings.Join(lines[firstLineChecked:], "\n"))
 }
 
 // idleByScreen rattrape un statut « busy » resté à tort (tâches de fond terminées mais listées) : l'écran doit
