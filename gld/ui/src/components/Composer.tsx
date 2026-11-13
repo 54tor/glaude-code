@@ -916,7 +916,7 @@ function TerminalPanel({ id, onAsk, onSent, extra }: { id: string; onAsk?: (aski
           <div className="flex flex-col items-stretch gap-1.5">
             {prompt.options.map((option) => (
               <div key={option.label} className="contents">
-                <Button size="sm" disabled={pressing} variant={typing === option.label ? "secondary" : "outline"} className="h-auto min-h-8 justify-start gap-2 py-1.5 text-left whitespace-normal" onClick={() => choose(option)} title={t("conversation.composer.keys", { keys: option.keys.join(", ") })}>
+                <Button size="sm" disabled={pressing} variant={typing === option.label ? "secondary" : "outline"} className="h-auto min-h-8 pointer-coarse:h-auto pointer-coarse:min-h-9 justify-start gap-2 py-1.5 text-left whitespace-normal" onClick={() => choose(option)} title={t("conversation.composer.keys", { keys: option.keys.join(", ") })}>
                   {option.checked !== undefined && (option.checked ? <SquareCheck className="text-success" /> : <Square />)}
                   <span className="min-w-0">
                     {option.label}
