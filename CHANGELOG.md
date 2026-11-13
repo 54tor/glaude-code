@@ -4,6 +4,9 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ## [Non publié]
 
+### Corrigé
+- Questions de Claude : les tableaux dessinés en caractères de cadre (┌─┬┐) dans le contexte s'affichent en vrais tableaux dont les cellules se replient, au lieu d'un bloc ASCII à défilement horizontal.
+
 ## [0.14.0] - 2026-11-12
 
 ### Ajouté

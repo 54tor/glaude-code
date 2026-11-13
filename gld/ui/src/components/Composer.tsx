@@ -3,6 +3,7 @@ import { usePending, refreshPending } from "@/hooks/usePending"
 import { Trans, useTranslation } from "react-i18next"
 import { i18n } from "@/i18n"
 import { cn, copyText, isSend, keyHint } from "@/lib/utils"
+import { QuestionContext } from "@/components/QuestionContext"
 import { modeOfScreen, parseBtw, parsePrompt, type Opt } from "@/lib/prompt"
 import { type Live } from "./LiveStatus"
 import { toast } from "sonner"
@@ -136,7 +137,6 @@ const fieldRef = (element: HTMLTextAreaElement | null) => {
   if (element && Date.now() < focusUntil) element.focus()
 }
 // Tableau ASCII (cadres ┌─┬┐│└┘) : un retour à la ligne automatique casse l'alignement, on défile à l'horizontale.
-const BOX_DRAWING = /[\u2500-\u257F]/
 
 export const focusComposer = () => {
   if (window.matchMedia("(pointer: coarse)").matches) return // pas de clavier virtuel qui jaillit à l'ouverture
@@ -905,7 +905,7 @@ function TerminalPanel({ id, onAsk, onSent, extra }: { id: string; onAsk?: (aski
               </Button>
             </p>
           )}
-          {prompt.context && <pre className={cn("mb-2 max-h-60 overflow-auto rounded-md border bg-background/70 p-2 font-mono text-xs", BOX_DRAWING.test(prompt.context) ? "ascii-table whitespace-pre" : "break-words whitespace-pre-wrap")}>{prompt.context}</pre>}
+          {prompt.context && <QuestionContext context={prompt.context} />}
           {prompt.preview && <pre className="mb-2 max-h-60 overflow-auto rounded-md border bg-background/70 p-2 font-mono text-xs leading-tight whitespace-pre">{prompt.preview}</pre>}
           <div className="mb-1.5 flex items-start justify-between gap-2">
             <p className="font-medium">{prompt.question || t("conversation.composer.answerExpected")}</p>
