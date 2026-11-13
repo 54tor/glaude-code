@@ -22,6 +22,12 @@ func TestScreenIdleDetectsEmptyPromptWithStaleBackgroundTasks(t *testing.T) {
 	}
 }
 
+func TestScreenIdleAcceptsNonBreakingSpaceAfterPrompt(t *testing.T) {
+	if !screenIdle("texte\n────\n❯\u00a0\n────\n  ⏵⏵ auto mode on\n") {
+		t.Fatal("prompt suivi d'une espace insécable non reconnu")
+	}
+}
+
 func TestScreenIdleIgnoresLongTeammateListBelowPrompt(t *testing.T) {
 	teammateRows := strings.Repeat("  ◯ impl  Tâche coéquipier\n", 20)
 	screenWithLongTeammateList := "texte\n────\n❯ \n────\n  ⏵⏵ auto mode on\n\n  ● main\n" + teammateRows

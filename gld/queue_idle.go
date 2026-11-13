@@ -14,7 +14,7 @@ const (
 )
 
 var (
-	idlePrompt = regexp.MustCompile(`^❯\s*$`)
+	idlePrompt = regexp.MustCompile(`^❯[\s\x{00A0}]*$`)
 
 	idleSeenMu sync.Mutex
 	idleSeenAt = map[string]time.Time{}
