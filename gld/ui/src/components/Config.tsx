@@ -125,7 +125,7 @@ export function Config({ home, tab, onTab, ui, dir }: { home: string; tab: strin
               {groups.map(([groupName, groupTabs]) => (
                 <div key={groupName} className="max-w-full min-w-0">
                   <p className="mb-1 px-1 text-2xs font-medium tracking-wide text-muted-foreground uppercase">{t(`config.main.groups.${groupName}`)}</p>
-                  <div className="overflow-x-auto">
+                  <div className="-m-1 overflow-x-auto p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                     <TabsList className="w-max">
                       {groupTabs.map(([tabValue, tabLabel]) => (
                         <TabsTrigger key={tabValue} value={tabValue}>{tabLabel}</TabsTrigger>
