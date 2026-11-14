@@ -59,6 +59,6 @@ function useGitPushToast(run: GitPushRun | null, requestSend: () => void) {
     const tail = status === "error" ? errorMessage : gitPushOutputTail(TOAST_TAIL_LINES)
     const description = <ToastBody tail={tail} openLabel={t("conversation.gitPush.openTerminal")} />
     if (status === "succeeded") toast.success(t("conversation.gitPush.toastDone", { branch, remote }), { ...shared, description, duration: TOAST_SUCCESS_MS, onAutoClose: dismissGitPush })
-    else toast.error(t("conversation.gitPush.toastFailed", { remote, code: exitCode ?? "?" }), { ...shared, description, action: sendToClaude })
+    else toast.error(t("conversation.gitPush.toastFailed", { remote, code: exitCode ?? "?" }), { ...shared, description, action: sendToClaude, closeButton: true })
   }, [status, exitCode, errorMessage, branch, remote, requestSend, t])
 }
