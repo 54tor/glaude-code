@@ -273,7 +273,12 @@ var waitingKnown = func() (waitingIDs []string, known bool) {
 		return waitingIDs, false
 	}
 	for _, agent := range agents {
-		if agent.Status == "idle" || agent.State == "blocked" {
+		isIdleBehindShell := false
+		if agent.Status == "busy" {
+			fileStatus, _ := sessionStatus(agent.SessionId)
+			isIdleBehindShell = fileStatus == "idle" // claude agents rend « busy » une session dont seul un shell de fond tourne
+		}
+		if agent.Status == "idle" || agent.State == "blocked" || isIdleBehindShell {
 			waitingIDs = append(waitingIDs, agent.SessionId)
 		}
 	}

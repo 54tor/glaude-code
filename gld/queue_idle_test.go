@@ -67,3 +67,22 @@ func TestShownStatusTurnsStuckBusyIntoIdle(t *testing.T) {
 		t.Fatalf("vrai busy corrigé à tort : %q", status)
 	}
 }
+
+func TestWaitingKnownCountsSessionWithOnlyBackgroundShellAsWaiting(t *testing.T) {
+	use(t.TempDir())
+	put(t, filepath.Join(cfgDir(), "sessions", "1.json"), fmt.Sprintf(`{"pid":%d,"sessionId":%q,"status":"shell"}`, os.Getpid(), id1), old)
+	previousTTL := agentsTTL
+	agentsTTL = time.Minute
+	agentsMu.Lock()
+	agentsOut, agentsErr, agentsAt = []byte(fmt.Sprintf(`[{"sessionId":%q,"status":"busy"}]`, id1)), nil, time.Now()
+	agentsMu.Unlock()
+	t.Cleanup(func() { agentsTTL = previousTTL; forgetAgents() })
+
+	waitingIDs, known := waitingKnown()
+	if !known || len(waitingIDs) != 1 || waitingIDs[0] != id1 {
+		t.Fatalf("session avec seulement un shell de fond non reconnue en attente : %v (connu : %v)", waitingIDs, known)
+	}
+	if status, _ := sessionStatus(id1); status != "idle" {
+		t.Fatalf("statut shell non ramené à idle : %q", status)
+	}
+}

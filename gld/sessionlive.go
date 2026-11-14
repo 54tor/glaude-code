@@ -290,6 +290,9 @@ func sessionStatus(id string) (status string, isOpen bool) {
 		if _, statErr := os.Stat("/proc/" + strconv.Itoa(sessionRecord.Pid)); statErr != nil && pidProbe {
 			continue
 		}
+		if sessionRecord.Status == "shell" {
+			return "idle", true // tour fini, seul un shell de fond tourne encore : claude attend votre message
+		}
 		return sessionRecord.Status, true
 	}
 	return "", false
