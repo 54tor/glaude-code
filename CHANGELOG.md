@@ -7,7 +7,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 ### Modifié
 - Bouton « Pousser » : plusieurs pushes tournent en parallèle (autres remotes ou autres projets) au lieu d'un seul à la fois ; chacun a sa pastille, son toast et son terminal. Seul un second push du même dépôt attend la fin du premier.
 - Texte collé dans un message : affiché en clair sous 80 lignes, replié à partir de 80.
-- Question à choix : le message de Claude qui la précède (tableaux compris) s'affiche comme un message normal au-dessus de la carte, qui ne contient plus que la question et les boutons de choix.
+- Question à choix : le message de Claude qui la précède (tableaux compris) s'affiche comme un message normal à la fin de la conversation (défilement et relecture habituels), et la carte ne contient plus que la question et les boutons de choix.
 
 ### Corrigé
 - Ouverture de la page juste après le démarrage de gld : les sessions sont préchargées et les relectures simultanées des transcripts sont partagées, au lieu d'attendre plusieurs secondes.

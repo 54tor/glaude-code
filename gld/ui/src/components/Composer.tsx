@@ -4,7 +4,6 @@ import { Trans, useTranslation } from "react-i18next"
 import { i18n } from "@/i18n"
 import { cn, copyText, isSend, keyHint } from "@/lib/utils"
 import { QuestionContext } from "@/components/QuestionContext"
-import { Markdown } from "@/components/Message"
 import { contextToMarkdown } from "@/lib/boxTable"
 import { modeOfScreen, parseBtw, parsePrompt, type Opt } from "@/lib/prompt"
 import { type Live } from "./LiveStatus"
@@ -166,6 +165,7 @@ export function Composer({
   setTurn,
   onDone,
   onAsk,
+  onLead,
   onWrite,
   extra,
   compactHint,
@@ -183,6 +183,7 @@ export function Composer({
   setTurn: (update: (previousTurn: Turn | null) => Turn | null) => void
   onDone: () => void | Promise<void>
   onAsk?: (asking: boolean) => void // Claude attend une réponse dans le terminal
+  onLead?: (lead: string | null) => void // le message de Claude qui précède la question : affiché dans la conversation
   onWrite?: () => void // l'utilisateur envoie un message : la vue descend
   extra?: ReactNode // commandes de la vue, affichées au-dessus de la zone de saisie
   compactHint?: string | null // conseil de compacter, avec le bouton, au-dessus de la saisie d'une session ouverte
@@ -324,7 +325,7 @@ export function Composer({
     void api.chatStop(id).catch(() => {})
   }
 
-  if (live && !running && !own) return <LiveSend id={id} dir={dir} onSent={onSent} liveState={liveState} onAsk={onAsk} bar={extra} compactHint={compactHint} coldHint={coldHint} />
+  if (live && !running && !own) return <LiveSend id={id} dir={dir} onSent={onSent} liveState={liveState} onAsk={onAsk} onLead={onLead} bar={extra} compactHint={compactHint} coldHint={coldHint} />
   return (
     <div className="border-t bg-muted/20 px-4 py-3">
       <div className="mx-auto max-w-page space-y-2">
@@ -415,7 +416,7 @@ function ColdHint({ text, onNew }: ColdHintProps) {
 
 // Session ouverte dans un terminal : deux processus ne peuvent pas écrire le même transcript, donc pas de claude -p ici. Si la session
 // tourne dans tmux, le message y est collé puis validé ; sinon on l'explique.
-function LiveSend({ id, dir, onSent, liveState, onAsk, bar, compactHint, coldHint }: { id: string; dir: string; onSent: () => void; liveState: Live; onAsk?: (asking: boolean) => void; bar?: ReactNode; compactHint?: string | null; coldHint?: ColdHintProps | null }) {
+function LiveSend({ id, dir, onSent, liveState, onAsk, onLead, bar, compactHint, coldHint }: { id: string; dir: string; onSent: () => void; liveState: Live; onAsk?: (asking: boolean) => void; onLead?: (lead: string | null) => void; bar?: ReactNode; compactHint?: string | null; coldHint?: ColdHintProps | null }) {
   const { t } = useTranslation()
   const actions = useActions()
   const exec = useCan()("exec")
@@ -555,6 +556,7 @@ function LiveSend({ id, dir, onSent, liveState, onAsk, bar, compactHint, coldHin
             setAsking(isAsking)
             onAsk?.(isAsking)
           }}
+          onLead={onLead}
           onSent={onSent}
           extra={bar}
         />
@@ -755,7 +757,7 @@ function LiveModeButton({ id, disabled }: { id: string; disabled: boolean }) {
 }
 
 // L'écran du terminal de la session (tmux) relu toutes les 1,5 s, pour proposer en boutons les options détectées.
-function TerminalPanel({ id, onAsk, onSent, extra }: { id: string; onAsk?: (asking: boolean) => void; onSent: () => void; extra?: ReactNode }) {
+function TerminalPanel({ id, onAsk, onLead, onSent, extra }: { id: string; onAsk?: (asking: boolean) => void; onLead?: (lead: string | null) => void; onSent: () => void; extra?: ReactNode }) {
   const { t } = useTranslation()
   const [screen, setScreen] = useState("")
   const busy = useRef(false) // une touche vient d'être envoyée : l'écran affiché peut être périmé
@@ -876,6 +878,15 @@ function TerminalPanel({ id, onAsk, onSent, extra }: { id: string; onAsk?: (aski
     ask.current?.(asking)
     return () => ask.current?.(false)
   }, [asking])
+  const leadMarkdown = prompt?.context && prompt.contextIsMessage ? contextToMarkdown(prompt.context) : null
+  const lead = useRef(onLead)
+  useEffect(() => {
+    lead.current = onLead
+  })
+  useEffect(() => {
+    lead.current?.(leadMarkdown)
+    return () => lead.current?.(null)
+  }, [leadMarkdown])
   return (
     <div className="space-y-2">
       {prompt && questionCollapsed && (
@@ -889,11 +900,6 @@ function TerminalPanel({ id, onAsk, onSent, extra }: { id: string; onAsk?: (aski
           <ChevronUp className="size-4 shrink-0" />
           <span className="min-w-0 truncate font-medium">{prompt.question || t("conversation.composer.answerExpected")}</span>
         </button>
-      )}
-      {prompt?.context && prompt.contextIsMessage && (
-        <div className="max-h-[40dvh] overflow-y-auto overscroll-contain px-1 text-sm">
-          <Markdown t={contextToMarkdown(prompt.context)} />
-        </div>
       )}
       {prompt && !questionCollapsed && (
         <div className="max-h-[min(65dvh,36rem)] overflow-y-auto overscroll-contain rounded-lg border border-warning/50 bg-warning/10 px-3 py-2 text-sm">

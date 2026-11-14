@@ -124,6 +124,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
     if (id) lastId.current = id
   }, [id])
   const [tools, setTools] = useState(false)
+  const [questionLead, setQuestionLead] = useState<string | null>(null)
   const [view, setView] = useLocal("gld.session-view", "visuel") // choix gardé dans ce navigateur
   const [termOn, setTermOn] = useState(false) // GLD_WEB_TERMINAL=1 côté serveur
   useEffect(() => {
@@ -591,6 +592,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
                 <Fan className="size-4 animate-spin" aria-hidden /> {t("conversation.view.replying")}
               </p>
             )}
+            {questionLead && <Message m={{ r: "assistant", t: questionLead }} />}
             <LiveBar live={live} id={id} />
             {turn?.error && <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-destructive">{turn.error}</p>}
           </div>
@@ -632,6 +634,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
             }}
             onStart={() => actions.touch(id)}
             onWrite={sentDown}
+            onLead={setQuestionLead}
             compactHint={hint}
             coldHint={cold}
             extra={
