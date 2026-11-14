@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next"
 import { ArrowUpFromLine } from "lucide-react"
 import { api, type GitRemote, type GitState } from "@/lib/api"
 import { syncOf } from "./GitBadge"
-import { startGitPush, useGitPushRun } from "@/hooks/useGitPush"
+import { startGitPush, useGitPushRuns } from "@/hooks/useGitPush"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 
@@ -20,7 +20,7 @@ export const needsPush = (st: GitState | undefined): st is GitState => {
 export function GitPush({ dir, st }: { dir: string; st: GitState | undefined }) {
   const { t } = useTranslation()
   const [remotes, setRemotes] = useState<GitRemote[] | null>(null)
-  const isPushRunning = useGitPushRun()?.status === "running"
+  const isPushRunning = useGitPushRuns().some((run) => run.dir === dir && run.status === "running")
   if (!needsPush(st)) return null
   const loadRemotesOnOpen = (isOpen: boolean) => {
     if (!isOpen) return

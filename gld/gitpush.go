@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -114,7 +115,13 @@ func gitRemotes(dir string) []GitRemote {
 	return remotes
 }
 
-var pushMu sync.Mutex // un push à la fois : deux pushes du même dépôt se marcheraient dessus
+// pushLocks : un verrou par dépôt. Deux pushes du même dépôt se marcheraient dessus ; des dépôts différents poussent en parallèle.
+var pushLocks sync.Map
+
+func pushLockOf(dir string) *sync.Mutex {
+	lock, _ := pushLocks.LoadOrStore(filepath.Clean(dir), &sync.Mutex{})
+	return lock.(*sync.Mutex)
+}
 
 // gitPush pousse la branche courante vers remote et rend la sortie complète de git (hooks compris).
 func gitPush(dir, remote string) (string, error) {
@@ -141,8 +148,9 @@ func gitPushTo(dir, remote string, output io.Writer) error {
 	if upstream, _ := gitOut1(dir, "rev-parse", "--abbrev-ref", "@{u}"); upstream == "" {
 		args = append(args, "-u")
 	}
-	pushMu.Lock()
-	defer pushMu.Unlock()
+	pushLock := pushLockOf(dir)
+	pushLock.Lock()
+	defer pushLock.Unlock()
 	err := gitStreamTo(dir, output, append(args, "--", remote, "HEAD")...)
 	gitMu.Lock()
 	delete(gitCache, dir) // l'avance sur l'amont a changé : relu au prochain passage

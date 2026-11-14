@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"io"
 	"net/http/httptest"
 	"os"
 	"os/exec"
@@ -166,5 +167,42 @@ func TestStreamGitPushSendsHeartbeatsDuringSlowSilentHook(t *testing.T) {
 	}
 	if !strings.Contains(recorder.Body.String(), `"exit":0`) {
 		t.Errorf("code de retour 0 attendu : %q", recorder.Body.String())
+	}
+}
+
+// Deux dépôts différents poussent en parallèle : chaque hook ne se termine qu'une fois qu'il a vu le marqueur de l'autre, donc un verrou global ferait échouer les deux.
+func TestGitPushRunsDifferentReposInParallel(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git absent")
+	}
+	root := t.TempDir()
+	markerOfRepo := map[string]string{"a": root + "/marker-a", "b": root + "/marker-b"}
+	workDirOfRepo := map[string]string{}
+	for repoName, ownMarker := range markerOfRepo {
+		otherMarker := markerOfRepo["a"]
+		if repoName == "a" {
+			otherMarker = markerOfRepo["b"]
+		}
+		bareRemote, workDir := root+"/remote-"+repoName+".git", root+"/work-"+repoName
+		git(t, root, "init", "-q", "--bare", bareRemote)
+		git(t, root, "init", "-q", "-b", "main", workDir)
+		git(t, workDir, "remote", "add", "origin", bareRemote)
+		git(t, workDir, "commit", "-q", "--allow-empty", "-m", "un")
+		hook := "#!/bin/sh\ntouch " + ownMarker + "\nfor attempt in $(seq 60); do [ -e " + otherMarker + " ] && exit 0; sleep 0.1; done\nexit 1\n"
+		if err := os.WriteFile(workDir+"/.git/hooks/pre-push", []byte(hook), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		workDirOfRepo[repoName] = workDir
+	}
+
+	exitCodes := make(chan int, len(workDirOfRepo))
+	for _, workDir := range workDirOfRepo {
+		go func() { exitCodes <- exitCodeOf(gitPushTo(workDir, "origin", io.Discard)) }()
+	}
+
+	for range workDirOfRepo {
+		if exitCode := <-exitCodes; exitCode != 0 {
+			t.Errorf("push parallèle attendu réussi, code %d", exitCode)
+		}
 	}
 }

@@ -4,17 +4,16 @@ import { FitAddon } from "@xterm/addon-fit"
 import "@xterm/xterm/css/xterm.css"
 import { Minimize2 } from "lucide-react"
 import { useTranslation } from "react-i18next"
-import { readGitPushChunks, setGitPushTerminalOpen, subscribeGitPushOutput, useGitPushRun } from "@/hooks/useGitPush"
+import { readGitPushChunks, setGitPushTerminalOpen, subscribeGitPushOutput, type GitPushRun } from "@/hooks/useGitPush"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
 // Terminal en lecture seule du push courant : rejoue la sortie déjà reçue puis suit la suite. Le fermer ou le réduire ne
 // l'arrête pas ; le toast du push permet de le rouvrir.
-export function GitPushTerminal() {
+export function GitPushTerminal({ run }: { run: GitPushRun }) {
   const { t } = useTranslation()
-  const run = useGitPushRun()
   const [terminalHost, setTerminalHost] = useState<HTMLDivElement | null>(null)
-  const isOpen = !!run?.isTerminalOpen
+  const isOpen = run.isTerminalOpen
 
   useEffect(() => {
     if (!terminalHost) return
@@ -25,20 +24,19 @@ export function GitPushTerminal() {
     fitAddon.fit()
     const resizeObserver = new ResizeObserver(() => fitAddon.fit())
     resizeObserver.observe(terminalHost)
-    readGitPushChunks().forEach((chunk) => terminal.write(chunk))
-    const unsubscribe = subscribeGitPushOutput((chunk) => terminal.write(chunk))
+    readGitPushChunks(run.id).forEach((chunk) => terminal.write(chunk))
+    const unsubscribe = subscribeGitPushOutput(run.id, (chunk) => terminal.write(chunk))
     return () => {
       resizeObserver.disconnect()
       unsubscribe()
       terminal.dispose()
     }
-  }, [terminalHost])
+  }, [terminalHost, run.id])
 
-  if (!run) return null
   const isRunning = run.status === "running"
   const isSuccess = run.status === "succeeded"
   return (
-    <Dialog open={isOpen} onOpenChange={setGitPushTerminalOpen}>
+    <Dialog open={isOpen} onOpenChange={(isOpening) => setGitPushTerminalOpen(run.id, isOpening)}>
       <DialogContent className="min-w-0 sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>{t("conversation.gitPush.terminalTitle", { branch: run.branch, remote: run.remote })}</DialogTitle>
@@ -55,7 +53,7 @@ export function GitPushTerminal() {
             {run.status === "error" && <p role="alert" className="font-medium text-destructive">{run.errorMessage}</p>}
           </div>
           {isRunning && (
-            <Button size="sm" variant="outline" onClick={() => setGitPushTerminalOpen(false)}>
+            <Button size="sm" variant="outline" onClick={() => setGitPushTerminalOpen(run.id, false)}>
               <Minimize2 /> {t("conversation.gitPush.minimize")}
             </Button>
           )}

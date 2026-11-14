@@ -4,10 +4,12 @@ import { errMsg } from "@/lib/apiError"
 import { streamGitPush } from "@/lib/gitPushStream"
 import { refreshGit } from "@/hooks/useGit"
 
-// Le push en cours (ou le dernier, tant que son toast n'est pas fermé), gardé hors des composants : réduire la fenêtre ou changer
-// de page ne l'interrompt pas, et sa sortie reste relisible. Un seul push à la fois.
+// Les pushes en cours (et les derniers, tant que leur toast n'est pas fermé), gardés hors des composants : réduire la fenêtre ou
+// changer de page ne les interrompt pas, et leur sortie reste relisible. Plusieurs pushes tournent en parallèle ; le serveur n'en
+// sérialise qu'un par dépôt, donc l'interface refuse de relancer un dépôt dont un push tourne encore.
 export type GitPushStatus = "running" | "succeeded" | "failed" | "error"
 export type GitPushRun = {
+  id: number
   dir: string
   remote: string
   branch: string
@@ -17,72 +19,90 @@ export type GitPushRun = {
   isTerminalOpen: boolean
 }
 
+type RunOutput = { chunks: Uint8Array[]; bytes: number }
+
 const MAX_OUTPUT_BYTES = 1 << 20
 
-let currentRun: GitPushRun | null = null
-let outputChunks: Uint8Array[] = []
-let outputBytes = 0
+let nextRunId = 1
+let currentRuns: GitPushRun[] = []
+const outputByRun = new Map<number, RunOutput>()
 const runSubscribers = new Set<() => void>()
-const outputSubscribers = new Set<(chunk: Uint8Array) => void>()
+const outputSubscribers = new Map<number, Set<(chunk: Uint8Array) => void>>()
 
-const setRun = (nextRun: GitPushRun | null) => {
-  currentRun = nextRun
+const setRuns = (nextRuns: GitPushRun[]) => {
+  currentRuns = nextRuns
   runSubscribers.forEach((subscriber) => subscriber())
 }
 
-const keepOutput = (chunk: Uint8Array) => {
-  outputChunks.push(chunk)
-  outputBytes += chunk.length
-  while (outputBytes > MAX_OUTPUT_BYTES && outputChunks.length > 1) outputBytes -= outputChunks.shift()!.length
-  outputSubscribers.forEach((subscriber) => subscriber(chunk))
+const updateRun = (runId: number, changes: Partial<GitPushRun>) => {
+  setRuns(currentRuns.map((run) => (run.id === runId ? { ...run, ...changes } : run)))
 }
 
+const keepOutput = (runId: number, chunk: Uint8Array) => {
+  const output = outputByRun.get(runId)
+  if (!output) return
+  output.chunks.push(chunk)
+  output.bytes += chunk.length
+  while (output.bytes > MAX_OUTPUT_BYTES && output.chunks.length > 1) output.bytes -= output.chunks.shift()!.length
+  outputSubscribers.get(runId)?.forEach((subscriber) => subscriber(chunk))
+}
+
+export const listGitPushRuns = (): GitPushRun[] => currentRuns
+
+export const isGitPushRunning = (dir: string) => currentRuns.some((run) => run.dir === dir && run.status === "running")
+
 export function startGitPush(dir: string, remote: string, branch: string) {
-  if (currentRun?.status === "running") return
-  outputChunks = []
-  outputBytes = 0
-  setRun({ dir, remote, branch, status: "running", isTerminalOpen: true })
-  streamGitPush(dir, remote, keepOutput)
+  if (isGitPushRunning(dir)) return
+  const runId = nextRunId++
+  outputByRun.set(runId, { chunks: [], bytes: 0 })
+  const openedRun: GitPushRun = { id: runId, dir, remote, branch, status: "running", isTerminalOpen: true }
+  setRuns([...currentRuns.map((run) => ({ ...run, isTerminalOpen: false })), openedRun])
+  streamGitPush(dir, remote, (chunk) => keepOutput(runId, chunk))
     .then(
-      (exitCode) => setRun({ ...currentRun!, status: exitCode === 0 ? "succeeded" : "failed", exitCode }),
-      (pushError) => setRun({ ...currentRun!, status: "error", errorMessage: errMsg(pushError) })
+      (exitCode) => updateRun(runId, { status: exitCode === 0 ? "succeeded" : "failed", exitCode }),
+      (pushError) => updateRun(runId, { status: "error", errorMessage: errMsg(pushError) })
     )
     .finally(refreshGit)
 }
 
-export function setGitPushTerminalOpen(isTerminalOpen: boolean) {
-  if (currentRun) setRun({ ...currentRun, isTerminalOpen })
+// Un seul terminal est ouvert à la fois : en ouvrir un referme les autres.
+export function setGitPushTerminalOpen(runId: number, isTerminalOpen: boolean) {
+  setRuns(currentRuns.map((run) => (run.id === runId ? { ...run, isTerminalOpen } : isTerminalOpen ? { ...run, isTerminalOpen: false } : run)))
 }
 
 // Fermer le toast d'un push terminé. Sans effet tant qu'il tourne.
-export function dismissGitPush() {
-  if (!currentRun || currentRun.status === "running") return
-  outputChunks = []
-  outputBytes = 0
-  setRun(null)
+export function dismissGitPush(runId: number) {
+  const run = currentRuns.find((candidate) => candidate.id === runId)
+  if (!run || run.status === "running") return
+  outputByRun.delete(runId)
+  outputSubscribers.delete(runId)
+  setRuns(currentRuns.filter((candidate) => candidate.id !== runId))
 }
 
-export const readGitPushChunks = (): Uint8Array[] => [...outputChunks]
+export const readGitPushChunks = (runId: number): Uint8Array[] => [...(outputByRun.get(runId)?.chunks ?? [])]
 
-export function subscribeGitPushOutput(subscriber: (chunk: Uint8Array) => void) {
-  outputSubscribers.add(subscriber)
-  return () => void outputSubscribers.delete(subscriber)
+export function subscribeGitPushOutput(runId: number, subscriber: (chunk: Uint8Array) => void) {
+  const subscribers = outputSubscribers.get(runId) ?? new Set()
+  subscribers.add(subscriber)
+  outputSubscribers.set(runId, subscribers)
+  return () => void subscribers.delete(subscriber)
 }
 
-// La sortie en texte, sans séquences de couleur, réduite à ses `maxLines` dernières lignes.
-export function gitPushOutputTail(maxLines: number): string {
+// La sortie d'un push en texte, sans séquences de couleur, réduite à ses `maxLines` dernières lignes.
+export function gitPushOutputTail(runId: number, maxLines: number): string {
   const decoder = new TextDecoder()
-  const fullText = stripAnsi(outputChunks.map((chunk) => decoder.decode(chunk, { stream: true })).join("")).replace(/\r\n?/g, "\n")
+  const chunks = outputByRun.get(runId)?.chunks ?? []
+  const fullText = stripAnsi(chunks.map((chunk) => decoder.decode(chunk, { stream: true })).join("")).replace(/\r\n?/g, "\n")
   const lines = fullText.split("\n").filter((line) => line.trim() !== "")
   return lines.slice(-maxLines).join("\n")
 }
 
-export function useGitPushRun(): GitPushRun | null {
+export function useGitPushRuns(): GitPushRun[] {
   return useSyncExternalStore(
     (onChange) => {
       runSubscribers.add(onChange)
       return () => void runSubscribers.delete(onChange)
     },
-    () => currentRun
+    () => currentRuns
   )
 }

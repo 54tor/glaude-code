@@ -1,15 +1,16 @@
+// @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 vi.mock("@/lib/gitPushStream", () => ({ streamGitPush: vi.fn() }))
 vi.mock("@/hooks/useGit", () => ({ refreshGit: vi.fn() }))
 
 import { streamGitPush } from "@/lib/gitPushStream"
-import { dismissGitPush, gitPushOutputTail, startGitPush } from "./useGitPush"
+import { dismissGitPush, gitPushOutputTail, startGitPush, listGitPushRuns } from "./useGitPush"
 
 const flushPromises = () => new Promise((resolve) => setTimeout(resolve, 0))
 
 afterEach(() => {
-  dismissGitPush()
+  listGitPushRuns().forEach((run) => dismissGitPush(run.id))
   vi.mocked(streamGitPush).mockReset()
 })
 
@@ -23,11 +24,12 @@ describe("useGitPush store", () => {
     startGitPush("/depot", "origin", "main")
     await flushPromises()
 
-    expect(gitPushOutputTail(5)).toBe("rouge\nligne 2")
-    expect(gitPushOutputTail(1)).toBe("ligne 2")
+    const runId = listGitPushRuns()[0].id
+    expect(gitPushOutputTail(runId, 5)).toBe("rouge\nligne 2")
+    expect(gitPushOutputTail(runId, 1)).toBe("ligne 2")
   })
 
-  it("ne lance pas un second push tant que le premier tourne", async () => {
+  it("ne lance pas un second push sur le même dépôt tant que le premier tourne", async () => {
     let finishFirstPush: (exitCode: number) => void = () => {}
     vi.mocked(streamGitPush).mockImplementation(() => new Promise<number>((resolve) => (finishFirstPush = resolve)))
 
@@ -37,5 +39,14 @@ describe("useGitPush store", () => {
     expect(streamGitPush).toHaveBeenCalledTimes(1)
     finishFirstPush(0)
     await flushPromises()
+  })
+
+  it("lance en parallèle des pushes sur des dépôts différents", async () => {
+    vi.mocked(streamGitPush).mockImplementation(() => new Promise<number>(() => {}))
+
+    startGitPush("/depot-a", "origin", "main")
+    startGitPush("/depot-b", "origin", "main")
+
+    expect(streamGitPush).toHaveBeenCalledTimes(2)
   })
 })

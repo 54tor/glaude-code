@@ -4,7 +4,13 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ## [Non publié]
 
+### Modifié
+- Bouton « Pousser » : plusieurs pushes tournent en parallèle (autres remotes ou autres projets) au lieu d'un seul à la fois ; chacun a sa pastille, son toast et son terminal. Seul un second push du même dépôt attend la fin du premier.
+- Texte collé dans un message : affiché en clair sous 80 lignes, replié à partir de 80.
+
 ### Corrigé
+- Ouverture de la page juste après le démarrage de gld : les sessions sont préchargées et les relectures simultanées des transcripts sont partagées, au lieu d'attendre plusieurs secondes.
+- Toast d'un push git en échec : une croix permet de le fermer.
 - Pages Accueil et Extensions : l'état des serveurs MCP est gardé une minute, préchargé au démarrage et rendu aussitôt (rafraîchi en arrière-plan quand il est périmé), au lieu de relancer `claude mcp list` (5 s et plus, tous les serveurs démarrés) à chaque ouverture.
 - Questions de Claude : les tableaux dessinés en caractères de cadre (┌─┬┐) dans le contexte s'affichent en vrais tableaux dont les cellules se replient, au lieu d'un bloc ASCII à défilement horizontal.
 - Fenêtre de poussée git : le terminal s'adapte à la hauteur de la fenêtre, la dernière ligne de la sortie n'est plus coupée.

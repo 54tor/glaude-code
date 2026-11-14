@@ -11,20 +11,25 @@ vi.mock("@/hooks/useGit", () => ({ refreshGit: vi.fn() }))
 vi.mock("@/lib/gitPushStream", () => ({ streamGitPush: vi.fn() }))
 
 import { streamGitPush } from "@/lib/gitPushStream"
-import { dismissGitPush, setGitPushTerminalOpen, startGitPush } from "@/hooks/useGitPush"
+import { dismissGitPush, setGitPushTerminalOpen, startGitPush, listGitPushRuns, useGitPushRuns } from "@/hooks/useGitPush"
 import { GitPushTerminal } from "./GitPushTerminal"
 
 afterEach(() => {
   cleanup()
-  dismissGitPush()
+  listGitPushRuns().forEach((run) => dismissGitPush(run.id))
   writtenToTerminal.length = 0
   vi.mocked(streamGitPush).mockReset()
 })
 
+function TerminalOfFirstRun() {
+  const run = useGitPushRuns()[0]
+  return run ? <GitPushTerminal run={run} /> : null
+}
+
 describe("GitPushTerminal", () => {
   it("affiche le code de retour d'un hook qui refuse", async () => {
     vi.mocked(streamGitPush).mockResolvedValue(1)
-    render(<GitPushTerminal />)
+    render(<TerminalOfFirstRun />)
 
     await act(async () => startGitPush("/depot", "origin", "main"))
 
@@ -37,12 +42,12 @@ describe("GitPushTerminal", () => {
       onOutput(new TextEncoder().encode("sortie du hook"))
       return 0
     })
-    render(<GitPushTerminal />)
+    render(<TerminalOfFirstRun />)
     await act(async () => startGitPush("/depot", "origin", "main"))
-    await act(async () => setGitPushTerminalOpen(false))
+    await act(async () => setGitPushTerminalOpen(listGitPushRuns()[0].id, false))
     writtenToTerminal.length = 0
 
-    await act(async () => setGitPushTerminalOpen(true))
+    await act(async () => setGitPushTerminalOpen(listGitPushRuns()[0].id, true))
 
     expect(writtenToTerminal.map((chunk) => new TextDecoder().decode(chunk))).toEqual(["sortie du hook"])
   })

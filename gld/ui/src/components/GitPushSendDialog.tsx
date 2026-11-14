@@ -19,10 +19,10 @@ export function GitPushSendDialog({ run, open, onOpenChange }: { run: GitPushRun
   const { t } = useTranslation()
   const actions = useActions()
   const sameFolderRows = actions.rows.filter((row) => row.g.project === run.dir || row.s.cwd === run.dir)
-  const report = () => buildGitPushReport(run, gitPushOutputTail(REPORT_OUTPUT_LINES))
+  const report = () => buildGitPushReport(run, gitPushOutputTail(run.id, REPORT_OUTPUT_LINES))
   const finishSending = () => {
     onOpenChange(false)
-    dismissGitPush()
+    dismissGitPush(run.id)
   }
   const sendToSession = async (row: Row) => {
     const isLive = actions.live.has(row.s.id)
