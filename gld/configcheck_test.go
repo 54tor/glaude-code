@@ -14,3 +14,19 @@ func TestMcpMask(t *testing.T) {
 		t.Errorf("args : %s", got)
 	}
 }
+
+func TestMcpStatusPasseParLeCacheDesProjets(t *testing.T) {
+	originalMcpStates := projectMcpStates
+	defer func() { projectMcpStates = originalMcpStates }()
+	nombreDeLancements := 0
+	projectMcpStates = func(string) ([]McpState, error) {
+		nombreDeLancements++
+		return []McpState{{Name: "serveur-a", Status: "✔ Connected", OK: true}}, nil
+	}
+
+	statutObtenu, err := mcpStatus()
+
+	if err != nil || statutObtenu["serveur-a"] != "✔ Connected" || nombreDeLancements != 1 {
+		t.Errorf("statut=%v err=%v lancements=%d", statutObtenu, err, nombreDeLancements)
+	}
+}

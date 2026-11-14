@@ -3,7 +3,6 @@ package main
 // Lecture de la configuration : précédence des réglages, santé, hooks, serveurs MCP. Rien n'est modifié ici.
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -436,22 +435,16 @@ func mcpServersFor(strict bool) []McpServer {
 
 var mcpLine = regexp.MustCompile(`^(.+?): (.*) - (.+)$`)
 
-// mcpStatus lance `claude mcp list` (il contrôle chaque serveur : quelques secondes) et renvoie l'état par nom.
+// mcpStatus : l'état par nom des serveurs vus par Claude Code, via le même cache et la même file unique que les dossiers de projet,
+// sinon chaque ouverture de page relance `claude mcp list` (5 s et plus, tous les serveurs démarrés).
 var mcpStatus = func() (map[string]string, error) {
-	commandContext, cancel := context.WithTimeout(context.Background(), mcpListTimeout)
-	defer cancel()
-	cmd := withPath(exec.CommandContext(commandContext, "claude", "mcp", "list"))
-	cmd.WaitDelay = time.Second
-	cmd.Dir = workDir()
-	listOutput, err := cmd.Output()
-	if err != nil && len(listOutput) == 0 {
+	states, err := projectMcpStates(workDir())
+	if err != nil {
 		return nil, err
 	}
 	statusByName := map[string]string{}
-	for _, listLine := range strings.Split(string(listOutput), "\n") {
-		if lineMatch := mcpLine.FindStringSubmatch(strings.TrimSpace(listLine)); lineMatch != nil {
-			statusByName[lineMatch[1]] = strings.TrimSpace(lineMatch[3])
-		}
+	for _, state := range states {
+		statusByName[state.Name] = state.Status
 	}
 	return statusByName, nil
 }
