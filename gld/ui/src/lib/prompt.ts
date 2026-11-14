@@ -4,7 +4,7 @@
 // pour amener le curseur sur l'option sans la valider (nécessaire avant d'écrire dans une option « Type something ») ; edit : réponse libre
 // déjà donnée (« 3. texte ✔ »), à modifier : le curseur sur la ligne rouvre l'édition du texte.
 export type Opt = { label: string; keys: string[]; detail?: string; text?: boolean; chat?: boolean; checked?: boolean; reach?: string[]; edit?: string }
-export type Prompt = { question: string; context?: string; preview?: string; options: Opt[]; submit?: string[]; tabs?: { label: string; done: boolean }[] } // tabs : onglets de la question (☒ répondu) ; context : la commande ou le diff d'une demande d'autorisation
+export type Prompt = { question: string; context?: string; contextIsMessage?: boolean; preview?: string; options: Opt[]; submit?: string[]; tabs?: { label: string; done: boolean }[] } // tabs : onglets de la question (☒ répondu) ; context : la commande ou le diff d'une demande d'autorisation
 // Options qui attendent une réponse libre (« Type something. », « Chat about this », « No, and tell Claude what to do differently »…).
 const CHAT = /chat about this/i
 const FREE = /type something|chat about this|tell claude|something else|^\d+\.\s*other\b/i
@@ -226,6 +226,7 @@ function parseLines(src: string[]): Prompt | null {
     return {
       question,
       context: permissionContext ?? tabsContext,
+      contextIsMessage: !permissionContext && !!tabsContext,
       tabs: isTabbed ? tabsOf(lines[tabsHeaderLine]) : undefined,
       options: numberedOptions.map(toOption),
     }
@@ -308,6 +309,7 @@ function multiSelect(screenLines: string[], above: (at: number) => string, recap
   return {
     question: above(checkboxRows[0].at + headerLine),
     context: recapAt(headerLine),
+    contextIsMessage: !!recapAt(headerLine),
     tabs: tabsOf(lines[0]),
     options,
     submit: [...arrowKeysToward(submitRow, cursorRow), "Enter"],

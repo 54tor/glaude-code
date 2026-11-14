@@ -4,6 +4,8 @@ import { Trans, useTranslation } from "react-i18next"
 import { i18n } from "@/i18n"
 import { cn, copyText, isSend, keyHint } from "@/lib/utils"
 import { QuestionContext } from "@/components/QuestionContext"
+import { Markdown } from "@/components/Message"
+import { contextToMarkdown } from "@/lib/boxTable"
 import { modeOfScreen, parseBtw, parsePrompt, type Opt } from "@/lib/prompt"
 import { type Live } from "./LiveStatus"
 import { toast } from "sonner"
@@ -888,6 +890,11 @@ function TerminalPanel({ id, onAsk, onSent, extra }: { id: string; onAsk?: (aski
           <span className="min-w-0 truncate font-medium">{prompt.question || t("conversation.composer.answerExpected")}</span>
         </button>
       )}
+      {prompt?.context && prompt.contextIsMessage && (
+        <div className="max-h-[40dvh] overflow-y-auto overscroll-contain px-1 text-sm">
+          <Markdown t={contextToMarkdown(prompt.context)} />
+        </div>
+      )}
       {prompt && !questionCollapsed && (
         <div className="max-h-[min(65dvh,36rem)] overflow-y-auto overscroll-contain rounded-lg border border-warning/50 bg-warning/10 px-3 py-2 text-sm">
           {prompt.tabs && prompt.tabs.length > 1 && (
@@ -905,7 +912,7 @@ function TerminalPanel({ id, onAsk, onSent, extra }: { id: string; onAsk?: (aski
               </Button>
             </p>
           )}
-          {prompt.context && <QuestionContext context={prompt.context} />}
+          {prompt.context && !prompt.contextIsMessage && <QuestionContext context={prompt.context} />}
           {prompt.preview && <pre className="mb-2 max-h-60 overflow-auto rounded-md border bg-background/70 p-2 font-mono text-xs leading-tight whitespace-pre">{prompt.preview}</pre>}
           <div className="mb-1.5 flex items-start justify-between gap-2">
             <p className="font-medium">{prompt.question || t("conversation.composer.answerExpected")}</p>

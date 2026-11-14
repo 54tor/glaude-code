@@ -66,3 +66,17 @@ export function splitContextTables(context: string): ContextSegment[] {
   flushText()
   return segments
 }
+
+// Le contexte (texte du terminal et tableaux encadrés) en Markdown GFM, pour l'afficher comme un message de Claude.
+export function contextToMarkdown(context: string): string {
+  return splitContextTables(context)
+    .map((segment) => {
+      if (segment.kind === "text") return segment.text
+      const escapedRows = segment.rows.map((cells) => cells.map((cellText) => cellText.replace(/\|/g, "\\|")))
+      const [headerCells, ...bodyRows] = escapedRows
+      const formatRow = (cells: string[]) => `| ${cells.join(" | ")} |`
+      const separator = formatRow(headerCells.map(() => "---"))
+      return [formatRow(headerCells), separator, ...bodyRows.map(formatRow)].join("\n")
+    })
+    .join("\n\n")
+}
