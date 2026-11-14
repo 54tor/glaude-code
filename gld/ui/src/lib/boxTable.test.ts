@@ -36,4 +36,12 @@ describe("contextToMarkdown", () => {
 
     expect(markdownObtenu).toBe("Il en reste 2 :\n\n| # | Point |\n| --- | --- |\n| 1 | a\\|b |")
   })
+
+  it("lit un tableau dont les lignes de contenu n'ont pas de cadre à gauche ni à droite", () => {
+    const contexteTerminal = ["┌────┬───────┬──────┐", "│    │       │      │", "│ #  │ Point │ Effet│", "├────┼───────┼──────┤", "│    │       │      │", "1   │ Coût  │ doc", "│    │       │      │", "└────┴───────┴──────┘"].join("\n")
+
+    const markdownObtenu = contextToMarkdown(contexteTerminal)
+
+    expect(markdownObtenu).toBe("| # | Point | Effet |\n| --- | --- | --- |\n| 1 | Coût | doc |")
+  })
 })

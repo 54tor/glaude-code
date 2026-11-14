@@ -1,12 +1,12 @@
 export type ContextSegment = { kind: "text"; text: string } | { kind: "table"; rows: string[][] }
 
 const BORDER_LINE = /^\s*[┌├└╭╰][─━┬┼┴╌┄]*[┐┤┘╮╯]\s*$/
-const CONTENT_LINE = /^\s*[│┃].*[│┃]\s*$/
+const CONTENT_LINE = /^\s*[│┃]|[│┃]\s*$|[│┃].*[│┃]/
 const CELL_SEPARATOR = /[│┃]/
 
 const isTableLine = (line: string) => BORDER_LINE.test(line) || CONTENT_LINE.test(line)
 
-const splitCells = (line: string) => line.trim().slice(1, -1).split(CELL_SEPARATOR).map((cellText) => cellText.trim())
+const splitCells = (line: string) => line.trim().replace(/^[│┃]/, "").replace(/[│┃]$/, "").split(CELL_SEPARATOR).map((cellText) => cellText.trim())
 
 // Une rangée tient sur plusieurs lignes quand une cellule se replie : on recolle les fragments de chaque colonne.
 function mergeRowLines(rowLines: string[]): string[] {
