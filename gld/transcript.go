@@ -17,6 +17,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/sync/singleflight"
 )
 
 const (
@@ -374,7 +376,15 @@ func decodeDirWalk(name string) string {
 	return walk("/", strings.TrimPrefix(name, "-"))
 }
 
+var sessionsFlight singleflight.Group
+
+// sessions : les appels simultanés partagent un seul balayage ; à froid, il relit tous les transcripts (plusieurs secondes), et le démarrage en lance plusieurs à la fois (boucles de fond, premières requêtes de la page).
 func sessions() []Group {
+	scanned, _, _ := sessionsFlight.Do("sessions", func() (any, error) { return scanSessions(), nil })
+	return scanned.([]Group)
+}
+
+func scanSessions() []Group {
 	groups := map[string][]Session{}
 	files, _ := filepath.Glob(filepath.Join(root, "*", "*.jsonl"))
 	var allSessions []Session
