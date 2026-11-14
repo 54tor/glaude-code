@@ -44,6 +44,7 @@ export function Markdown({ t, onLink }: { t: string; onLink?: (href: string) => 
 }
 
 // Texte collé dans Claude Code (<pasted_content id="…">…</pasted_content id="…">) : un bloc repliable.
+const PASTED_COLLAPSE_MIN_LINES = 80
 const PASTED = /<pasted_content id="[^"]*">\n?([\s\S]*?)\n?<\/pasted_content(?: id="[^"]*")?>/g
 
 // Le dossier personnel (et donc l'identifiant du compte) ne s'affiche pas : « @/home/nom/x.png » devient « @~/x.png ».
@@ -87,6 +88,11 @@ function UserText({ t: text, conv }: { t: string; conv?: Conv }) {
     if (before) pushMarkdownWithUploads(before, `t${at}`)
     const pastedContent = pastedMatch[1]
     const lines = pastedContent.split("\n").length
+    if (lines < PASTED_COLLAPSE_MIN_LINES) {
+      parts.push(<PlainText key={pastedMatch.index} t={pastedContent} />)
+      at = pastedMatch.index + pastedMatch[0].length
+      continue
+    }
     parts.push(
       <details key={pastedMatch.index} className="group/paste my-1 rounded-md border bg-background/60">
         <summary className="cursor-pointer list-none px-3 py-1.5 text-xs text-muted-foreground select-none hover:text-foreground">
