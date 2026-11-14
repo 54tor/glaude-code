@@ -5,7 +5,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 ## [Non publié]
 
 ### Corrigé
-- Pages Accueil et Extensions : l'état des serveurs MCP est gardé une minute et partagé entre les pages, au lieu de relancer `claude mcp list` (5 s et plus, tous les serveurs démarrés) à chaque ouverture.
+- Pages Accueil et Extensions : l'état des serveurs MCP est gardé une minute, préchargé au démarrage et rendu aussitôt (rafraîchi en arrière-plan quand il est périmé), au lieu de relancer `claude mcp list` (5 s et plus, tous les serveurs démarrés) à chaque ouverture.
 - Questions de Claude : les tableaux dessinés en caractères de cadre (┌─┬┐) dans le contexte s'affichent en vrais tableaux dont les cellules se replient, au lieu d'un bloc ASCII à défilement horizontal.
 - Fenêtre de poussée git : le terminal s'adapte à la hauteur de la fenêtre, la dernière ligne de la sortie n'est plus coupée.
 - Session dont claude reste « occupé » alors que l'écran est au repos : le compteur « en cours » disparaît (prompt suivi d'une espace insécable, et longue liste de coéquipiers sous le prompt).

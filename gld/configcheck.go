@@ -435,10 +435,13 @@ func mcpServersFor(strict bool) []McpServer {
 
 var mcpLine = regexp.MustCompile(`^(.+?): (.*) - (.+)$`)
 
-// mcpStatus : l'état par nom des serveurs vus par Claude Code, via le même cache et la même file unique que les dossiers de projet,
+// mcpStatus : l'état par nom des serveurs vus par Claude Code, via le même cache et la même file unique que les dossiers de projet ; un relevé périmé est rendu aussitôt et rafraîchi en arrière-plan,
 // sinon chaque ouverture de page relance `claude mcp list` (5 s et plus, tous les serveurs démarrés).
 var mcpStatus = func() (map[string]string, error) {
-	states, err := projectMcpStates(workDir())
+	states, found, err := mcpStatesStale(workDir())
+	if !found {
+		states, err = projectMcpStates(workDir())
+	}
 	if err != nil {
 		return nil, err
 	}

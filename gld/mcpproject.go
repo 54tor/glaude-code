@@ -56,6 +56,18 @@ var projectMcpStates = func(cwd string) ([]McpState, error) {
 	return entry.out, entry.err
 }
 
+// mcpStatesStale : le dernier relevé du dossier, même périmé, sans jamais attendre `claude mcp list` ; un relevé périmé relance le
+// rafraîchissement en arrière-plan. found faux : aucun relevé encore (le premier appel doit attendre).
+func mcpStatesStale(cwd string) (states []McpState, found bool, err error) {
+	mcpCache.Lock()
+	cached, found := mcpCache.m[cwd]
+	mcpCache.Unlock()
+	if found && time.Since(cached.at) >= mcpCacheTTL {
+		go projectMcpStates(cwd)
+	}
+	return cached.out, found, cached.err
+}
+
 func mcpList(cwd string) ([]McpState, error) {
 	commandContext, cancel := context.WithTimeout(context.Background(), mcpListTimeout)
 	defer cancel()

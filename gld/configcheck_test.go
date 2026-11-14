@@ -3,6 +3,7 @@ package main
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestMcpMask(t *testing.T) {
@@ -28,5 +29,31 @@ func TestMcpStatusPasseParLeCacheDesProjets(t *testing.T) {
 
 	if err != nil || statutObtenu["serveur-a"] != "✔ Connected" || nombreDeLancements != 1 {
 		t.Errorf("statut=%v err=%v lancements=%d", statutObtenu, err, nombreDeLancements)
+	}
+}
+
+func TestMcpStatusRendLeReleveperimeSansAttendre(t *testing.T) {
+	originalMcpStates := projectMcpStates
+	defer func() { projectMcpStates = originalMcpStates }()
+	releveEnCours := make(chan struct{})
+	projectMcpStates = func(string) ([]McpState, error) {
+		<-releveEnCours
+		return nil, nil
+	}
+	defer close(releveEnCours)
+	dossierDeTest := workDir()
+	mcpCache.Lock()
+	mcpCache.m[dossierDeTest] = mcpEntry{at: time.Now().Add(-time.Hour), out: []McpState{{Name: "serveur-a", Status: "ok"}}}
+	mcpCache.Unlock()
+	defer func() {
+		mcpCache.Lock()
+		delete(mcpCache.m, dossierDeTest)
+		mcpCache.Unlock()
+	}()
+
+	statutObtenu, err := mcpStatus()
+
+	if err != nil || statutObtenu["serveur-a"] != "ok" {
+		t.Errorf("statut=%v err=%v", statutObtenu, err)
 	}
 }
