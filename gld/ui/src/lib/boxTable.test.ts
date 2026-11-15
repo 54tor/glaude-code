@@ -28,6 +28,23 @@ describe("splitContextTables", () => {
   })
 })
 
+describe("splitContextTables avec un cadre à droite d'une liste", () => {
+  it("separeLaListeDeGaucheEtGardeLeContenuDuCadreEnTexteIndente", () => {
+    const contexteTerminal = [
+      "❯ 1. Sous-dossiers   ┌─────────────────┐",
+      "  2. Plat            │ docs/           │",
+      "                     │   README.md     │",
+      "                     └─────────────────┘",
+    ].join("\n")
+
+    const segmentsObtenus = splitContextTables(contexteTerminal)
+
+    expect(segmentsObtenus).toEqual([
+      { kind: "text", text: "❯ 1. Sous-dossiers\n  2. Plat\ndocs/\n  README.md" },
+    ])
+  })
+})
+
 describe("contextToMarkdown", () => {
   it("transforme un tableau encadré en tableau Markdown et garde le texte", () => {
     const contexteTerminal = ["Il en reste 2 :", "┌────┬───────┐", "│ #  │ Point │", "├────┼───────┤", "│ 1  │ a|b   │", "└────┴───────┘"].join("\n")

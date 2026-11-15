@@ -6,6 +6,8 @@ const CELL_SEPARATOR = /[│┃]/
 
 const isTableLine = (line: string) => BORDER_LINE.test(line) || CONTENT_LINE.test(line)
 
+const stripOuterFrame = (line: string) => line.trim().replace(/^[│┃]/, "").replace(/[│┃]$/, "")
+
 const splitCells = (line: string) => line.trim().replace(/^[│┃]/, "").replace(/[│┃]$/, "").split(CELL_SEPARATOR).map((cellText) => cellText.trim())
 
 // Une rangée tient sur plusieurs lignes quand une cellule se replie : on recolle les fragments de chaque colonne.
@@ -35,6 +37,30 @@ function parseTable(tableLines: string[]): string[][] {
   return rows
 }
 
+const BOX_TOP_AFTER_TEXT = /\S.*?(┌[─━┬╌┄]*┐)\s*$/
+const BOX_BOTTOM_CORNER = "└"
+
+// Sépare les cadres posés à droite d'un texte (liste d'options à gauche, aperçu encadré à droite) : le texte de gauche, puis le cadre seul.
+function detachSideBoxes(lines: string[]): string[] {
+  const outputLines: string[] = []
+  let lineIndex = 0
+  while (lineIndex < lines.length) {
+    const topMatch = BOX_TOP_AFTER_TEXT.exec(lines[lineIndex])
+    const boxColumn = topMatch ? lines[lineIndex].lastIndexOf(topMatch[1]) : -1
+    const bottomIndex = boxColumn > 0 ? lines.findIndex((line, candidateIndex) => candidateIndex > lineIndex && line.includes(BOX_BOTTOM_CORNER)) : -1
+    if (bottomIndex === -1) {
+      outputLines.push(lines[lineIndex])
+      lineIndex++
+      continue
+    }
+    const boxLines = lines.slice(lineIndex, bottomIndex + 1)
+    const leftTexts = boxLines.map((boxLine) => boxLine.slice(0, boxColumn).trimEnd()).filter((leftText) => leftText !== "")
+    outputLines.push(...leftTexts, ...boxLines.map((boxLine) => boxLine.slice(boxColumn)))
+    lineIndex = bottomIndex + 1
+  }
+  return outputLines
+}
+
 // Découpe le contexte d'une question en texte et en tableaux dessinés au terminal (cadres ┌─┬┐│└┘), pour réafficher ceux-ci en vrais tableaux.
 export function splitContextTables(context: string): ContextSegment[] {
   const segments: ContextSegment[] = []
@@ -45,8 +71,11 @@ export function splitContextTables(context: string): ContextSegment[] {
     textLines = []
   }
   const flushTable = () => {
-    const hasContent = tableLines.some((line) => CONTENT_LINE.test(line))
-    if (hasContent) {
+    const contentLines = tableLines.filter((line) => CONTENT_LINE.test(line))
+    const isSingleColumnBox = contentLines.length > 0 && contentLines.every((line) => !CELL_SEPARATOR.test(stripOuterFrame(line)))
+    if (isSingleColumnBox) {
+      textLines.push(...contentLines.map((line) => stripOuterFrame(line).replace(/^ /, "").trimEnd()))
+    } else if (contentLines.length > 0) {
       flushText()
       segments.push({ kind: "table", rows: parseTable(tableLines) })
     } else {
@@ -54,7 +83,7 @@ export function splitContextTables(context: string): ContextSegment[] {
     }
     tableLines = []
   }
-  for (const line of context.split("\n")) {
+  for (const line of detachSideBoxes(context.split("\n"))) {
     if (isTableLine(line)) {
       tableLines.push(line)
       continue
