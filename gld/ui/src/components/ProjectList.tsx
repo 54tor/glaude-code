@@ -21,9 +21,51 @@ export function ProjectList({ route, go, q: query = "" }: { route: Route; go: (r
   const opened = useOpenState()
   const openKey = (name: string) => "p/" + name
   const toggle = (name: string) => setOpen(openKey(name), !opened[openKey(name)])
-  const visibleProjects = [...actions.projects]
-    .sort((left, right) => left.name.localeCompare(right.name))
-    .filter((project) => project.name.toLowerCase().includes(query))
+  const sortedProjects = [...actions.projects].sort((left, right) => left.name.localeCompare(right.name))
+  if (query) {
+    const matchesQuery = (text: string) => text.toLowerCase().includes(query)
+    const matchingProjects = sortedProjects.filter((project) => matchesQuery(project.name))
+    const matchingDirs = sortedProjects.flatMap((project) =>
+      project.dirs.filter((directory) => matchesQuery(directory)).map((directory) => ({ project, directory }))
+    )
+    return (
+      <ul className="space-y-px">
+        {matchingProjects.map((project) => (
+          <li key={project.name}>
+            <button
+              className="flex h-7 w-full items-center gap-2 rounded-md pr-2 pl-2 text-left text-xs text-muted-foreground hover:bg-muted hover:text-foreground pointer-coarse:h-11"
+              onClick={() => go({ kind: "project", name: project.name })}
+              title={project.name}
+            >
+              <Layers className="size-4 shrink-0 text-info" />
+              <span className="truncate">{project.name}</span>
+            </button>
+          </li>
+        ))}
+        {matchingDirs.map(({ project, directory }) => {
+          const key = segs(directory, actions.home).join("/")
+          const isActiveDir = route.kind === "dir" && route.key === key
+          return (
+            <li key={project.name + "\0" + directory}>
+              <button
+                onClick={() => go({ kind: "dir", key })}
+                title={directory}
+                className={cn(
+                  "flex h-7 w-full items-center gap-2 rounded-md pr-2 pl-2 text-left text-xs transition-colors pointer-coarse:h-11",
+                  isActiveDir ? "bg-accent font-medium text-accent-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                )}
+              >
+                <Folder className="size-4 shrink-0 text-muted-foreground" />
+                <span className="min-w-0 flex-1 truncate">{tilde(directory, actions.home)}</span>
+                <span className="shrink-0 text-2xs text-muted-foreground">{project.name}</span>
+              </button>
+            </li>
+          )
+        })}
+      </ul>
+    )
+  }
+  const visibleProjects = sortedProjects
   return (
     <ul className="space-y-px">
       {visibleProjects.map((project) => {

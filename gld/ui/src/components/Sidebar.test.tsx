@@ -224,7 +224,7 @@ describe("Sidebar — recherche de navbar", () => {
     expect(search.value).toBe("")
   })
 
-  it("filtre l'arbre : garde un dossier dont le nom correspond avec ses ancêtres", async () => {
+  it("filtre l'arbre : liste à plat les dossiers dont le chemin correspond", async () => {
     const tree = buildTree(
       [
         { g: { project: `${HOME}/Projets/caddy`, missing: false, sessions: [] }, ss: [session("1")] },
@@ -235,8 +235,8 @@ describe("Sidebar — recherche de navbar", () => {
     await mount({ tree })
     expect(screen.getByRole("button", { name: /^blog/ })).toBeTruthy()
     fireEvent.change(screen.getByLabelText(/Rechercher dans les titres/), { target: { value: "cad" } })
-    expect(screen.getByRole("button", { name: /^caddy/ })).toBeTruthy()
-    expect(screen.queryByRole("button", { name: /^blog/ })).toBeNull()
+    expect(screen.getByRole("button", { name: /caddy/ })).toBeTruthy()
+    expect(screen.queryByRole("button", { name: /blog/ })).toBeNull()
   })
 
   it("filtre les favoris par titre et masque les sessions ouvertes pendant la recherche", async () => {

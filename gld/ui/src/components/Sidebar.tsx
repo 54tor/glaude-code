@@ -285,13 +285,12 @@ function FavSessions({ rows, read }: { rows: Row[]; read: (session: Session) => 
   return <>{tops.map((topRow) => item(topRow, kids.get(topRow.s.id)))}</>
 }
 
-// Garde un nœud dont le nom correspond (avec tout son sous-arbre) ou dont un descendant correspond.
+// Liste plate des nœuds dont le chemin correspond, sans hiérarchie.
 function filterTree(nodes: Node[], query: string): Node[] {
   return nodes.flatMap((node) => {
-    if (node.name.toLowerCase().includes(query)) return [node]
     const matchingKids = filterTree([...node.kids.values()], query)
-    if (!matchingKids.length) return []
-    return [{ ...node, kids: new Map(matchingKids.map((kid) => [kid.name, kid])) }]
+    if (!node.key.toLowerCase().includes(query)) return matchingKids
+    return [{ ...node, name: node.key, kids: new Map<string, Node>() }, ...matchingKids]
   })
 }
 
@@ -463,7 +462,7 @@ export function Sidebar({ searchRef, ...props }: SidebarProps) {
             </>
           )}
 
-          {actions.projects.some((project) => show(project.name)) && (
+          {actions.projects.some((project) => show(project.name) || project.dirs.some((directory) => show(directory))) && (
             <>
               <Heading fold={{ folded: projFold === "1", toggle: () => setProjFold(projFold ? "" : "1") }}>{t("shell.sidebar.projects")}</Heading>
               {projFold !== "1" && <ProjectList route={currentRoute} go={props.go} q={normalizedNavQuery} />}
