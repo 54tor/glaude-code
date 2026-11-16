@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/json"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -70,13 +72,23 @@ var hasRunningSubagent = func(sessionID string) bool {
 	if running, known := subagentsFromEvents(readStateEvents(), sessionID); known {
 		return running
 	}
-	subagentDirs, _ := filepath.Glob(filepath.Join(root, "*", sessionID, "subagents"))
-	for _, subagentDir := range subagentDirs {
-		for _, subagent := range subLives(subagentDir) {
-			if subagent.Running {
-				return true
-			}
+	metaFiles, _ := filepath.Glob(filepath.Join(root, "*", sessionID, "subagents", "agent-*.meta.json"))
+	for _, metaPath := range metaFiles {
+		if isSubagentRunningOnDisk(metaPath) {
+			return true
 		}
 	}
 	return false
+}
+
+// isSubagentRunningOnDisk : sans relire le transcript (appelé pour chaque session occupée à chaque relevé) : pas « fini » dans
+// son meta.json et transcript écrit récemment.
+func isSubagentRunningOnDisk(metaPath string) bool {
+	metaContent, err := readTrusted(metaPath)
+	var meta struct{ Finished bool }
+	if err != nil || json.Unmarshal(metaContent, &meta) != nil || meta.Finished {
+		return false
+	}
+	transcriptInfo, err := os.Stat(strings.TrimSuffix(metaPath, ".meta.json") + ".jsonl")
+	return err == nil && time.Since(transcriptInfo.ModTime()) < subagentRecentWindow
 }
