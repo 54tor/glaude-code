@@ -1,6 +1,7 @@
 package main
 
 import (
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -45,6 +46,9 @@ func screenIdle(screen string) bool {
 // idleByScreen rattrape un statut « busy » resté à tort (tâches de fond terminées mais listées) : l'écran doit
 // rester au repos idleScreenSettle de suite avant que la file parte.
 func idleByScreen(sessionID string, now time.Time) bool {
+	if hasRunningSubagent(sessionID) {
+		return false
+	}
 	screen, err := screenFn(sessionID)
 	idleSeenMu.Lock()
 	defer idleSeenMu.Unlock()
@@ -58,4 +62,17 @@ func idleByScreen(sessionID string, now time.Time) bool {
 		return false
 	}
 	return now.Sub(firstSeen) >= idleScreenSettle
+}
+
+// hasRunningSubagent : signal des fichiers (meta.json + transcript du sous-agent), plus stable que le texte de l'écran.
+var hasRunningSubagent = func(sessionID string) bool {
+	subagentDirs, _ := filepath.Glob(filepath.Join(root, "*", sessionID, "subagents"))
+	for _, subagentDir := range subagentDirs {
+		for _, subagent := range subLives(subagentDir) {
+			if subagent.Running {
+				return true
+			}
+		}
+	}
+	return false
 }

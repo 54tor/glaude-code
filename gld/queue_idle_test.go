@@ -116,3 +116,15 @@ func TestWaitingKnownCountsStuckBusySessionWhoseScreenIsIdle(t *testing.T) {
 		t.Fatalf("vrai busy compté en attente : %v", waitingIDs)
 	}
 }
+
+func TestIdleByScreenRefusesWhileSubagentRuns(t *testing.T) {
+	previousScreen, previousRunning := screenFn, hasRunningSubagent
+	t.Cleanup(func() { screenFn, hasRunningSubagent = previousScreen, previousRunning })
+	screenFn = func(string) (string, error) { return "texte\n────\n❯ \n────\n", nil }
+	hasRunningSubagent = func(string) bool { return true }
+	now := time.Now()
+	idleByScreen("sub-test", now)
+	if idleByScreen("sub-test", now.Add(idleScreenSettle+time.Second)) {
+		t.Fatal("session avec un sous-agent en cours prise pour du repos")
+	}
+}
