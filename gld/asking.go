@@ -12,9 +12,9 @@ import (
 )
 
 var (
-	askFoot = regexp.MustCompile(`(?i)enter to (select|confirm)|esc to cancel|tab to amend|ready to submit|do you want to|would you like to|proceed\?`)
-	askOpt  = regexp.MustCompile(`^\s*(?:[❯>›]\s*)?[1-9][.)]\s+\S|^\s*❯\s+\S`)
-	askBusy = regexp.MustCompile(`(?i)esc to interrupt`)
+	askOpt    = regexp.MustCompile(`^\s*(?:[❯>›]\s*)?[1-9][.)]\s+\S`)
+	askCursor = regexp.MustCompile(`^\s*[❯>›]\s+[1-9][.)]\s+\S`)
+	askBusy   = regexp.MustCompile(`(?i)esc to interrupt`)
 
 	askMu    sync.Mutex
 	askAt    time.Time
@@ -29,27 +29,25 @@ const (
 	askMaxPanesInspected = 40
 )
 
-// screenAsks : l'écran montre un dialogue qui attend une réponse (et la session n'est pas en pleine réflexion).
+// screenAsks : l'écran montre un dialogue à choix (question, autorisation). Détection par la structure seule, sans phrase du
+// dialogue (elles changent avec la langue) : un curseur « ❯ » posé sur une option numérotée, au moins deux options, et aucun
+// prompt de saisie vide en bas (le dialogue le remplace).
 func screenAsks(screen string) bool {
 	lines := strings.Split(strings.TrimRight(screen, "\n "), "\n")
 	if len(lines) > askScreenTailLines {
 		lines = lines[len(lines)-askScreenTailLines:]
 	}
-	tail := strings.Join(lines, "\n")
-	foot := tail
-	if len(lines) > askDialogFootLines {
-		foot = strings.Join(lines[len(lines)-askDialogFootLines:], "\n")
-	}
-	if askBusy.MatchString(foot) || !askFoot.MatchString(foot) || hasEmptyPrompt(lines) {
+	if hasEmptyPrompt(lines) {
 		return false
 	}
-	optionCount := 0
+	optionCount, hasCursor := 0, false
 	for _, line := range lines {
 		if askOpt.MatchString(line) {
 			optionCount++
 		}
+		hasCursor = hasCursor || askCursor.MatchString(line)
 	}
-	return optionCount >= askMinimumOptions
+	return hasCursor && optionCount >= askMinimumOptions
 }
 
 // hasEmptyPrompt : un dialogue remplace la zone de saisie ; un prompt « ❯ » vide en bas d'écran prouve que la session est au repos,

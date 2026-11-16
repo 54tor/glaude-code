@@ -11,6 +11,8 @@ func TestScreenAsks(t *testing.T) {
 		{"autorisation", " Ask rule Bash(rm *) overrides auto mode\n Do you want to proceed?\n ❯ 1. Yes\n   2. No\n Esc to cancel · Tab to amend", true},
 		{"liste numérotée dans le texte", "Voici le plan :\n1. Lire\n2. Écrire\n\n❯ \n ⏵⏵ auto mode on (shift+tab to cycle)", false},
 		{"texte final avec options et prompt vide", "1. Appliquer\n2. Ignorer\nWould you like to proceed?\n────\n❯ \n────\n ⏵⏵ auto mode on (shift+tab to cycle)", false},
+		{"dialogue sans aucune phrase connue", "Choisissez :\n❯ 1. Oui\n  2. Non\n  3. Autre", true},
+		{"phrase de dialogue sans curseur", "Do you want to proceed?\n1. Oui\n2. Non", false},
 		{"en réflexion", "Do you want to proceed?\n1. a\n2. b\n✻ Réfléchit… (esc to interrupt)", false},
 		{"écran vide", "", false},
 	} {
