@@ -15,6 +15,8 @@ const (
 
 var (
 	idlePrompt = regexp.MustCompile(`^❯[\s\x{00A0}]*$`)
+	// « Waiting for N background agent(s) to finish » : le tour est suspendu, pas terminé.
+	idleWaitingOnAgents = regexp.MustCompile(`(?i)waiting for \d+ background (?:agent|task)`)
 
 	idleSeenMu sync.Mutex
 	idleSeenAt = map[string]time.Time{}
@@ -36,7 +38,8 @@ func screenIdle(screen string) bool {
 		return false
 	}
 	firstLineChecked := max(0, promptLineIndex-idleScreenLinesAbovePrompt)
-	return !askBusy.MatchString(strings.Join(lines[firstLineChecked:], "\n"))
+	tail := strings.Join(lines[firstLineChecked:], "\n")
+	return !askBusy.MatchString(tail) && !idleWaitingOnAgents.MatchString(tail)
 }
 
 // idleByScreen rattrape un statut « busy » resté à tort (tâches de fond terminées mais listées) : l'écran doit

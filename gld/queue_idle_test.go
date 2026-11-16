@@ -22,6 +22,13 @@ func TestScreenIdleDetectsEmptyPromptWithStaleBackgroundTasks(t *testing.T) {
 	}
 }
 
+func TestScreenIdleRefusesPromptWhileWaitingOnBackgroundAgent(t *testing.T) {
+	waitingScreen := "texte\n✻ Waiting for 1 background agent to finish\n────\n❯ \n────\n  ⏵⏵ auto mode on\n"
+	if screenIdle(waitingScreen) {
+		t.Fatal("session qui attend un subagent prise pour du repos")
+	}
+}
+
 func TestScreenIdleAcceptsNonBreakingSpaceAfterPrompt(t *testing.T) {
 	if !screenIdle("texte\n────\n❯\u00a0\n────\n  ⏵⏵ auto mode on\n") {
 		t.Fatal("prompt suivi d'une espace insécable non reconnu")
