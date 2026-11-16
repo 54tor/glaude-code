@@ -201,9 +201,14 @@ function parseLines(src: string[]): Prompt | null {
       if (!ANSWERED_FREE_TEXT.test(numberedOptions[optionIndex].label)) return false
       return CHAT.test(numberedOptions[optionIndex + 1]?.label ?? "")
     }
+    // Champ de saisie libre (l'option juste avant « Chat about this ») sous le curseur : un chiffre y serait tapé comme du texte,
+    // même une fois du texte déjà saisi (« 4. 1 ») ; les flèches en sortent.
+    const freeSlotIndex = numberedOptions.findIndex((_, optionIndex) => CHAT.test(numberedOptions[optionIndex + 1]?.label ?? ""))
+    const isCursorInFreeSlot = cursorOption >= 0 && cursorOption === freeSlotIndex
     const toOption = (option: { n: string; label: string }, optionIndex: number): Opt => {
       const isChat = CHAT.test(option.label)
       const isAnswered = isAnsweredFreeText(optionIndex)
+      const mustLeaveFreeSlot = isCursorInFreeSlot && optionIndex !== cursorOption
       const result: Opt = {
         label: `${option.n}. ${option.label}`.replace(/\s+/g, " "),
         detail: detailOf(optionIndex) || undefined,
@@ -212,6 +217,7 @@ function parseLines(src: string[]): Prompt | null {
         chat: isChat,
       }
       if (isChat) result.keys = [option.n, "Enter"]
+      if (mustLeaveFreeSlot) result.keys = [...arrowKeysToward(optionIndex, cursorOption), "Enter"]
       if (isAnswered) {
         result.edit = option.label.replace(ANSWERED_FREE_TEXT, "").trim()
         result.reach = arrowKeysToward(optionIndex, cursorOption)

@@ -187,6 +187,27 @@ Voilà.
  ⏵⏵ auto mode on`,
 }
 
+describe("parsePrompt : curseur dans le champ libre", () => {
+  const screen = `Quels libellés ?
+  1. Toujours
+  2. Jamais
+  3. Détection
+❯ 4. 1
+────────────────────────────────────────
+  5. Chat about this
+
+Enter to select · ↑/↓ to navigate · Esc to cancel`
+  it("rejoint une autre option aux flèches, un chiffre serait tapé dans le champ", () => {
+    const prompt = parsePrompt(screen)!
+    expect(prompt.options[1].keys).toEqual(["Up", "Up", "Enter"])
+    expect(prompt.options[4].keys).toEqual(["Down", "Enter"])
+  })
+  it("garde le chiffre quand le curseur est sur une autre option", () => {
+    const prompt = parsePrompt(screen.replace("❯ 4. 1", "  4. 1").replace("  1. Toujours", "❯ 1. Toujours"))!
+    expect(prompt.options[1].keys).toEqual(["2"])
+  })
+})
+
 describe("parsePrompt : captures réelles", () => {
   it("permission d'une commande risquée", () => {
     const prompt = parsePrompt(real.permission)!
