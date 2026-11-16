@@ -381,7 +381,7 @@ var sessionsFlight singleflight.Group
 // sessions : les appels simultanés partagent un seul balayage ; à froid, il relit tous les transcripts (plusieurs secondes), et le démarrage en lance plusieurs à la fois (boucles de fond, premières requêtes de la page).
 func sessions() []Group {
 	scanned, _, _ := sessionsFlight.Do("sessions", func() (any, error) { return scanSessions(), nil })
-	return scanned.([]Group)
+	return slices.Clone(scanned.([]Group)) // chaque appelant reçoit son tableau : withEmptyDirs y ajoute et le trie sur place
 }
 
 func scanSessions() []Group {
