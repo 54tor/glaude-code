@@ -250,7 +250,7 @@ func bgOutputOK(path string) bool {
 	if filepath.Clean(path) != path || !bgOutRe.MatchString(path) {
 		return false
 	}
-	fileInfo, err := os.Lstat(path)
+	fileInfo, err := os.Lstat(path) // #nosec G703 -- chemin géré par gld par conception, confiné par rootfs.go sous GLD_RUN_AS
 	if err != nil || !fileInfo.Mode().IsRegular() {
 		return false
 	}
@@ -260,7 +260,7 @@ func bgOutputOK(path string) bool {
 // bgKilled : Claude Code termine par « [killed] » la sortie d'une commande de fond tuée, même sans <task-notification> (kill du processus).
 // Les agents n'ont pas ce marqueur : leur sortie est leur transcript.
 func bgKilled(path string) bool {
-	outputFile, err := os.OpenFile(path, os.O_RDONLY|oNoFollow, 0)
+	outputFile, err := os.OpenFile(path, os.O_RDONLY|oNoFollow, 0) // #nosec G703 -- chemin géré par gld par conception, confiné par rootfs.go sous GLD_RUN_AS
 	if err != nil {
 		return false
 	}

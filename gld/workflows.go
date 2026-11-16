@@ -77,7 +77,7 @@ func wfRead(path string, maxBytes int64) ([]byte, os.FileInfo, bool) {
 
 // wfDirOK : un vrai dossier (pas un lien) qui appartient à l'utilisateur de gld.
 func wfDirOK(path string) bool {
-	dirInfo, err := os.Lstat(path)
+	dirInfo, err := os.Lstat(path) // #nosec G703 -- chemin géré par gld par conception, confiné par rootfs.go sous GLD_RUN_AS
 	return err == nil && dirInfo.IsDir() && ownedByMe(dirInfo)
 }
 

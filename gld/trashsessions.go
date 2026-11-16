@@ -77,7 +77,7 @@ func trashSessions(items []item) (movedCount, spared int, err error) {
 }
 
 func dirExists(path string) bool {
-	fileInfo, err := os.Stat(path)
+	fileInfo, err := os.Stat(path) // #nosec G703 -- chemin géré par gld par conception, confiné par rootfs.go sous GLD_RUN_AS
 	return err == nil && fileInfo.IsDir()
 }
 

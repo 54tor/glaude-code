@@ -79,7 +79,7 @@ func claudeJSON() string {
 }
 
 func fileExists(path string) bool {
-	fileInfo, err := os.Stat(path)
+	fileInfo, err := os.Stat(path) // #nosec G703 -- chemin géré par gld par conception, confiné par rootfs.go sous GLD_RUN_AS
 	return err == nil && fileInfo.Mode().IsRegular()
 }
 

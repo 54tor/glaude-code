@@ -285,7 +285,7 @@ type reposEntry struct {
 }
 
 func isRepoDir(dir string) bool {
-	gitInfo, err := os.Lstat(filepath.Join(dir, ".git"))
+	gitInfo, err := os.Lstat(filepath.Join(dir, ".git")) // #nosec G703 -- chemin géré par gld par conception, confiné par rootfs.go sous GLD_RUN_AS
 	return err == nil && gitInfo.IsDir() && ownedByMe(gitInfo)
 }
 

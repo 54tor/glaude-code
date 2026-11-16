@@ -214,7 +214,7 @@ func reassign(items []item, targetDir string) (int, error) {
 }
 
 func lexists(path string) bool {
-	_, err := os.Lstat(path)
+	_, err := os.Lstat(path) // #nosec G703 -- chemin géré par gld par conception, confiné par rootfs.go sous GLD_RUN_AS
 	return err == nil
 }
 

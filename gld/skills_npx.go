@@ -373,7 +373,7 @@ func checkSkillUpdates(requestContext context.Context, force bool) map[string]st
 // shadowsSkillsPkg : npx remonte les dossiers parents à la recherche d'un node_modules/skills et le préfère au paquet épinglé.
 func shadowsSkillsPkg(dir string) bool {
 	for currentDir := filepath.Clean(dir); ; currentDir = filepath.Dir(currentDir) {
-		if _, err := os.Lstat(filepath.Join(currentDir, "node_modules", "skills")); err == nil {
+		if _, err := os.Lstat(filepath.Join(currentDir, "node_modules", "skills")); err == nil { // #nosec G703 -- chemin géré par gld par conception, confiné par rootfs.go sous GLD_RUN_AS
 			return true
 		}
 		if filepath.Dir(currentDir) == currentDir {

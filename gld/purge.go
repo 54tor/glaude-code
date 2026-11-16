@@ -313,7 +313,7 @@ func solder(deleted []string, snaps map[string]bool) []string {
 	}
 
 	isOld := func(path string) bool {
-		fileInfo, statErr := os.Stat(path)
+		fileInfo, statErr := os.Stat(path) // #nosec G703 -- chemin géré par gld par conception, confiné par rootfs.go sous GLD_RUN_AS
 		return statErr == nil && time.Since(fileInfo.ModTime()) > grace()
 	}
 	pasteCount, snapshotCount := 0, 0

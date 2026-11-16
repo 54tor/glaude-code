@@ -89,6 +89,6 @@ func isSubagentRunningOnDisk(metaPath string) bool {
 	if err != nil || json.Unmarshal(metaContent, &meta) != nil || meta.Finished {
 		return false
 	}
-	transcriptInfo, err := os.Stat(strings.TrimSuffix(metaPath, ".meta.json") + ".jsonl")
+	transcriptInfo, err := os.Stat(strings.TrimSuffix(metaPath, ".meta.json") + ".jsonl") // #nosec G703 -- chemin géré par gld par conception, confiné par rootfs.go sous GLD_RUN_AS
 	return err == nil && time.Since(transcriptInfo.ModTime()) < subagentRecentWindow
 }
