@@ -4,6 +4,8 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ## [Non publié]
 
+## [0.15.0] - 2026-11-16
+
 ### Modifié
 - Bouton « Pousser » : plusieurs pushes tournent en parallèle (autres remotes ou autres projets) au lieu d'un seul à la fois ; chacun a sa pastille, son toast et son terminal. Seul un second push du même dépôt attend la fin du premier.
 - Texte collé dans un message : affiché en clair sous 80 lignes, replié à partir de 80.
@@ -16,6 +18,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Questions de Claude : les tableaux dessinés en caractères de cadre (┌─┬┐) dans le contexte s'affichent en vrais tableaux dont les cellules se replient, au lieu d'un bloc ASCII à défilement horizontal.
 - Fenêtre de poussée git : le terminal s'adapte à la hauteur de la fenêtre, la dernière ligne de la sortie n'est plus coupée.
 - Session dont claude reste « occupé » alors que l'écran est au repos : le compteur « en cours » disparaît (prompt suivi d'une espace insécable, et longue liste de coéquipiers sous le prompt).
+- Recherche de la barre latérale : liste à plat qui trouve aussi les dossiers situés dans les projets.
 - Session dont le tour est fini mais qui garde un shell de fond actif (statut `shell` de claude) : elle passe en attente au lieu de tourner indéfiniment « en cours ».
 
 ## [0.14.0] - 2026-11-12
@@ -758,7 +761,8 @@ Première version : `gld`, interface web locale pour parcourir, piloter et confi
 - Terminal intégré désactivé par défaut ; lecture bornée des fichiers de commandes.
 - Refus d'agir quand les sessions ouvertes sont indéterminées.
 
-[Non publié]: https://github.com/54tor/glaude-code/compare/v0.14.0...HEAD
+[Non publié]: https://github.com/54tor/glaude-code/compare/v0.15.0...HEAD
+[0.15.0]: https://github.com/54tor/glaude-code/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/54tor/glaude-code/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/54tor/glaude-code/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/54tor/glaude-code/compare/v0.11.0...v0.12.0
