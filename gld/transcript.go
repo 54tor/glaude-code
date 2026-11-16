@@ -384,6 +384,10 @@ func sessions() []Group {
 	return slices.Clone(scanned.([]Group)) // chaque appelant reçoit son tableau : withEmptyDirs y ajoute et le trie sur place
 }
 
+// forgetSessions : après une écriture (corbeille, restauration, purge), un balayage déjà en cours n'a pas vu le changement ;
+// le prochain appel en lance un nouveau au lieu de s'y rattacher.
+func forgetSessions() { sessionsFlight.Forget("sessions") }
+
 func scanSessions() []Group {
 	groups := map[string][]Session{}
 	files, _ := filepath.Glob(filepath.Join(root, "*", "*.jsonl"))

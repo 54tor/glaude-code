@@ -206,6 +206,7 @@ func purgeOne(dir, sessionID string, snaps map[string]bool) (removedCount int, f
 // purgeSessions supprime transcript, sous-agents et satellites des sessions, puis solde les restes
 // partagés. Les sessions vivantes sont épargnées. Renvoie les comptes et un compte rendu.
 func purgeSessions(items []item) (purgedCount, spared int, notes []string, err error) {
+	defer forgetSessions()
 	live, err := liveCheck()
 	if err != nil {
 		return 0, 0, nil, err

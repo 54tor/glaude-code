@@ -31,6 +31,7 @@ func trashSessionPath(id string) string { return filepath.Join(sessionTrashDir()
 
 // trashSessions déplace les sessions dans la corbeille. Les sessions ouvertes sont épargnées (comme pour la suppression).
 func trashSessions(items []item) (movedCount, spared int, err error) {
+	defer forgetSessions()
 	live, err := liveCheck()
 	if err != nil {
 		return 0, 0, err
@@ -158,6 +159,7 @@ func expireTrashLoop(every time.Duration) {
 
 // restoreTrashed remet une session à sa place ; refuse d'écraser un transcript du même nom.
 func restoreTrashed(id string) error {
+	defer forgetSessions()
 	meta, found := readTrashMeta(id)
 	if !found {
 		return terr("srv.trashsessions.sessionIntrouvableDansLa")
