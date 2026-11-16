@@ -13,6 +13,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Renommer une session ouverte depuis gld n'exige plus de la fermer : `/rename <titre>` lui est envoyé dès qu'elle est au repos.
 
 ### Corrigé
+- La barre latérale, les snippets, les commandes slash et la configuration ne se figent plus : les milliers de dossiers `-tmp-…` laissés sous `projects/` par des outils éphémères coûtaient un parcours du disque chacun. gld retire désormais ceux qui n'ont aucun fichier, toutes les 6 h, et garde plus longtemps en mémoire les noms introuvables.
 - Une session qui attend la fin d'un sous-agent garde le ventilateur au lieu de la tasse de café. Les hooks de suivi rendent le signal fiable ; sans eux, gld lit les fichiers du sous-agent.
 - Une session « en attente » ne garde plus le ventilateur qui tourne dans la barre latérale quand claude la déclare occupée alors que son écran est au repos.
 - La fenêtre de nouvelle session se ferme au lancement sans attendre le rechargement de la liste ; une session mise à la corbeille disparaît de la liste immédiatement.
