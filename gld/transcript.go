@@ -26,7 +26,7 @@ const (
 	previewMaxRunes       = 300
 	toolResultMaxRunes    = 1500
 	recentPromptCount     = 3
-	decodeCacheMax        = 5000
+	decodeCacheMax        = 20000
 	detailCacheMax        = 64
 	sessionIDPrefixLength = 8
 )
@@ -306,6 +306,10 @@ var (
 	decodeMu    sync.Mutex
 	decodeCache = map[string]decoded{}
 	decodeTTL   = 2 * time.Minute
+	// decodeMissTTL : un dossier introuvable (projet supprimé, /tmp éphémère) a peu de chances de réapparaître ; sans ce délai
+	// long, des milliers de noms morts relançaient chacun un parcours de « / » toutes les 2 minutes.
+	decodeMissTTL = 30 * time.Minute
+	decodeFlight  singleflight.Group
 )
 
 type decoded struct {
@@ -317,17 +321,40 @@ func decodeDir(name string) string {
 	decodeMu.Lock()
 	cachedEntry, found := decodeCache[name]
 	decodeMu.Unlock()
-	if found && time.Since(cachedEntry.at) < decodeTTL {
+	ttl := decodeTTL
+	if cachedEntry.path == "" {
+		ttl = decodeMissTTL
+	}
+	if found && time.Since(cachedEntry.at) < ttl {
 		return cachedEntry.path
 	}
-	decodedPath := decodeDirWalk(name)
-	decodeMu.Lock()
-	if len(decodeCache) > decodeCacheMax {
-		clear(decodeCache)
+	walked, _, _ := decodeFlight.Do(name, func() (any, error) {
+		decodedPath := decodeDirWalk(name)
+		decodeMu.Lock()
+		if len(decodeCache) > decodeCacheMax {
+			clear(decodeCache)
+		}
+		decodeCache[name] = decoded{decodedPath, time.Now()}
+		decodeMu.Unlock()
+		return decodedPath, nil
+	})
+	return walked.(string)
+}
+
+// encodeDirName : le nom de dossier tel que Claude Code l'encode, chaque caractère hors [A-Za-z0-9] devenant « - ». Sans
+// regexp : decodeDirWalk l'appelle pour chaque entrée de chaque dossier traversé.
+func encodeDirName(name string) string {
+	var encoded strings.Builder
+	encoded.Grow(len(name))
+	for _, character := range name {
+		isAlnum := character >= 'a' && character <= 'z' || character >= 'A' && character <= 'Z' || character >= '0' && character <= '9'
+		if isAlnum {
+			encoded.WriteRune(character)
+		} else {
+			encoded.WriteByte('-')
+		}
 	}
-	decodeCache[name] = decoded{decodedPath, time.Now()}
-	decodeMu.Unlock()
-	return decodedPath
+	return encoded.String()
 }
 
 // skipRoots : racines que decodeDirWalk ne descend jamais. Pseudo-systèmes de fichiers (/proc, /sys, boucles de liens
@@ -347,7 +374,7 @@ func decodeDirWalk(name string) string {
 			if !entry.IsDir() {
 				continue
 			}
-			encodedName := nonAlnum.ReplaceAllString(entry.Name(), "-")
+			encodedName := encodeDirName(entry.Name())
 			childPath := filepath.Join(dirPath, entry.Name())
 			if skipRoots[childPath] {
 				continue
