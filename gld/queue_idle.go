@@ -64,8 +64,12 @@ func idleByScreen(sessionID string, now time.Time) bool {
 	return now.Sub(firstSeen) >= idleScreenSettle
 }
 
-// hasRunningSubagent : signal des fichiers (meta.json + transcript du sous-agent), plus stable que le texte de l'écran.
+// hasRunningSubagent : les hooks de Claude Code d'abord ; à défaut (session ouverte avant leur installation), les fichiers
+// du sous-agent (meta.json + transcript), plus stables que le texte de l'écran.
 var hasRunningSubagent = func(sessionID string) bool {
+	if running, known := subagentsFromEvents(readStateEvents(), sessionID); known {
+		return running
+	}
 	subagentDirs, _ := filepath.Glob(filepath.Join(root, "*", sessionID, "subagents"))
 	for _, subagentDir := range subagentDirs {
 		for _, subagent := range subLives(subagentDir) {

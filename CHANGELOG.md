@@ -11,6 +11,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Renommer une session ouverte depuis gld n'exige plus de la fermer : `/rename <titre>` lui est envoyé dès qu'elle est au repos.
 
 ### Corrigé
+- Une session qui attend la fin d'un sous-agent garde le ventilateur au lieu de la tasse de café. Le hook `gld-web _event` (SubagentStart, SubagentStop, Stop, SessionStart, SessionEnd) rend le signal fiable ; sans lui, gld lit les fichiers du sous-agent.
 - Une session « en attente » ne garde plus le ventilateur qui tourne dans la barre latérale quand claude la déclare occupée alors que son écran est au repos.
 - La fenêtre de nouvelle session se ferme au lancement sans attendre le rechargement de la liste ; une session mise à la corbeille disparaît de la liste immédiatement.
 

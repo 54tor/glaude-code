@@ -55,6 +55,10 @@ func dispatchCLI(argv []string) (exitCode int, handled bool) {
 			cliMode = true
 			return runLoaded(os.Stdin), true
 		}
+		if name == "_event" { // hooks de sous-agents de Claude Code (sessionevents.go)
+			cliMode = true
+			return runEvent(os.Stdin), true
+		}
 		if name == "_guard" && len(args) <= 1 { // hook PreToolUse de Claude Code (auth_guard.go)
 			cliMode = true
 			return runGuard(os.Stdin, os.Stderr, strings.Join(args, "")), true
