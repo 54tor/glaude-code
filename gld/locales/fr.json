@@ -386,7 +386,6 @@
   "srv.routes_sessions.renommee": "Renommée : {{.A1}}",
   "srv.routes_sessions.reouvertureEchouee": "{{.A1}} session(s) déplacée(s) mais non rouverte(s)",
   "srv.routes_sessions.sessionFermee": "Session fermée",
-  "srv.routes_sessions.sessionOuverteRenommeLa": "session ouverte : renomme-la avec /rename dans Claude, ou ferme-la d'abord",
   "srv.routes_sessions.sessionSReassigneeS": "{{.A1}} session(s) réassignée(s) vers {{.A2}}",
   "srv.routes_sessions.titreAutomatiqueImpossible": "titre automatique impossible : {{.A1}}",
   "srv.routes_sessions.titreOuSessionInvalide": "titre ou session invalide",

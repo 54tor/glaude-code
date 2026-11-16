@@ -4,6 +4,16 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ## [Non publié]
 
+### Ajouté
+- Une session titrée automatiquement est re-titrée par `/rename` tous les 5 messages. Un titre posé à la main, depuis gld ou avec `/rename` dans Claude, la retire du suivi : il n'est plus jamais remplacé.
+
+### Modifié
+- Renommer une session ouverte depuis gld n'exige plus de la fermer : `/rename <titre>` lui est envoyé dès qu'elle est au repos.
+
+### Corrigé
+- Une session « en attente » ne garde plus le ventilateur qui tourne dans la barre latérale quand claude la déclare occupée alors que son écran est au repos.
+- La fenêtre de nouvelle session se ferme au lancement sans attendre le rechargement de la liste ; une session mise à la corbeille disparaît de la liste immédiatement.
+
 ## [0.15.1] - 2026-11-16
 
 ### Modifié

@@ -260,6 +260,8 @@ type Store struct {
 	Projects []Project `json:"projects"`
 	// Dirs : dossiers de travail ajoutés à la main, qui n'ont pas (encore) de session : on y lance un prompt sans mémoire Claude.
 	Dirs []string `json:"dirs"`
+	// AutoTitles : sessions titrées par /rename automatique, donc re-titrables ; un titre posé à la main les en retire.
+	AutoTitles map[string]AutoTitle `json:"autoTitles,omitempty"`
 }
 
 var groupsMu sync.Mutex

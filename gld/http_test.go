@@ -210,7 +210,10 @@ func TestHTTPSessions(t *testing.T) {
 	status(t, handler, "PATCH", "/v1/sessions/"+id1+"?dir=-p", `{"title":"  "}`, 400)
 	status(t, handler, "PATCH", "/v1/sessions/"+id1+"?dir=-p", `{"title":"`+strings.Repeat("é", 201)+`"}`, 400)
 	agents(t, id1)
-	v1err(t, handler, "PATCH", "/v1/sessions/"+id1+"?dir=-p", `{"title":"x"}`, 409, "session ouverte")
+	previousGiveUp := liveRenameGiveUp
+	liveRenameGiveUp = time.Nanosecond // le /rename d'une session ouverte part au repos : ici il abandonne au premier tick, sans toucher à tmux
+	status(t, handler, "PATCH", "/v1/sessions/"+id1+"?dir=-p", `{"title":"x"}`, 200)
+	liveRenameGiveUp = previousGiveUp
 	t.Setenv("FAKE_AGENTS", "illisible")
 	v1err(t, handler, "PATCH", "/v1/sessions/"+id1+"?dir=-p", `{"title":"x"}`, 503, "action refusée")
 	t.Setenv("FAKE_AGENTS", "[]")

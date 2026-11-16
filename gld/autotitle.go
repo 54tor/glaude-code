@@ -65,18 +65,20 @@ func titleLoop(every time.Duration) {
 			return
 		case <-ticker.C:
 			flushTitles()
+			autoRenameTick()
 		}
 	}
 }
 
-const liveRenameGiveUp = 10 * time.Minute
+var liveRenameGiveUp = 10 * time.Minute
 
 var (
 	liveRenamed   = map[string]bool{}
 	liveRenamedMu sync.Mutex
 )
 
-// renameLive envoie « /rename » (titre auto de Claude Code) dans une session ouverte, une fois par session, dès qu'elle est au repos.
+// renameLive envoie « /rename » (titre auto de Claude Code) dans une session ouverte, une fois par session, dès qu'elle est au repos ;
+// autoRenameTick relance ensuite le titre tous les autoRenameEveryInputs messages.
 func renameLive(sessionID, transcriptPath string) {
 	liveRenamedMu.Lock()
 	alreadyScheduled := liveRenamed[sessionID]
@@ -89,13 +91,18 @@ func renameLive(sessionID, transcriptPath string) {
 		forgetLiveRename(sessionID)
 		return
 	}
+	sendWhenIdle(sessionID, "/rename", func() { markAutoTitled(sessionID, transcriptPath) }, func() { forgetLiveRename(sessionID) })
+}
+
+// sendWhenIdle envoie command dans la session ouverte dès qu'elle est au repos ; onSent après un envoi réussi, onGiveUp à l'abandon.
+func sendWhenIdle(sessionID, command string, onSent, onGiveUp func()) {
+	deadline := time.Now().Add(liveRenameGiveUp)
 	go func() {
-		deadline := time.Now().Add(liveRenameGiveUp)
 		ticker := time.NewTicker(queueTick)
 		defer ticker.Stop()
 		for now := range ticker.C {
 			if now.After(deadline) || homeCtx.Err() != nil {
-				forgetLiveRename(sessionID) // abandon : une prochaine demande pourra réessayer ; après un envoi, on garde la marque
+				onGiveUp() // abandon : une prochaine demande pourra réessayer ; après un envoi, on garde la marque
 				return
 			}
 			sentMu.Lock()
@@ -107,10 +114,11 @@ func renameLive(sessionID, transcriptPath string) {
 			if mustWait || !isOpen || isAsking || !isIdle {
 				continue
 			}
-			sendErr := sendFn(sessionID, "/rename")
+			sendErr := sendFn(sessionID, command)
 			journal("auto-rename live %s : %v", sessionID, errOr(sendErr))
 			if sendErr == nil {
 				markSent(sessionID)
+				onSent()
 			}
 			return
 		}

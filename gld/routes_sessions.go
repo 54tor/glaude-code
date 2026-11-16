@@ -532,7 +532,20 @@ func routesSessions(mux *http.ServeMux) {
 			return
 		}
 		if liveIDs[sessionID] {
-			writeErr(responseWriter, http.StatusConflict, "conflict", L("srv.routes_sessions.sessionOuverteRenommeLa"))
+			// Une session ouverte réécrit son titre : on passe par son propre /rename, envoyé dès qu'elle est au repos.
+			command, onSent := "/rename "+title, func() {}
+			if body.Auto {
+				command, onSent = "/rename", func() { markAutoTitled(sessionID, transcriptPath) }
+			} else {
+				protectManualTitle(sessionID)
+			}
+			sendWhenIdle(sessionID, command, onSent, func() {})
+			journal("rename live %s « %s »", sessionID, title)
+			if body.Auto {
+				writeJSON(responseWriter, 200, map[string]any{"title": "", "message": ""})
+				return
+			}
+			writeJSON(responseWriter, 200, map[string]any{"title": title, "message": L("srv.routes_sessions.renommee", "A1", title)})
 			return
 		}
 		if body.Auto && body.Keep && hasTitle(transcriptPath) {
@@ -545,6 +558,9 @@ func routesSessions(mux *http.ServeMux) {
 				writeErr(responseWriter, http.StatusBadGateway, "upstream_failed", L("srv.routes_sessions.titreAutomatiqueImpossible", "A1", titleErr.Error()))
 				return
 			}
+		}
+		if !body.Auto {
+			protectManualTitle(sessionID)
 		}
 		err := setTitle(transcriptPath, sessionID, title)
 		journal("rename %s « %s » : %v", sessionID, title, errOr(err))
