@@ -125,6 +125,7 @@ func main() {
 	if _, hooksErr := syncSessionHooks(sessionHooksOn()); hooksErr != nil { // non bloquant : sans hooks, gld lit les fichiers des sous-agents
 		fmt.Fprintln(os.Stderr, tr(cliLang(), "cli.main.hooksFailed", map[string]any{"A1": hooksErr.Error()}))
 	}
+	startPprof()
 	tokenPrincipal = tokenForChildren(token, generated)
 	hostToken = token // obligatoire hors localhost ; en local, exigé dès que GLD_WEB_TOKEN est fixé (machine partagée)
 	rootHandler := handler()

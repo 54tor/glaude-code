@@ -5,6 +5,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 ## [Non publié]
 
 ### Ajouté
+- `GLD_PPROF_ADDR=127.0.0.1:6060` ouvre le profilage Go (`/debug/pprof/`) sur une adresse de boucle locale, hors du serveur public ; sans la variable, rien n'est ouvert.
 - Réglages > Claude : un interrupteur « Hooks de suivi des sous-agents » installe au démarrage les hooks `gld-web _event` dans le `settings.json` de Claude, et les retire quand on le coupe, sans toucher aux hooks de l'utilisateur.
 - Une session titrée automatiquement est re-titrée par `/rename` tous les 5 messages. Un titre posé à la main, depuis gld ou avec `/rename` dans Claude, la retire du suivi : il n'est plus jamais remplacé.
 
