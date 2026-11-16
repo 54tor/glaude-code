@@ -74,6 +74,7 @@ var routeRights = map[string]Right{
 	"GET /v1/git/status": RightMemRead, "GET /v1/git/changes": RightMemRead, "GET /v1/git/remotes": RightMemRead,
 	"GET /v1/update": RightMemRead, "GET /v1/cleanup-warning": RightMemRead, "GET /v1/tabs": RightMemRead, "GET /v1/keepwarm": RightMemRead,
 	"GET /v1/builtin-rules": RightMemRead, "PUT /v1/builtin-rules": RightConfigWrite,
+	"GET /v1/session-hooks": RightMemRead, "PUT /v1/session-hooks": RightConfigWrite,
 	"PUT /v1/tabs": RightMemWrite, "DELETE /v1/tabs/{tab}": RightMemWrite, "PUT /v1/vgroups": RightMemWrite,
 
 	// Réglages et skills : font exécuter du code par Claude Code.

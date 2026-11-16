@@ -122,6 +122,9 @@ func main() {
 	if _, rulesErr := installBuiltinRules(); rulesErr != nil { // non bloquant : le serveur marche sans, seules les règles manquent
 		fmt.Fprintln(os.Stderr, tr(cliLang(), "cli.main.rulesFailed", map[string]any{"A1": rulesErr.Error()}))
 	}
+	if _, hooksErr := syncSessionHooks(sessionHooksOn()); hooksErr != nil { // non bloquant : sans hooks, gld lit les fichiers des sous-agents
+		fmt.Fprintln(os.Stderr, tr(cliLang(), "cli.main.hooksFailed", map[string]any{"A1": hooksErr.Error()}))
+	}
 	tokenPrincipal = tokenForChildren(token, generated)
 	hostToken = token // obligatoire hors localhost ; en local, exigé dès que GLD_WEB_TOKEN est fixé (machine partagée)
 	rootHandler := handler()
@@ -373,6 +376,7 @@ func handler() http.Handler {
 	routesPush(mux)
 	routesKeepWarm(mux)
 	routesBuiltinRules(mux)
+	routesSessionHooks(mux)
 	routesSkills(mux)
 	routesBackup(mux)
 	routesIDE(mux)

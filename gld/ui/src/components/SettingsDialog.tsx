@@ -130,6 +130,17 @@ export function ClaudeOptions({ args, setArgs, choice, setChoice }: Pick<UiSetti
   useEffect(() => {
     api.builtinRules().then((rulesResponse) => setRules(rulesResponse.enabled), () => {})
   }, [])
+  const [hooks, setHooks] = useState<boolean | null>(null)
+  useEffect(() => {
+    api.sessionHooks().then((hooksResponse) => setHooks(hooksResponse.enabled), () => {})
+  }, [])
+  const pickHooks = async (isEnabled: boolean) => {
+    try {
+      setHooks((await api.setSessionHooks(isEnabled)).enabled)
+    } catch (error) {
+      toast.error(errMsg(error))
+    }
+  }
   const pickRules = async (isEnabled: boolean) => {
     try {
       setRules((await api.setBuiltinRules(isEnabled)).enabled)
@@ -164,6 +175,11 @@ export function ClaudeOptions({ args, setArgs, choice, setChoice }: Pick<UiSetti
         t("config.dialog.gldRulesTitle"),
         t("config.dialog.gldRulesHint"),
         <Switch checked={rules ?? false} disabled={rules === null} onCheckedChange={pickRules} aria-label={t("config.dialog.gldRulesTitle")} />
+      )}
+      {section(
+        t("config.dialog.sessionHooksTitle"),
+        t("config.dialog.sessionHooksHint"),
+        <Switch checked={hooks ?? false} disabled={hooks === null} onCheckedChange={pickHooks} aria-label={t("config.dialog.sessionHooksTitle")} />
       )}
     </section>
   )

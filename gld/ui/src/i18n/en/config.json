@@ -423,6 +423,8 @@
       "argsPlaceholder": "e.g. --dangerously-skip-permissions",
       "gldRulesTitle": "gld rules",
       "gldRulesHint": "Passes the rules shipped by gld (output format, questions, long files, todos) as a system prompt to the sessions gld launches only. Applies from the next session.",
+      "sessionHooksTitle": "Subagent tracking hooks",
+      "sessionHooksHint": "Adds the SubagentStart, SubagentStop, Stop, SessionStart and SessionEnd hooks to Claude's settings.json, calling gld without slowing Claude, to know when a subagent is running. Turned off, only gld's own hooks are removed.",
       "modelTitle": "Model and effort for new prompts",
       "modelHint": "Offered by default when resuming with a message, in a new session or in chat; adjustable on each prompt.",
       "theme": "Theme",
