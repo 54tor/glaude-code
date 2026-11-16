@@ -42,11 +42,13 @@ export function useAppData() {
   const [denied, setDenied] = useState(false) // mode multi-utilisateur sans le droit sessions_read sur ce home : rien à afficher, rien à signaler
   const lastStamp = useRef(0)
   const latestRequest = useRef(0)
+  const latestApplied = useRef(0)
   const reload = useCallback(async () => {
     const requestNumber = ++latestRequest.current
     try {
       const [freshData, freshSnippets] = await Promise.all([api.data(), api.snippets()])
-      if (requestNumber !== latestRequest.current) return // une relecture plus récente est partie : cette réponse est périmée
+      if (requestNumber < latestApplied.current) return // une relecture plus récente est déjà appliquée : celle-ci est périmée
+      latestApplied.current = requestNumber
       setData(withoutClosing(freshData))
       setSnips(freshSnippets)
       setNow(Date.now() / 1000)
