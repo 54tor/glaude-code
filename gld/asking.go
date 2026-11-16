@@ -40,7 +40,7 @@ func screenAsks(screen string) bool {
 	if len(lines) > askDialogFootLines {
 		foot = strings.Join(lines[len(lines)-askDialogFootLines:], "\n")
 	}
-	if askBusy.MatchString(foot) || !askFoot.MatchString(foot) {
+	if askBusy.MatchString(foot) || !askFoot.MatchString(foot) || hasEmptyPrompt(lines) {
 		return false
 	}
 	optionCount := 0
@@ -50,6 +50,18 @@ func screenAsks(screen string) bool {
 		}
 	}
 	return optionCount >= askMinimumOptions
+}
+
+// hasEmptyPrompt : un dialogue remplace la zone de saisie ; un prompt « ❯ » vide en bas d'écran prouve que la session est au repos,
+// même si le dernier message cite « do you want to » et une liste numérotée.
+func hasEmptyPrompt(lines []string) bool {
+	firstLineChecked := max(0, len(lines)-askDialogFootLines)
+	for _, line := range lines[firstLineChecked:] {
+		if idlePrompt.MatchString(line) {
+			return true
+		}
+	}
+	return false
 }
 
 // askingSessions : les ids des sessions ouvertes dans tmux qui attendent une réponse. Résultat gardé 3 s : la liste des sessions
