@@ -218,3 +218,14 @@ describe("Composer, question à cases avec saisie libre", () => {
     expect(champRouvert.value).toBe("")
   })
 })
+
+describe("Composer, mode écran brut", () => {
+  it("n'affiche pas la carte question web tant que l'écran brut est ouvert", async () => {
+    mount([], false, ECRAN_CASES_A_COCHER)
+    await screen.findByRole("button", { name: /Rouge/ })
+    fireEvent.click(screen.getByRole("button", { name: i18n.t("conversation.composer.rawScreen") }))
+    await waitFor(() => expect(screen.queryByRole("button", { name: /Rouge/ })).toBeNull())
+    fireEvent.click(screen.getByRole("button", { name: i18n.t("conversation.composer.rawScreen") }))
+    await screen.findByRole("button", { name: /Rouge/ })
+  })
+})

@@ -878,7 +878,7 @@ function TerminalPanel({ id, onAsk, onLead, onSent, extra }: { id: string; onAsk
     ask.current?.(asking)
     return () => ask.current?.(false)
   }, [asking])
-  const leadMarkdown = prompt?.context && prompt.contextIsMessage ? contextToMarkdown(prompt.context) : null
+  const leadMarkdown = !debug && prompt?.context && prompt.contextIsMessage ? contextToMarkdown(prompt.context) : null
   const lead = useRef(onLead)
   useEffect(() => {
     lead.current = onLead
@@ -889,7 +889,7 @@ function TerminalPanel({ id, onAsk, onLead, onSent, extra }: { id: string; onAsk
   }, [leadMarkdown])
   return (
     <div className="space-y-2">
-      {prompt && questionCollapsed && (
+      {prompt && !debug && questionCollapsed && (
         <button
           type="button"
           onClick={() => setQuestionCollapsed(false)}
@@ -901,7 +901,7 @@ function TerminalPanel({ id, onAsk, onLead, onSent, extra }: { id: string; onAsk
           <span className="min-w-0 truncate font-medium">{prompt.question || t("conversation.composer.answerExpected")}</span>
         </button>
       )}
-      {prompt && !questionCollapsed && (
+      {prompt && !debug && !questionCollapsed && (
         <div className="max-h-[min(65dvh,36rem)] overflow-y-auto overscroll-contain rounded-lg border border-warning/50 bg-warning/10 px-3 py-2 text-sm">
           {prompt.tabs && prompt.tabs.length > 1 && (
             <p className="mb-1.5 flex flex-wrap items-center gap-1 text-xs" aria-label={t("conversation.composer.tabsAria")}>
