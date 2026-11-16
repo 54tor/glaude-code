@@ -86,3 +86,26 @@ func TestWaitingKnownCountsSessionWithOnlyBackgroundShellAsWaiting(t *testing.T)
 		t.Fatalf("statut shell non ramené à idle : %q", status)
 	}
 }
+
+func TestWaitingKnownCountsStuckBusySessionWhoseScreenIsIdle(t *testing.T) {
+	use(t.TempDir())
+	put(t, filepath.Join(cfgDir(), "sessions", "1.json"), fmt.Sprintf(`{"pid":%d,"sessionId":%q,"status":"busy"}`, os.Getpid(), id1), old)
+	previousTTL := agentsTTL
+	agentsTTL = time.Minute
+	agentsMu.Lock()
+	agentsOut, agentsErr, agentsAt = []byte(fmt.Sprintf(`[{"sessionId":%q,"status":"busy"}]`, id1)), nil, time.Now()
+	agentsMu.Unlock()
+	t.Cleanup(func() { agentsTTL = previousTTL; forgetAgents(); screenFn = sessionScreen })
+	idleSeenMu.Lock()
+	idleSeenAt[id1] = time.Now().Add(-idleScreenSettle)
+	idleSeenMu.Unlock()
+
+	screenFn = func(string) (string, error) { return "❯ \n", nil }
+	if waitingIDs, _ := waitingKnown(); len(waitingIDs) != 1 {
+		t.Fatalf("busy figé à l'écran au repos non compté en attente : %v", waitingIDs)
+	}
+	screenFn = func(string) (string, error) { return "esc to interrupt\n", nil }
+	if waitingIDs, _ := waitingKnown(); len(waitingIDs) != 0 {
+		t.Fatalf("vrai busy compté en attente : %v", waitingIDs)
+	}
+}
