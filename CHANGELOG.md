@@ -4,6 +4,11 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ## [Non publié]
 
+## [0.15.1] - 2026-11-16
+
+### Modifié
+- Dépendances Go (x/crypto, x/sys, x/text, sqlite…) et npm (vite, prettier, lucide-react, typescript-eslint) mises à jour vers leurs dernières versions mineures et correctifs.
+
 ## [0.15.0] - 2026-11-16
 
 ### Modifié
@@ -761,7 +766,8 @@ Première version : `gld`, interface web locale pour parcourir, piloter et confi
 - Terminal intégré désactivé par défaut ; lecture bornée des fichiers de commandes.
 - Refus d'agir quand les sessions ouvertes sont indéterminées.
 
-[Non publié]: https://github.com/54tor/glaude-code/compare/v0.15.0...HEAD
+[Non publié]: https://github.com/54tor/glaude-code/compare/v0.15.1...HEAD
+[0.15.1]: https://github.com/54tor/glaude-code/compare/v0.15.0...v0.15.1
 [0.15.0]: https://github.com/54tor/glaude-code/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/54tor/glaude-code/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/54tor/glaude-code/compare/v0.12.0...v0.13.0
