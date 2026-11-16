@@ -41,7 +41,7 @@ func loopbackHostOnly(next http.Handler) http.Handler {
 			host = request.Host
 		}
 		if ip := net.ParseIP(host); (ip == nil || !ip.IsLoopback()) && host != "localhost" {
-			http.Error(responseWriter, "forbidden", http.StatusForbidden)
+			writeErr(responseWriter, http.StatusForbidden, "forbidden", "loopback host required")
 			return
 		}
 		next.ServeHTTP(responseWriter, request)
