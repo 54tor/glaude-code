@@ -106,17 +106,18 @@ export function useAppActions(context: {
     const toastId = toast.loading(busy)
     const succeeded = await reportAction(run, { id: toastId, pick })
     if (succeeded && launch === "new") void watchTrust(home)
-    await reloadQuietly() // le résultat de l'action est déjà affiché ; un rechargement raté ne doit pas le masquer
     // Une session lancée met un instant à créer son transcript : on relit jusqu'à ce qu'elle apparaisse, sans retenir l'appelant
-    // (la fenêtre de saisie se ferme dès le lancement).
+    // (la fenêtre de saisie se ferme dès le lancement, sans attendre le premier rechargement).
     if (succeeded && launch) {
       void (async () => {
+        await reloadQuietly()
         for (let attempt = 0; attempt < LAUNCH_RELOAD_ATTEMPTS; attempt++) {
           await wait(LAUNCH_RELOAD_DELAY_MS)
           await reloadQuietly()
         }
       })()
     }
+    if (!(succeeded && launch)) await reloadQuietly() // le résultat de l'action est déjà affiché ; un rechargement raté ne doit pas le masquer
     return succeeded
   }
   const startSessionIn = (target: Target, prompt: string, chosen: Choice) => {
@@ -631,6 +632,8 @@ export function useAppActions(context: {
         run: async () => {
           after?.()
           unpick(items)
+          const removedIds = new Set(items.map((item) => item.id))
+          setData((currentData) => currentData && { ...currentData, groups: currentData.groups.map((folder) => ({ ...folder, sessions: folder.sessions.filter((session) => !removedIds.has(session.id)) })) }) // retrait immédiat ; le rechargement réconcilie (et rétablit si l'envoi échoue)
           let trashResult: { message: string }
           try {
             trashResult = await api.trashSessionsAdd(items)
