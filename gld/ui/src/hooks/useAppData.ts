@@ -41,9 +41,12 @@ export function useAppData() {
   const [error, setError] = useState<string | null>(null) // serveur injoignable : dit une fois, effacé dès qu'une relecture passe
   const [denied, setDenied] = useState(false) // mode multi-utilisateur sans le droit sessions_read sur ce home : rien à afficher, rien à signaler
   const lastStamp = useRef(0)
+  const latestRequest = useRef(0)
   const reload = useCallback(async () => {
+    const requestNumber = ++latestRequest.current
     try {
       const [freshData, freshSnippets] = await Promise.all([api.data(), api.snippets()])
+      if (requestNumber !== latestRequest.current) return // une relecture plus récente est partie : cette réponse est périmée
       setData(withoutClosing(freshData))
       setSnips(freshSnippets)
       setNow(Date.now() / 1000)

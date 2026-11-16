@@ -47,6 +47,27 @@ afterEach(() => {
 const flush = () => act(() => vi.advanceTimersByTimeAsync(0))
 
 describe("useAppData", () => {
+  it("ignore la réponse d'une relecture ancienne arrivée après une plus récente", async () => {
+    const pendingResponses: Array<(response: Response) => void> = []
+    const answer = (home: string) => new Response(JSON.stringify({ ...DATA, home }), { status: 200 })
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: string) => {
+        if (url === "/v1/state") return new Promise<Response>((resolve) => pendingResponses.push(resolve))
+        if (url === "/v1/snippets") return Promise.resolve(new Response(JSON.stringify(SNIPS), { status: 200 }))
+        return Promise.resolve(new Response(JSON.stringify({ stamp: 1 }), { status: 200 }))
+      })
+    )
+    const { result } = renderHook(() => useAppData())
+    await flush()
+    await act(async () => void result.current.reload())
+    await flush()
+    expect(pendingResponses).toHaveLength(2)
+    await act(async () => pendingResponses[1](answer("/récent")))
+    await act(async () => pendingResponses[0](answer("/ancien")))
+    await flush()
+    expect(result.current.data?.home).toBe("/récent")
+  })
   it("charge sessions et snippets au montage", async () => {
     server()
     const { result } = renderHook(() => useAppData())
