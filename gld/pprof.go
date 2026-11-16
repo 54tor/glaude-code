@@ -28,7 +28,22 @@ func startPprof() {
 	mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
 	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
 	mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
-	mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
-	server := &http.Server{Addr: address, Handler: mux, ReadHeaderTimeout: pprofHeaderTimeout}
+	server := &http.Server{Addr: address, Handler: loopbackHostOnly(mux), ReadHeaderTimeout: pprofHeaderTimeout}
 	go func() { journal("pprof sur http://%s/debug/pprof/ : %v", address, server.ListenAndServe()) }()
+}
+
+// loopbackHostOnly refuse une requête dont le Host n'est pas une adresse de boucle locale : une page web qui passerait par
+// un nom DNS repointé vers 127.0.0.1 (DNS rebinding) ne peut pas lire le profil.
+func loopbackHostOnly(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		host, _, err := net.SplitHostPort(request.Host)
+		if err != nil {
+			host = request.Host
+		}
+		if ip := net.ParseIP(host); (ip == nil || !ip.IsLoopback()) && host != "localhost" {
+			http.Error(responseWriter, "forbidden", http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(responseWriter, request)
+	})
 }
