@@ -49,20 +49,37 @@ const keepOutput = (runId: number, chunk: Uint8Array) => {
 
 export const listGitPushRuns = (): GitPushRun[] => currentRuns
 
-export const isGitPushRunning = (dir: string) => currentRuns.some((run) => run.dir === dir && run.status === "running")
+const queuedDirs = new Set<string>()
 
-export function startGitPush(dir: string, remote: string, branch: string) {
-  if (isGitPushRunning(dir)) return
+export const isGitPushRunning = (dir: string) => queuedDirs.has(dir) || currentRuns.some((run) => run.dir === dir && run.status === "running")
+
+function runGitPush(dir: string, remote: string, branch: string): Promise<void> {
   const runId = nextRunId++
   outputByRun.set(runId, { chunks: [], bytes: 0 })
   const openedRun: GitPushRun = { id: runId, dir, remote, branch, status: "running", isTerminalOpen: true }
   setRuns([...currentRuns.map((run) => ({ ...run, isTerminalOpen: false })), openedRun])
-  streamGitPush(dir, remote, (chunk) => keepOutput(runId, chunk))
+  return streamGitPush(dir, remote, (chunk) => keepOutput(runId, chunk))
     .then(
       (exitCode) => updateRun(runId, { status: exitCode === 0 ? "succeeded" : "failed", exitCode }),
       (pushError) => updateRun(runId, { status: "error", errorMessage: errMsg(pushError) })
     )
     .finally(refreshGit)
+}
+
+export function startGitPush(dir: string, remote: string, branch: string) {
+  void startGitPushes(dir, [remote], branch)
+}
+
+// Pousse vers plusieurs remotes l'un après l'autre (le serveur sérialise un dépôt) ; un échec n'arrête pas les suivants.
+export async function startGitPushes(dir: string, remotes: string[], branch: string) {
+  if (isGitPushRunning(dir)) return
+  queuedDirs.add(dir)
+  try {
+    for (const remote of remotes) await runGitPush(dir, remote, branch)
+  } finally {
+    queuedDirs.delete(dir)
+    runSubscribers.forEach((subscriber) => subscriber())
+  }
 }
 
 // Un seul terminal est ouvert à la fois : en ouvrir un referme les autres.

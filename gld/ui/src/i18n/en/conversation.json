@@ -628,7 +628,18 @@
       "newBranch": "new branch",
       "position": "↑{{ahead}} ↓{{behind}}",
       "reading": "Reading remotes…",
-      "none": "No remote configured"
+      "none": "No remote configured",
+      "dialogTitle": "Push “{{branch}}”",
+      "dialogHint": "Tick the remotes to update. Listed commits are the ones they are missing.",
+      "loadingCommits": "Reading commits…",
+      "upToDate": "up to date",
+      "commitCount_one": "{{count}} commit to push",
+      "commitCount_other": "{{count}} commits to push",
+      "moreCommits": "… and {{count}} more",
+      "pushSelected_one": "Push to {{count}} remote",
+      "pushSelected_other": "Push to {{count}} remotes",
+      "cancel": "Cancel",
+      "previewFailed": "Commit preview unavailable"
     },
     "guest": {
       "title": "Shared session",

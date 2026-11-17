@@ -197,6 +197,8 @@ export type GitState = { branch: string; detached?: boolean; upstream: boolean; 
 // Maintien au chaud d'une session (keepwarm.go) : pings automatiques, comptés et plafonnés.
 export type WarmState = { dir: string; on: boolean; pings: number; max: number; lastPing: number; note?: string }
 export type GitRemote = { name: string; url: string }
+export type UnpushedCommit = { hash: string; subject: string; date: string }
+export type RemoteUnpushed = { name: string; total: number; commits: UnpushedCommit[] }
 export type GitChange = { path: string; status: string; from?: string } // status : « XY » comme git status --short
 // Dossiers de configuration Claude (homes.go) : current "" = celui du processus principal (main).
 // main "" et mainId : mode multi-utilisateur, le principal sans droit dessus ; id : clé des droits, connue du serveur.
@@ -262,6 +264,7 @@ export const api = {
   notesSent: (key: string) => http.get<{ sent: SentNote[] }>(`/notes/sent${qs({ key })}`),
   trustPending: () => http.get<{ dirs: string[] }>("/trust/pending"),
   gitRemotes: (dir: string) => http.get<{ remotes: GitRemote[] }>(`/git/remotes${qs({ dir })}`),
+  gitUnpushed: (dir: string) => http.get<{ remotes: RemoteUnpushed[] }>(`/git/unpushed${qs({ dir })}`),
   gitStatus: () => http.get<{ status: Record<string, GitState>; repos: Record<string, string[]> }>("/git/status"),
   snippets: () => http.get<{ dir: string; files: Snippet[]; scopes: SnipScope[] }>("/snippets"),
   snippet: (key: string) => http.get<{ text: string; missing?: boolean }>(`/snippets/${seg(key)}`),
