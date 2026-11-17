@@ -10,10 +10,13 @@ const base = (path: string) => path.slice(path.lastIndexOf("/") + 1)
 export function Tabs({ tabs, active, onFocus, onClose }: { tabs: Tab[]; active: string; onFocus(path: string): void; onClose(path: string): void }) {
   const { t } = useTranslation()
   const box = useRef<HTMLDivElement>(null)
-  const fromKeyboard = useRef(false) // le focus ne suit l'onglet actif que si le changement vient du clavier
+  // Le focus ne suit l'onglet actif que si le changement vient du clavier ; la demande n'est consommée que lorsque l'onglet actif ou le nombre d'onglets a changé depuis la touche (une exécution antérieure de l'effet ne doit pas l'avaler).
+  const keyboardRequest = useRef<{ active: string; count: number } | null>(null)
   useEffect(() => {
-    if (fromKeyboard.current) box.current?.querySelector<HTMLElement>(`[data-path="${CSS.escape(active)}"]`)?.focus()
-    fromKeyboard.current = false
+    const request = keyboardRequest.current
+    if (!request || (request.active === active && request.count === tabs.length)) return
+    keyboardRequest.current = null
+    box.current?.querySelector<HTMLElement>(`[data-path="${CSS.escape(active)}"]`)?.focus()
   }, [active, tabs.length])
   // Activation automatique : la flèche choisit et affiche l'onglet. Suppr ferme l'onglet qui a le focus.
   const onKeyDown = (event: KeyboardEvent, tabIndex: number) => {
@@ -28,7 +31,7 @@ export function Tabs({ tabs, active, onFocus, onClose }: { tabs: Tab[]; active: 
     }
     if (!actions[event.key]) return
     event.preventDefault()
-    fromKeyboard.current = true
+    keyboardRequest.current = { active, count: tabs.length }
     actions[event.key]()
   }
   return (
