@@ -85,6 +85,7 @@
       "downloadDoc": "Download the file",
       "docDescription": "Markdown document preview",
       "imageAlt": "Conversation image",
+      "attachment": "Attachment ({{extension}})",
       "interrupted": "Interrupted by the user",
       "interruptedTool": "Interrupted by the user during a tool call",
       "askAnswered": "Answers given",

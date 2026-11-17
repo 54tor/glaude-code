@@ -3,7 +3,7 @@ import { memo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
-import { Check, ChevronRight, CornerDownRight, Download, ExternalLink, MessageCircleQuestion, OctagonX, Wrench } from "lucide-react"
+import { Check, ChevronRight, CornerDownRight, Download, ExternalLink, MessageCircleQuestion, OctagonX, Paperclip, Wrench } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -52,7 +52,8 @@ const HOME_PREFIX = /(^|[\s@("'`])(?:\/home\/[^/\s]+|\/Users\/[^/\s]+|[A-Za-z]:[
 export const hideHome = (text: string) => text.replace(HOME_PREFIX, "$1~")
 
 // Image déposée par l'interface (« @/…/.claude/gld-web-images/<nom> ») : affichée au lieu du chemin, relue par son seul nom (GET /v1/sessions/{id}/conversation/uploads/{up}).
-export const UPLOADED = /@[^\s@]{0,300}\/gld-web-images\/([A-Za-z0-9][\w.-]*\.(?:png|jpe?g|gif|webp))/g
+export const UPLOADED = /@[^\s@]{0,300}\/gld-web-images\/([A-Za-z0-9][\w.-]*\.[A-Za-z0-9]{1,8})/g
+const UPLOADED_IMAGE = /\.(?:png|jpe?g|gif|webp)$/i
 
 // Texte tapé par l'utilisateur : affiché tel quel, jamais interprété comme du Markdown (images distantes, liens, mise en forme).
 function PlainText({ t: text }: { t: string }) {
@@ -71,13 +72,23 @@ function UserText({ t: text, conv }: { t: string; conv?: Conv }) {
     for (const uploadMatch of markdownText.matchAll(UPLOADED)) {
       const before = markdownText.slice(from, uploadMatch.index).trim()
       if (before) parts.push(<PlainText key={`${key}t${from}`} t={before} />)
+      from = uploadMatch.index + uploadMatch[0].length
+      if (!UPLOADED_IMAGE.test(uploadMatch[1])) {
+        const extension = uploadMatch[1].slice(uploadMatch[1].lastIndexOf(".") + 1).toUpperCase()
+        parts.push(
+          <span key={`${key}f${uploadMatch.index}`} className="my-1 flex w-fit items-center gap-1.5 rounded-md border bg-muted/30 px-2 py-1 text-xs">
+            <Paperclip className="size-3.5" aria-hidden />
+            {t("conversation.message.attachment", { extension })}
+          </span>
+        )
+        continue
+      }
       const src = v1(`/sessions/${seg(conv.id)}/conversation/uploads/${seg(uploadMatch[1])}${qs({ dir: conv.dir })}`)
       parts.push(
         <ImageModal key={`${key}i${uploadMatch.index}`} src={src} className="my-1 block w-fit">
           <img src={src} loading="lazy" alt={t("conversation.message.imageAlt")} className="max-h-80 max-w-full rounded-lg border bg-muted/30 object-contain" />
         </ImageModal>
       )
-      from = uploadMatch.index + uploadMatch[0].length
     }
     const rest = markdownText.slice(from).trim()
     if (rest) parts.push(<PlainText key={`${key}r`} t={rest} />)

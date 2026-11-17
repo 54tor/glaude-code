@@ -12,3 +12,10 @@ describe("UPLOADED", () => {
     expect(performance.now() - t0).toBeLessThan(500)
   })
 })
+
+describe("UPLOADED fichiers joints", () => {
+  it("reconnaît un fichier non image", () => {
+    const regExpExecArrays = [..."@~/.claude/gld-web-images/20261117-231631-eff8f81e.md".matchAll(UPLOADED)]
+    expect(regExpExecArrays.map((regExpExecArray) => regExpExecArray[1])).toEqual(["20261117-231631-eff8f81e.md"])
+  })
+})

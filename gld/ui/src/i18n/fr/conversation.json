@@ -85,6 +85,7 @@
       "downloadDoc": "Télécharger le fichier",
       "docDescription": "Aperçu du document Markdown",
       "imageAlt": "Image de la conversation",
+      "attachment": "Pièce jointe ({{extension}})",
       "interrupted": "Interrompu par l'utilisateur",
       "interruptedTool": "Interrompu par l'utilisateur pendant un appel d'outil",
       "askAnswered": "Réponses données",
