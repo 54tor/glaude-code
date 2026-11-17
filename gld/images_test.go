@@ -181,3 +181,26 @@ func TestUploadImageConfinee(t *testing.T) {
 		}
 	}
 }
+
+func TestUploadTexteConfine(t *testing.T) {
+	use(t.TempDir())
+	cheminMarkdown, erreur := saveBlob([]byte("# titre\n"), ".md", "")
+	if erreur != nil {
+		t.Fatal(erreur)
+	}
+	contenuObtenu, erreur := uploadText(filepath.Base(cheminMarkdown))
+	if erreur != nil || string(contenuObtenu) != "# titre\n" {
+		t.Fatal(string(contenuObtenu), erreur)
+	}
+	dossierExterieur := t.TempDir()
+	os.WriteFile(filepath.Join(dossierExterieur, "secret.txt"), []byte("secret"), 0o600)
+	os.Symlink(filepath.Join(dossierExterieur, "secret.txt"), filepath.Join(imagesDir(), "lien.txt"))
+	os.WriteFile(filepath.Join(imagesDir(), "binaire.txt"), []byte("a\x00b"), 0o600)
+	os.WriteFile(filepath.Join(imagesDir(), "invalide.md"), []byte{0xff, 0xfe, 'a'}, 0o600)
+	os.WriteFile(filepath.Join(imagesDir(), "autre.png"), []byte("texte"), 0o600)
+	for _, nom := range []string{"lien.txt", "binaire.txt", "invalide.md", "autre.png", "../secret.txt", "absent.md", ""} {
+		if _, erreur := uploadText(nom); erreur == nil {
+			t.Errorf("%q servi", nom)
+		}
+	}
+}

@@ -5,6 +5,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
@@ -19,6 +20,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 const (
@@ -226,7 +228,59 @@ func uploadImage(name string) (*os.File, string, error) {
 	return file, http.DetectContentType(head[:headLength]), nil
 }
 
+// textMax : taille maximale d'un fichier texte joint relu par l'interface.
+const textMax = 1 << 20
+
+// uploadText relit un fichier joint .md ou .txt par son seul nom ; refuse tout ce dont le contenu n'est pas du texte UTF-8 (octet nul, binaire, trop gros).
+func uploadText(name string) ([]byte, error) {
+	notFound := terr("srv.images.imageIntrouvable")
+	lowerName := strings.ToLower(name)
+	if !uploadName.MatchString(name) || (!strings.HasSuffix(lowerName, ".md") && !strings.HasSuffix(lowerName, ".txt")) {
+		return nil, notFound
+	}
+	root, err := openRootTrusted(imagesDir())
+	if err != nil {
+		return nil, notFound
+	}
+	defer root.Close()
+	file, err := root.OpenFile(name, os.O_RDONLY|oNonBlock, 0)
+	if err != nil {
+		return nil, notFound
+	}
+	defer file.Close()
+	fileInfo, err := file.Stat()
+	if err != nil || !fileInfo.Mode().IsRegular() || fileInfo.Size() > textMax {
+		return nil, notFound
+	}
+	content, err := io.ReadAll(io.LimitReader(file, textMax+1))
+	if err != nil || len(content) > textMax || !utf8.Valid(content) || bytes.IndexByte(content, 0) >= 0 {
+		return nil, notFound
+	}
+	return content, nil
+}
+
 func routesImages(mux *http.ServeMux) {
+	mux.HandleFunc("GET /v1/sessions/{id}/conversation/uploads/{up}/text", func(responseWriter http.ResponseWriter, request *http.Request) {
+		sessionID, isValid := pathID(responseWriter, request, "id")
+		if !isValid {
+			return
+		}
+		if _, exists := transcript(request.URL.Query().Get("dir"), sessionID); !exists {
+			notFound(responseWriter)
+			return
+		}
+		content, err := uploadText(request.PathValue("up"))
+		if err != nil {
+			notFound(responseWriter)
+			return
+		}
+		headers := responseWriter.Header()
+		headers.Set("Content-Type", "text/plain; charset=utf-8")
+		headers.Set("X-Content-Type-Options", "nosniff")
+		headers.Set("Content-Security-Policy", "default-src 'none'; sandbox")
+		headers.Set("Cache-Control", "private, max-age=3600")
+		responseWriter.Write(content)
+	})
 	mux.HandleFunc("GET /v1/sessions/{id}/conversation/uploads/{up}", func(responseWriter http.ResponseWriter, request *http.Request) {
 		sessionID, isValid := pathID(responseWriter, request, "id")
 		if !isValid {

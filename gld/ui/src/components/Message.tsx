@@ -60,6 +60,51 @@ function PlainText({ t: text }: { t: string }) {
   return <p className="break-words whitespace-pre-wrap">{noBreak(hideHome(text))}</p>
 }
 
+const UPLOADED_TEXT = /\.(?:md|txt)$/i
+
+// Fichier joint : une pastille ; pour un .md ou .txt, le serveur ne relit que ce dont le contenu est vraiment du texte.
+function UploadedFile({ name, conv }: { name: string; conv: Conv }) {
+  const { t } = useTranslation()
+  const [open, setOpen] = useState(false)
+  const [content, setContent] = useState<string | null>(null)
+  const extension = name.slice(name.lastIndexOf(".") + 1).toUpperCase()
+  const label = t("conversation.message.attachment", { extension })
+  if (!UPLOADED_TEXT.test(name)) {
+    return (
+      <span className="my-1 flex w-fit items-center gap-1.5 rounded-md border bg-muted/30 px-2 py-1 text-xs">
+        <Paperclip className="size-3.5" aria-hidden />
+        {label}
+      </span>
+    )
+  }
+  const flip = () => {
+    setOpen(!open)
+    if (content !== null) return
+    const fail = () => {
+      toast.error(t("conversation.message.docFail"))
+      setOpen(false)
+    }
+    authFetch(v1(`/sessions/${seg(conv.id)}/conversation/uploads/${seg(name)}/text${qs({ dir: conv.dir })}`)).then((response) => {
+      if (response.ok) return response.text().then(setContent)
+      return fail()
+    }, fail)
+  }
+  return (
+    <div className="my-1">
+      <button type="button" onClick={flip} aria-expanded={open} className="flex w-fit cursor-pointer items-center gap-1.5 rounded-md border bg-muted/30 px-2 py-1 text-xs hover:bg-muted">
+        <Paperclip className="size-3.5" aria-hidden />
+        {label}
+        <ChevronRight className={`size-3.5 transition-transform ${open ? "rotate-90" : ""}`} aria-hidden />
+      </button>
+      {open && content !== null && (
+        <div className="mt-1 max-h-96 overflow-auto rounded-lg border bg-card px-4 py-3 text-card-foreground">
+          {name.toLowerCase().endsWith(".md") ? <Markdown t={content} /> : <pre className="text-xs whitespace-pre-wrap">{content}</pre>}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function UserText({ t: text, conv }: { t: string; conv?: Conv }) {
   const { t } = useTranslation()
   const parts: React.ReactNode[] = []
@@ -74,13 +119,7 @@ function UserText({ t: text, conv }: { t: string; conv?: Conv }) {
       if (before) parts.push(<PlainText key={`${key}t${from}`} t={before} />)
       from = uploadMatch.index + uploadMatch[0].length
       if (!UPLOADED_IMAGE.test(uploadMatch[1])) {
-        const extension = uploadMatch[1].slice(uploadMatch[1].lastIndexOf(".") + 1).toUpperCase()
-        parts.push(
-          <span key={`${key}f${uploadMatch.index}`} className="my-1 flex w-fit items-center gap-1.5 rounded-md border bg-muted/30 px-2 py-1 text-xs">
-            <Paperclip className="size-3.5" aria-hidden />
-            {t("conversation.message.attachment", { extension })}
-          </span>
-        )
+        parts.push(<UploadedFile key={`${key}f${uploadMatch.index}`} name={uploadMatch[1]} conv={conv} />)
         continue
       }
       const src = v1(`/sessions/${seg(conv.id)}/conversation/uploads/${seg(uploadMatch[1])}${qs({ dir: conv.dir })}`)
