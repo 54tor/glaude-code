@@ -393,13 +393,26 @@ const LOGIN_CODE_PROMPT = /paste code here/i
 const LOGIN_URL_START = /^\s*(https:\/\/\S+)\s*$/
 const URL_CONTINUATION = /^\S+$/
 const LOGIN_MAX_DISTANCE = 14
+const LOGIN_HEADER = /^\s*Login\s*$/
+const LOGIN_CANCEL_FOOTER = /esc to cancel/i
+const LOGIN_HOSTS = ["claude.com", "claude.ai", "platform.claude.com", "console.anthropic.com"]
+// Le texte du terminal n'est pas fiable : seul un lien https vers un hôte de connexion officiel, sans identifiants, devient un bouton.
+function isOfficialLoginUrl(candidate: string): boolean {
+  try {
+    const parsed = new URL(candidate)
+    return parsed.protocol === "https:" && !parsed.username && !parsed.password && !parsed.port && LOGIN_HOSTS.includes(parsed.hostname)
+  } catch {
+    return false
+  }
+}
 export function parseLogin(screen: string): { url: string } | null {
   const lines = screen.replace(/\s+$/, "").split("\n")
   const codeLine = lines.findLastIndex((line) => LOGIN_CODE_PROMPT.test(line))
   if (codeLine < 0 || codeLine < lines.length - LOGIN_MAX_DISTANCE) return null
+  if (!lines.slice(-LOGIN_MAX_DISTANCE).some((line) => LOGIN_CANCEL_FOOTER.test(line))) return null
   const urlLine = lines.findLastIndex((line, lineIndex) => lineIndex < codeLine && LOGIN_URL_START.test(line))
-  if (urlLine < 0) return null
+  if (urlLine < 0 || !lines.slice(0, urlLine).some((line) => LOGIN_HEADER.test(line))) return null
   let url = LOGIN_URL_START.exec(lines[urlLine])![1]
   for (let lineIndex = urlLine + 1; lineIndex < codeLine && URL_CONTINUATION.test(lines[lineIndex].trim()); lineIndex++) url += lines[lineIndex].trim()
-  return { url }
+  return isOfficialLoginUrl(url) ? { url } : null
 }

@@ -562,7 +562,7 @@ describe("écran de connexion", () => {
     "   Login",
     "   Browser didn't open? Use the URL below to sign in (c to copy)",
     "",
-    "https://example.com/oauth/authorize?code=true&client_id=abc&scope=org%3Acreate_api_k",
+    "https://claude.com/oauth/authorize?code=true&client_id=abc&scope=org%3Acreate_api_k",
     "ey+user%3Aprofile&state=xyz",
     "",
     "   Paste code here if prompted",
@@ -572,9 +572,16 @@ describe("écran de connexion", () => {
     "   Esc to cancel",
   ].join("\n")
   it("reconstitue le lien replié sur deux lignes", () => {
-    expect(parseLogin(screen)?.url).toBe("https://example.com/oauth/authorize?code=true&client_id=abc&scope=org%3Acreate_api_key+user%3Aprofile&state=xyz")
+    expect(parseLogin(screen)?.url).toBe("https://claude.com/oauth/authorize?code=true&client_id=abc&scope=org%3Acreate_api_key+user%3Aprofile&state=xyz")
   })
   it("ignore un écran sans champ de code", () => {
     expect(parseLogin("https://example.com/x\n\nEsc to cancel")).toBeNull()
+  })
+  it("refuse un lien hors des hôtes officiels", () => {
+    expect(parseLogin(screen.replace("claude.com", "evil.example"))).toBeNull()
+    expect(parseLogin(screen.replace("claude.com", "claude.com@evil.example"))).toBeNull()
+  })
+  it("refuse un écran sans l'en-tête Login", () => {
+    expect(parseLogin(screen.replace("   Login\n", ""))).toBeNull()
   })
 })
