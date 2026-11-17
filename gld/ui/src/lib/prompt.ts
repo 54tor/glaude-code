@@ -387,3 +387,19 @@ export function parseBtw(screen: string): { question: string; answer: string } |
   const answer = answerLines.map((line) => line.slice(commonIndent)).join("\n").trim()
   return { question, answer }
 }
+
+// Écran de connexion (/login) : le lien OAuth, replié sur plusieurs lignes par le terminal, puis un champ « Paste code here ».
+const LOGIN_CODE_PROMPT = /paste code here/i
+const LOGIN_URL_START = /^\s*(https:\/\/\S+)\s*$/
+const URL_CONTINUATION = /^\S+$/
+const LOGIN_MAX_DISTANCE = 14
+export function parseLogin(screen: string): { url: string } | null {
+  const lines = screen.replace(/\s+$/, "").split("\n")
+  const codeLine = lines.findLastIndex((line) => LOGIN_CODE_PROMPT.test(line))
+  if (codeLine < 0 || codeLine < lines.length - LOGIN_MAX_DISTANCE) return null
+  const urlLine = lines.findLastIndex((line, lineIndex) => lineIndex < codeLine && LOGIN_URL_START.test(line))
+  if (urlLine < 0) return null
+  let url = LOGIN_URL_START.exec(lines[urlLine])![1]
+  for (let lineIndex = urlLine + 1; lineIndex < codeLine && URL_CONTINUATION.test(lines[lineIndex].trim()); lineIndex++) url += lines[lineIndex].trim()
+  return { url }
+}

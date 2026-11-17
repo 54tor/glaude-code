@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { modeOfScreen, parsePrompt } from "./prompt"
+import { modeOfScreen, parseLogin, parsePrompt } from "./prompt"
 
 const real = {
   // Captures d'une vraie session Claude Code 2.1.307 (tmux), 2026-10-22.
@@ -554,5 +554,27 @@ describe("question seule précédée d'un rapport de Claude", () => {
     const prompt = parsePrompt(screen)!
     expect(prompt.context).toBe("● Audit en lecture seule.\n  Plan d'exécution proposé\n  1. Go patchs directs.")
     expect(prompt.question).toBe("Valides-tu ce plan ?")
+  })
+})
+
+describe("écran de connexion", () => {
+  const screen = [
+    "   Login",
+    "   Browser didn't open? Use the URL below to sign in (c to copy)",
+    "",
+    "https://example.com/oauth/authorize?code=true&client_id=abc&scope=org%3Acreate_api_k",
+    "ey+user%3Aprofile&state=xyz",
+    "",
+    "   Paste code here if prompted",
+    "   ╭──────╮",
+    "   │      │",
+    "   ╰──────╯",
+    "   Esc to cancel",
+  ].join("\n")
+  it("reconstitue le lien replié sur deux lignes", () => {
+    expect(parseLogin(screen)?.url).toBe("https://example.com/oauth/authorize?code=true&client_id=abc&scope=org%3Acreate_api_key+user%3Aprofile&state=xyz")
+  })
+  it("ignore un écran sans champ de code", () => {
+    expect(parseLogin("https://example.com/x\n\nEsc to cancel")).toBeNull()
   })
 })

@@ -5,10 +5,10 @@ import { i18n } from "@/i18n"
 import { cn, copyText, isSend, keyHint } from "@/lib/utils"
 import { QuestionContext } from "@/components/QuestionContext"
 import { contextToMarkdown } from "@/lib/boxTable"
-import { modeOfScreen, parseBtw, parsePrompt, type Opt } from "@/lib/prompt"
+import { modeOfScreen, parseBtw, parseLogin, parsePrompt, type Opt } from "@/lib/prompt"
 import { type Live } from "./LiveStatus"
 import { toast } from "sonner"
-import { ArrowDownToLine, Bug, ChevronDown, ChevronUp, Copy, GitFork, Minimize2, Snowflake, Send, SendHorizontal, Square, SquareCheck, X } from "lucide-react"
+import { ArrowDownToLine, Bug, ExternalLink, ChevronDown, ChevronUp, Copy, GitFork, Minimize2, Snowflake, Send, SendHorizontal, Square, SquareCheck, X } from "lucide-react"
 import { useLocal } from "@/hooks/useLocal"
 import { draftOf, setDraft, useDraft } from "@/hooks/useDraft"
 import { setWaitIdle, useWaitIdle } from "@/hooks/useWaitIdle"
@@ -811,7 +811,8 @@ function TerminalPanel({ id, onAsk, onLead, onSent, extra }: { id: string; onAsk
       setPressing(false)
     }
   }
-  const prompt = parsePrompt(screen)
+  const login = parseLogin(screen)
+  const prompt = login ? null : parsePrompt(screen)
   const btw = parseBtw(screen)
   const [typing, setTyping] = useState<string | null>(null) // option à réponse libre en cours de saisie
   const [answer, setAnswer] = useState("")
@@ -857,7 +858,7 @@ function TerminalPanel({ id, onAsk, onLead, onSent, extra }: { id: string; onAsk
       () => toast.success(t("conversation.composer.screenCopied")),
       () => toast.error(t("conversation.composer.copyFailed")),
     )
-  const asking = !!prompt
+  const asking = !!prompt || !!login
   const [questionCollapsed, setQuestionCollapsed] = useState(false)
   const questionKey = prompt?.question ?? ""
   const [lastQuestionKey, setLastQuestionKey] = useState(questionKey)
@@ -966,6 +967,43 @@ function TerminalPanel({ id, onAsk, onLead, onSent, extra }: { id: string; onAsk
               </Button>
             )}
             <Button size="sm" disabled={pressing} variant="ghost" className="justify-start" onClick={() => press("Escape")}>
+              {t("conversation.composer.escape")}
+            </Button>
+          </div>
+        </div>
+      )}
+      {login && !debug && (
+        <div className="space-y-2 rounded-lg border border-warning/50 bg-warning/10 px-3 py-2 text-sm">
+          <p className="font-medium">{t("conversation.composer.loginTitle")}</p>
+          <p className="text-xs text-muted-foreground">{t("conversation.composer.loginHelp")}</p>
+          <div className="flex flex-wrap gap-1.5">
+            <Button size="sm" variant="outline" asChild>
+              <a href={login.url} target="_blank" rel="noopener noreferrer">
+                <ExternalLink /> {t("conversation.composer.loginOpen")}
+              </a>
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => copyText(login.url).then(() => toast.success(t("conversation.composer.loginCopied")), () => toast.error(t("conversation.composer.copyFailed")))}>
+              <Copy /> {t("conversation.composer.loginCopy")}
+            </Button>
+          </div>
+          <div className="flex items-end gap-1.5">
+            <input
+              value={answer}
+              onChange={(changeEvent) => setAnswer(changeEvent.target.value)}
+              onKeyDown={(keyEvent) => {
+                if (!isSend(keyEvent)) return
+                keyEvent.preventDefault()
+                void reply()
+              }}
+              autoComplete="off"
+              spellCheck={false}
+              className="min-w-0 flex-1 rounded-lg border border-input bg-background px-3 py-2 font-mono outline-none focus-visible:ring-3 focus-visible:ring-ring/80"
+              aria-label={t("conversation.composer.loginCodeAria")}
+            />
+            <Button size="sm" onClick={reply} disabled={!answer.trim()}>
+              <Send /> {t("conversation.composer.loginSend")}
+            </Button>
+            <Button size="sm" variant="ghost" disabled={pressing} onClick={() => press("Escape")}>
               {t("conversation.composer.escape")}
             </Button>
           </div>
