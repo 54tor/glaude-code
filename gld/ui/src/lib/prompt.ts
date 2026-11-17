@@ -15,6 +15,8 @@ const FRAME_LEFT_EDGE = /^(\s*)[│┃]\s?/
 const FRAME_RIGHT_EDGE = /\s*[│┃]\s*$/
 const DIALOG_FOOTER = /(esc|escape) to (cancel|exit|go back)|enter to (select|confirm)|to navigate|tab to amend|ready to submit|submit your answers|do you want to|would you like to|proceed\?/i
 const NUMBERED_OPTION = /^\s*(?:[❯>›]\s*)?([1-9])[.)]\s+(\S.*)$/
+const NOTES_HINT_LINE = /^\s*Notes:/i
+const UNNUMBERED_CHAT_LINE = /^\s*chat about this\s*$/i
 const CURSOR_MARK = /^\s*[❯>›]/
 const TABS_HEADER = /^\s*←.*Submit.*→\s*$/
 const SINGLE_TAB_HEADER = /^\s*(?:←\s*)?[☐☒]\s+\S/
@@ -159,7 +161,7 @@ function parseLines(src: string[]): Prompt | null {
     const nextOptionLine = numberedOptions[optionIndex + 1]?.at ?? lines.length
     return lines
       .slice(numberedOptions[optionIndex].at + 1, nextOptionLine)
-      .filter((line) => INDENTED_TEXT.test(line) && !HORIZONTAL_RULE.test(line) && !KEY_HELP_LINE.test(line))
+      .filter((line) => INDENTED_TEXT.test(line) && !HORIZONTAL_RULE.test(line) && !KEY_HELP_LINE.test(line) && !NOTES_HINT_LINE.test(line))
       .map((line) => line.trim())
       .join(" ")
   }
@@ -229,12 +231,20 @@ function parseLines(src: string[]): Prompt | null {
     const singleTabLine = lines.findLastIndex((line, lineIndex) => lineIndex < firstOptionLine && SINGLE_TAB_HEADER.test(line))
     const questionHeaderLine = isTabbed ? tabsHeaderLine : singleTabLine
     const tabsContext = questionHeaderLine >= 0 ? recap(allLines, tailStart + questionHeaderLine) : undefined
+    const options = numberedOptions.map(toOption)
+    // Avec un aperçu, « Chat about this » s'affiche sans numéro sous le séparateur : on l'atteint aux flèches.
+    const lastOptionLine = numberedOptions[numberedOptions.length - 1].at
+    const hasUnnumberedChat = cursorOption >= 0 && lines.slice(lastOptionLine + 1).some((line) => UNNUMBERED_CHAT_LINE.test(line))
+    if (hasUnnumberedChat && !CHAT.test(numberedOptions[numberedOptions.length - 1].label)) {
+      const chatIndex = numberedOptions.length
+      options.push({ label: "Chat about this", keys: [...arrowKeysToward(chatIndex, cursorOption), "Enter"], text: true, chat: true })
+    }
     return {
       question,
       context: permissionContext ?? tabsContext,
       contextIsMessage: !permissionContext && !!tabsContext,
       tabs: isTabbed ? tabsOf(lines[tabsHeaderLine]) : undefined,
-      options: numberedOptions.map(toOption),
+      options,
     }
   }
   const selectedLine = lines.findIndex((line) => /^\s{0,3}❯ \S/.test(line))

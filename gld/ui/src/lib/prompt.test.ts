@@ -462,6 +462,28 @@ describe("parsePrompt", () => {
     expect(prompt.options.map((opt) => opt.label)).toEqual(["1. Invalide = fermé", "2. Refuser le snapshot", "3. Laisser en l'état"])
     expect(prompt.preview).toBe("Chaîne confirmée :\n  pool.rs:105  Invalid(None)")
   })
+  it("aperçu : « Notes: » ignoré et « Chat about this » sans numéro atteint aux flèches", () => {
+    const screen = [
+      " ☐ Disposition",
+      "",
+      "Comment ranger la page ?",
+      "",
+      "❯ 1. Une page                     ┌──────────────┐",
+      "  2. Deux onglets                 │ Tunnels      │",
+      "  3. Deux colonnes                └──────────────┘",
+      "",
+      "                                  Notes: press n to add notes",
+      "",
+      "──────────────────────────────────────────────────",
+      "  Chat about this",
+      "",
+      "Enter to select · ↑/↓ to navigate · n to add notes · Esc to cancel",
+    ].join("\n")
+    const prompt = parsePrompt(screen)!
+    expect(prompt.options[2].detail).toBeUndefined()
+    expect(prompt.options).toHaveLength(4)
+    expect(prompt.options[3]).toMatchObject({ label: "Chat about this", chat: true, keys: ["Down", "Down", "Down", "Enter"] })
+  })
   it("liste à sélection : flèches puis Entrée", () => {
     const prompt = parsePrompt(screens.select)!
     expect(prompt.options.map((opt) => opt.keys)).toEqual([["Enter"], ["Down", "Enter"], ["Down", "Down", "Enter"]])
