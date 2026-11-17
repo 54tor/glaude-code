@@ -128,3 +128,26 @@ func TestIdleByScreenRefusesWhileSubagentRuns(t *testing.T) {
 		t.Fatal("session avec un sous-agent en cours prise pour du repos")
 	}
 }
+
+func TestIdleSessionWithRunningSubagentIsBusyAndNotWaiting(t *testing.T) {
+	use(t.TempDir())
+	put(t, filepath.Join(cfgDir(), "sessions", "1.json"), fmt.Sprintf(`{"pid":%d,"sessionId":%q,"status":"idle"}`, os.Getpid(), id1), old)
+	previousTTL, previousRunning := agentsTTL, hasRunningSubagent
+	agentsTTL = time.Minute
+	agentsMu.Lock()
+	agentsOut, agentsErr, agentsAt = []byte(fmt.Sprintf(`[{"sessionId":%q,"status":"idle"}]`, id1)), nil, time.Now()
+	agentsMu.Unlock()
+	t.Cleanup(func() { agentsTTL = previousTTL; hasRunningSubagent = previousRunning; forgetAgents() })
+
+	hasRunningSubagent = func(string) bool { return true }
+	if status, _ := shownStatus(id1); status != "busy" {
+		t.Fatalf("statut attendu busy avec un sous-agent en cours, obtenu %q", status)
+	}
+	if waitingIDs, _ := waitingKnown(); len(waitingIDs) != 0 {
+		t.Fatalf("session avec sous-agent en cours comptée en attente : %v", waitingIDs)
+	}
+	hasRunningSubagent = func(string) bool { return false }
+	if status, _ := shownStatus(id1); status != "idle" {
+		t.Fatalf("statut attendu idle sans sous-agent, obtenu %q", status)
+	}
+}

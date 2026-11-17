@@ -298,9 +298,13 @@ func sessionStatus(id string) (status string, isOpen bool) {
 	return "", false
 }
 
-// shownStatus : sessionStatus, mais un « busy » resté figé côté claude passe à « idle » quand l'écran reste au repos.
+// shownStatus : sessionStatus, mais un « busy » resté figé côté claude passe à « idle » quand l'écran reste au repos,
+// et un « idle » avec un sous-agent en cours reste « busy » (le tour est suspendu, pas terminé).
 func shownStatus(id string) (status string, isOpen bool) {
 	status, isOpen = sessionStatus(id)
+	if isOpen && status == "idle" && hasRunningSubagent(id) {
+		return "busy", true
+	}
 	if isOpen && status == "busy" && idleByScreen(id, time.Now()) {
 		return "idle", true
 	}
