@@ -28,7 +28,7 @@ export function GitPush({ dir, st }: { dir: string; st: GitState | undefined }) 
       <Button size="xs" variant="outline" disabled={isGitPushRunning(dir)} title={triggerTitle} onClick={() => setIsDialogOpen(true)}>
         <ArrowUpFromLine /> {t("conversation.gitPush.button")}
       </Button>
-      <GitPushDialog dir={dir} branch={st.branch} open={isDialogOpen} onOpenChange={setIsDialogOpen} />
+      {isDialogOpen && <GitPushDialog dir={dir} branch={st.branch} onOpenChange={setIsDialogOpen} />}
     </>
   )
 }

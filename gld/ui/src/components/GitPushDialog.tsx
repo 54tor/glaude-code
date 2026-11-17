@@ -6,10 +6,11 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
-type Props = { dir: string; branch: string; open: boolean; onOpenChange: (isOpen: boolean) => void }
+type Props = { dir: string; branch: string; onOpenChange: (isOpen: boolean) => void }
 
 // Aperçu des commits manquants sur chaque remote, puis poussée vers ceux qui sont cochés (par défaut ceux qui sont en retard).
-export function GitPushDialog({ dir, branch, open, onOpenChange }: Props) {
+// Monté seulement quand il est ouvert : chaque ouverture repart d'un état vierge.
+export function GitPushDialog({ dir, branch, onOpenChange }: Props) {
   const { t } = useTranslation()
   const [remotes, setRemotes] = useState<GitRemote[] | null>(null)
   const [unpushed, setUnpushed] = useState<RemoteUnpushed[] | null>(null)
@@ -17,11 +18,7 @@ export function GitPushDialog({ dir, branch, open, onOpenChange }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set())
 
   useEffect(() => {
-    if (!open) return
     let isCurrent = true
-    setRemotes(null)
-    setUnpushed(null)
-    setHasPreviewFailed(false)
     api.gitRemotes(dir).then(
       (response) => isCurrent && setRemotes(response.remotes),
       () => isCurrent && setRemotes([])
@@ -38,7 +35,7 @@ export function GitPushDialog({ dir, branch, open, onOpenChange }: Props) {
     return () => {
       isCurrent = false
     }
-  }, [open, dir])
+  }, [dir])
 
   const unpushedOf = (name: string) => unpushed?.find((remote) => remote.name === name)
   const toggle = (name: string, isChecked: boolean) => {
@@ -54,7 +51,7 @@ export function GitPushDialog({ dir, branch, open, onOpenChange }: Props) {
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open onOpenChange={onOpenChange}>
       <DialogContent className="min-w-0 sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{t("conversation.gitPush.dialogTitle", { branch })}</DialogTitle>
