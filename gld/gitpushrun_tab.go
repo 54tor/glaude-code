@@ -22,6 +22,10 @@ func runPushSession(id string) int {
 		fmt.Fprintln(os.Stderr, "gld :", err)
 		return 1
 	}
+	if err := os.Chdir(status.Dir); err != nil { // le dossier ne passe pas par tmux (-c en expanse les formats « #(…) »)
+		fmt.Fprintln(os.Stderr, "gld :", err)
+		return 1
+	}
 	logFile, err := rOpenFile(cfgDir(), pushRunFile(id, pushRunLogFile), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o600)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "gld :", err)

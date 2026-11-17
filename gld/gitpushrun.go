@@ -68,7 +68,12 @@ func pushSessionAlive(id string) bool {
 
 func readPushStatus(id string) (PushRunStatus, error) {
 	var status PushRunStatus
-	content, err := readTrusted(pushRunFile(id, pushRunStatusFile))
+	statusFile, err := openTrusted(pushRunFile(id, pushRunStatusFile))
+	if err != nil {
+		return status, err
+	}
+	defer statusFile.Close()
+	content, err := io.ReadAll(io.LimitReader(statusFile, pushRunStatusMax+1))
 	if err != nil {
 		return status, err
 	}
@@ -140,7 +145,7 @@ func startPushRun(dir string, remotes []string) (PushRunStatus, error) {
 	}
 	self, err := os.Executable()
 	if err == nil {
-		_, err = tmuxRun("", "new-session", "-d", "-x", pushRunPaneCols, "-y", pushRunPaneRows, "-s", pushSessionName(status.ID), "-c", dir, shJoin([]string{self, "_push", status.ID}))
+		_, err = tmuxRun("", "new-session", "-d", "-x", pushRunPaneCols, "-y", pushRunPaneRows, "-s", pushSessionName(status.ID), shJoin([]string{self, "_push", status.ID}))
 	}
 	if err != nil {
 		rRemoveAll(cfgDir(), pushRunDir(status.ID))
