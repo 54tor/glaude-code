@@ -43,6 +43,10 @@ func dispatchCLI(argv []string) (exitCode int, handled bool) {
 			cliMode = true
 			return runTab(args[0]), true
 		}
+		if name == "_push" && len(args) == 1 { // poussée durable, dans sa session tmux (gitpushrun_tab.go)
+			cliMode = true
+			return runPushSession(args[0]), true
+		}
 		if name == "_canread" && len(args) == 2 { // vérification de GLD_RUN_AS, sous le compte cible (runas_unix.go)
 			cliMode = true
 			return runCanRead(args[0], args[1]), true

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
-import { dismissGitPush, gitPushOutputTail, setGitPushTerminalOpen, useGitPushRuns, type GitPushRun } from "@/hooks/useGitPush"
+import { dismissGitPush, gitPushOutputTail, resumeGitPushes, setGitPushTerminalOpen, useGitPushRuns, type GitPushRun } from "@/hooks/useGitPush"
 import { GitPushPill } from "./GitPushPill"
 import { GitPushSendDialog } from "./GitPushSendDialog"
 import { GitPushTerminal } from "./GitPushTerminal"
@@ -13,6 +13,7 @@ const TOAST_SUCCESS_MS = 6000
 // Monté une fois dans l'application : affiche chaque push en cours sous forme de pastille (les toasts gênaient l'interface), puis son résultat en toast, son terminal complet à la demande, et l'envoi de l'échec à Claude.
 export function GitPushHost() {
   const runs = useGitPushRuns()
+  useEffect(() => void resumeGitPushes(), [])
   const [sendRunId, setSendRunId] = useState<number | null>(null)
   const requestSend = useCallback((runId: number) => setSendRunId(runId), [])
   const closeSend = useCallback(() => setSendRunId(null), [])

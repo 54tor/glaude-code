@@ -47,7 +47,7 @@ export function GitPushDialog({ dir, branch, onOpenChange }: Props) {
   const pushSelected = () => {
     const names = (remotes ?? []).map((remote) => remote.name).filter((name) => selected.has(name))
     onOpenChange(false)
-    void startGitPushes(dir, names, branch)
+    startGitPushes(dir, names, branch)
   }
 
   return (

@@ -34,7 +34,7 @@ describe("GitPushTerminal", () => {
     await act(async () => startGitPush("/depot", "origin", "main"))
 
     expect(await screen.findByRole("alert")).toBeTruthy()
-    expect(streamGitPush).toHaveBeenCalledWith("/depot", "origin", expect.any(Function))
+    expect(streamGitPush).toHaveBeenCalledWith("/depot", ["origin"], expect.any(Function), expect.any(Function))
   })
 
   it("rejoue la sortie déjà reçue quand on rouvre le terminal après l'avoir réduit", async () => {

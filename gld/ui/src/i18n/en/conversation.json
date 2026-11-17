@@ -638,6 +638,7 @@
       "moreCommits": "… and {{count}} more",
       "pushSelected_one": "Push to {{count}} remote",
       "pushSelected_other": "Push to {{count}} remotes",
+      "interrupted": "Push interrupted: the tmux session vanished before it finished",
       "cancel": "Cancel",
       "previewFailed": "Commit preview unavailable"
     },

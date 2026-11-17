@@ -6,6 +6,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ### Ajouté
 - Le bouton « Pousser » ouvre un dialogue qui liste, par remote, les commits qu'il n'a pas encore (`GET /v1/git/unpushed`), et pousse la branche vers tous les remotes cochés, l'un après l'autre ; un échec n'arrête pas les suivants.
+- Chaque poussée tourne dans sa propre session tmux (`gld _push`, `GET/POST/DELETE /v1/git/push-runs`) avec un vrai terminal pour git et ses hooks : un redémarrage de gld ou un rechargement de la page ne l'interrompt pas, son état et sa sortie sont relus sur disque, et une session tmux disparue avant la fin est signalée « interrompue ». Requiert tmux.
 - `GLD_PPROF_ADDR=127.0.0.1:6060` ouvre le profilage Go (`/debug/pprof/`) sur une adresse de boucle locale, hors du serveur public ; sans la variable, rien n'est ouvert.
 - Réglages > Claude : un interrupteur « Hooks de suivi des sous-agents » installe au démarrage les hooks `gld-web _event` dans le `settings.json` de Claude, et les retire quand on le coupe, sans toucher aux hooks de l'utilisateur.
 - Une session titrée automatiquement est re-titrée par `/rename` tous les 5 messages. Un titre posé à la main, depuis gld ou avec `/rename` dans Claude, la retire du suivi : il n'est plus jamais remplacé.

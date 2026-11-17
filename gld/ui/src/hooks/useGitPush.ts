@@ -1,15 +1,17 @@
 import { useSyncExternalStore } from "react"
 import stripAnsi from "strip-ansi"
 import { errMsg } from "@/lib/apiError"
-import { streamGitPush } from "@/lib/gitPushStream"
+import { deletePushRun, followGitPush, listPushRuns, streamGitPush, type PushRunInfo } from "@/lib/gitPushStream"
 import { refreshGit } from "@/hooks/useGit"
 
 // Les pushes en cours (et les derniers, tant que leur toast n'est pas fermé), gardés hors des composants : réduire la fenêtre ou
-// changer de page ne les interrompt pas, et leur sortie reste relisible. Plusieurs pushes tournent en parallèle ; le serveur n'en
-// sérialise qu'un par dépôt, donc l'interface refuse de relancer un dépôt dont un push tourne encore.
+// changer de page ne les interrompt pas, et leur sortie reste relisible. Chaque push tourne côté serveur dans sa propre session
+// tmux : ni un rechargement de la page ni un redémarrage de gld ne l'arrête, et resumeGitPushes() les retrouve. Le serveur
+// refuse un second push d'un dépôt dont un push tourne encore.
 export type GitPushStatus = "running" | "succeeded" | "failed" | "error"
 export type GitPushRun = {
   id: number
+  serverId?: string
   dir: string
   remote: string
   branch: string
@@ -49,16 +51,11 @@ const keepOutput = (runId: number, chunk: Uint8Array) => {
 
 export const listGitPushRuns = (): GitPushRun[] => currentRuns
 
-const queuedDirs = new Set<string>()
+export const isGitPushRunning = (dir: string) => currentRuns.some((run) => run.dir === dir && run.status === "running")
 
-export const isGitPushRunning = (dir: string) => queuedDirs.has(dir) || currentRuns.some((run) => run.dir === dir && run.status === "running")
-
-function runGitPush(dir: string, remote: string, branch: string): Promise<void> {
-  const runId = nextRunId++
-  outputByRun.set(runId, { chunks: [], bytes: 0 })
-  const openedRun: GitPushRun = { id: runId, dir, remote, branch, status: "running", isTerminalOpen: true }
-  setRuns([...currentRuns.map((run) => ({ ...run, isTerminalOpen: false })), openedRun])
-  return streamGitPush(dir, remote, (chunk) => keepOutput(runId, chunk))
+// Ouvre le suivi local d'une poussée : sa sortie est lue sur le serveur, jusqu'à la fin ou à l'interruption.
+function followRun(runId: number, follow: (onOutput: (chunk: Uint8Array) => void) => Promise<number>) {
+  follow((chunk) => keepOutput(runId, chunk))
     .then(
       (exitCode) => updateRun(runId, { status: exitCode === 0 ? "succeeded" : "failed", exitCode }),
       (pushError) => updateRun(runId, { status: "error", errorMessage: errMsg(pushError) })
@@ -66,19 +63,38 @@ function runGitPush(dir: string, remote: string, branch: string): Promise<void> 
     .finally(refreshGit)
 }
 
-export function startGitPush(dir: string, remote: string, branch: string) {
-  void startGitPushes(dir, [remote], branch)
+function openRun(dir: string, remotes: string[], branch: string, serverId?: string): number {
+  const runId = nextRunId++
+  outputByRun.set(runId, { chunks: [], bytes: 0 })
+  const openedRun: GitPushRun = { id: runId, serverId, dir, remote: remotes.join(", "), branch, status: "running", isTerminalOpen: !serverId }
+  setRuns([...currentRuns.map((run) => (serverId ? run : { ...run, isTerminalOpen: false })), openedRun])
+  return runId
 }
 
-// Pousse vers plusieurs remotes l'un après l'autre (le serveur sérialise un dépôt) ; un échec n'arrête pas les suivants.
-export async function startGitPushes(dir: string, remotes: string[], branch: string) {
+export function startGitPush(dir: string, remote: string, branch: string) {
+  startGitPushes(dir, [remote], branch)
+}
+
+// Pousse vers plusieurs remotes l'un après l'autre : le serveur les enchaîne dans une seule session tmux, pour que les hooks
+// ne se marchent pas dessus et que la série aille au bout même si le navigateur se ferme.
+export function startGitPushes(dir: string, remotes: string[], branch: string) {
   if (isGitPushRunning(dir)) return
-  queuedDirs.add(dir)
+  const runId = openRun(dir, remotes, branch)
+  followRun(runId, (onOutput) => streamGitPush(dir, remotes, onOutput, (serverId) => updateRun(runId, { serverId })))
+}
+
+// Reprend les poussées que le serveur connaît et que cette page ne suit pas encore (rechargement, redémarrage de gld).
+export async function resumeGitPushes() {
+  let serverRuns: PushRunInfo[]
   try {
-    for (const remote of remotes) await runGitPush(dir, remote, branch)
-  } finally {
-    queuedDirs.delete(dir)
-    runSubscribers.forEach((subscriber) => subscriber())
+    serverRuns = await listPushRuns()
+  } catch {
+    return
+  }
+  const trackedIds = new Set(currentRuns.map((run) => run.serverId))
+  for (const serverRun of serverRuns.filter((candidate) => !trackedIds.has(candidate.id))) {
+    const runId = openRun(serverRun.dir, serverRun.remotes.map((remote) => remote.name), serverRun.branch, serverRun.id)
+    followRun(runId, (onOutput) => followGitPush(serverRun.id, onOutput))
   }
 }
 
@@ -91,6 +107,7 @@ export function setGitPushTerminalOpen(runId: number, isTerminalOpen: boolean) {
 export function dismissGitPush(runId: number) {
   const run = currentRuns.find((candidate) => candidate.id === runId)
   if (!run || run.status === "running") return
+  if (run.serverId) deletePushRun(run.serverId).catch(() => undefined)
   outputByRun.delete(runId)
   outputSubscribers.delete(runId)
   setRuns(currentRuns.filter((candidate) => candidate.id !== runId))

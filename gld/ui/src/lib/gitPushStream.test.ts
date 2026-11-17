@@ -1,56 +1,56 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-vi.mock("@/lib/auth", () => ({ authFetch: vi.fn() }))
+vi.mock("@/lib/http", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/http")>()), http: { get: vi.fn(), post: vi.fn(), del: vi.fn() } }))
 
-import { authFetch } from "@/lib/auth"
-import { streamGitPush } from "./gitPushStream"
+import { ApiError } from "@/lib/apiError"
+import { http } from "@/lib/http"
+import { followGitPush, streamGitPush, type PushRunInfo } from "./gitPushStream"
 
-const base64Of = (text: string) => btoa(text)
+const runInfo = (overrides: Partial<PushRunInfo> = {}): PushRunInfo => ({ id: "run1", dir: "/depot", branch: "main", remotes: [{ name: "origin", state: "succeeded", exit: 0 }], done: true, started: 1, ...overrides })
+const page = (text: string | null, next: number, run: PushRunInfo) => ({ out: text === null ? null : btoa(text), next, run })
 
-const streamedResponse = (lines: string[]) => new Response(lines.map((line) => line + "\n").join(""), { status: 200 })
-
-describe("streamGitPush", () => {
-  afterEach(() => vi.mocked(authFetch).mockReset())
+describe("suivi d'une poussée durable", () => {
+  afterEach(() => vi.resetAllMocks())
 
   it("transmet la sortie du hook puis rend le code de retour", async () => {
-    vi.mocked(authFetch).mockResolvedValue(
-      streamedResponse([JSON.stringify({ out: base64Of("hook refuse\n") }), JSON.stringify({ exit: 1 })])
-    )
+    const failedRun = runInfo({ remotes: [{ name: "origin", state: "failed", exit: 1 }] })
+    vi.mocked(http.get).mockResolvedValueOnce(page("hook refuse\n", 12, failedRun)).mockResolvedValueOnce(page(null, 12, failedRun))
     const receivedChunks: string[] = []
 
-    const exitCode = await streamGitPush("/depot", "origin", (chunk) => receivedChunks.push(new TextDecoder().decode(chunk)))
+    const exitCode = await followGitPush("run1", (chunk) => receivedChunks.push(new TextDecoder().decode(chunk)))
 
     expect(receivedChunks).toEqual(["hook refuse\n"])
     expect(exitCode).toBe(1)
   })
 
-  it("ignore les lignes vides de signal de vie", async () => {
-    vi.mocked(authFetch).mockResolvedValue(streamedResponse(["{}", "{}", JSON.stringify({ exit: 0 })]))
-    const receivedChunks: Uint8Array[] = []
+  it("reprend au décalage déjà lu", async () => {
+    vi.mocked(http.get).mockResolvedValueOnce(page("a", 1, runInfo())).mockResolvedValueOnce(page(null, 1, runInfo()))
 
-    const exitCode = await streamGitPush("/depot", "origin", (chunk) => receivedChunks.push(chunk))
+    await followGitPush("run1", () => {})
 
-    expect(receivedChunks).toEqual([])
-    expect(exitCode).toBe(0)
+    expect(vi.mocked(http.get).mock.calls.map((call) => call[0])).toEqual(["/git/push-runs/run1/output?offset=0", "/git/push-runs/run1/output?offset=1"])
   })
 
-  it("rend 0 quand le push réussit", async () => {
-    vi.mocked(authFetch).mockResolvedValue(streamedResponse([JSON.stringify({ exit: 0 })]))
+  it("retente quand gld est injoignable, la poussée continuant dans tmux", async () => {
+    vi.useFakeTimers()
+    vi.mocked(http.get).mockRejectedValueOnce(new ApiError(0, "net", "réseau", { net: true })).mockResolvedValueOnce(page(null, 0, runInfo()))
 
-    expect(await streamGitPush("/depot", "origin", () => {})).toBe(0)
+    const pending = followGitPush("run1", () => {})
+    await vi.advanceTimersByTimeAsync(2000)
+
+    expect(await pending).toBe(0)
+    vi.useRealTimers()
   })
 
-  it("lève une erreur quand le flux se termine sans code de retour", async () => {
-    vi.mocked(authFetch).mockResolvedValue(streamedResponse([JSON.stringify({ out: base64Of("x") })]))
+  it("signale une poussée interrompue plutôt qu'un état indéterminé", async () => {
+    vi.mocked(http.get).mockResolvedValue(page(null, 0, runInfo({ done: false, interrupted: true, remotes: [{ name: "origin", state: "running" }] })))
 
-    await expect(streamGitPush("/depot", "origin", () => {})).rejects.toThrow()
+    await expect(followGitPush("run1", () => {})).rejects.toThrow()
   })
 
-  it("lève l'erreur de l'API quand le serveur refuse avant le flux", async () => {
-    vi.mocked(authFetch).mockResolvedValue(
-      new Response(JSON.stringify({ error: { code: "bad_request", message: "dossier invalide" } }), { status: 400 })
-    )
+  it("lève l'erreur de l'API quand la création est refusée", async () => {
+    vi.mocked(http.post).mockRejectedValue(new ApiError(409, "conflict", "déjà en cours"))
 
-    await expect(streamGitPush("/depot", "origin", () => {})).rejects.toThrow("dossier invalide")
+    await expect(streamGitPush("/depot", ["origin"], () => {})).rejects.toThrow("déjà en cours")
   })
 })

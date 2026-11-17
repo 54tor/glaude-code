@@ -370,6 +370,7 @@ func handler() http.Handler {
 	routesGit(mux)
 	routesGitPush(mux)
 	routesGitUnpushed(mux)
+	routesGitPushRuns(mux)
 	routesUpdate(mux)
 	routesTrust(mux)
 	routesTrashSessions(mux)
