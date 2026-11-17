@@ -29,10 +29,10 @@ test("un fichier joint non image devient une pastille, sans chemin", () => {
   expect(container.textContent?.match(/MD/g)).toHaveLength(2)
 })
 
-test("un .md joint se déplie et affiche son contenu relu par son seul nom", async () => {
+test("un .md joint s'ouvre en modale et affiche son contenu relu par son seul nom", async () => {
   vi.spyOn(await import("@/lib/auth"), "authFetch").mockResolvedValue(new Response("# Titre joint"))
   const record = { r: "user" as const, t: "@~/.claude/gld-web-images/20261117-231631-eff8f81e.md" }
   const { container } = render(<Message m={record} conv={{ dir: "d", id: "i" }} />)
   fireEvent.click(container.querySelector("button")!)
-  await waitFor(() => expect(container.textContent).toContain("Titre joint"))
+  await waitFor(() => expect(document.body.textContent).toContain("Titre joint"))
 })

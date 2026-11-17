@@ -91,16 +91,21 @@ function UploadedFile({ name, conv }: { name: string; conv: Conv }) {
   }
   return (
     <div className="my-1">
-      <button type="button" onClick={flip} aria-expanded={open} className="flex w-fit cursor-pointer items-center gap-1.5 rounded-md border bg-muted/30 px-2 py-1 text-xs hover:bg-muted">
+      <button type="button" onClick={flip} className="flex w-fit cursor-pointer items-center gap-1.5 rounded-md border bg-muted/30 px-2 py-1 text-xs hover:bg-muted">
         <Paperclip className="size-3.5" aria-hidden />
         {label}
-        <ChevronRight className={`size-3.5 transition-transform ${open ? "rotate-90" : ""}`} aria-hidden />
       </button>
-      {open && content !== null && (
-        <div className="mt-1 max-h-96 overflow-auto rounded-lg border bg-card px-4 py-3 text-card-foreground">
-          {name.toLowerCase().endsWith(".md") ? <Markdown t={content} /> : <pre className="text-xs whitespace-pre-wrap">{content}</pre>}
-        </div>
-      )}
+      <Dialog open={open && content !== null} onOpenChange={setOpen}>
+        <DialogContent className="flex h-[85vh] max-h-[85vh] min-w-0 flex-col overflow-hidden sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle className="text-sm break-all">{label}</DialogTitle>
+            <DialogDescription className="sr-only">{t("conversation.message.docDescription")}</DialogDescription>
+          </DialogHeader>
+          <div className="min-h-0 flex-1 overflow-y-auto leading-relaxed">
+            {content !== null && (name.toLowerCase().endsWith(".md") ? <Markdown t={content} /> : <pre className="text-xs whitespace-pre-wrap">{content}</pre>)}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
