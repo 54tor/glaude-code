@@ -225,9 +225,9 @@ func TestLaunchIgnoresLiveProbeFailure(t *testing.T) {
 
 func TestApplyTabEnvReplacesExisting(t *testing.T) {
 	cmd := exec.Command("claude")
-	cmd.Env = []string{"A=b", tabEnvKey + "=0"}
+	cmd.Env = []string{"A=b", tabEnvKey + "=0", "CLAUDE_CODE_DISABLE_AGENT_VIEW=0"}
 	applyTabEnv(cmd, map[string]string{tabEnvKey: "1"})
-	if strings.Join(cmd.Env, ",") != "A=b,"+tabEnvKey+"=1" {
+	if strings.Join(cmd.Env, ",") != "A=b,"+disableAgentViewEnv+","+tabEnvKey+"=1" {
 		t.Fatalf("%q", cmd.Env)
 	}
 }

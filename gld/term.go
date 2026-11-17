@@ -28,8 +28,12 @@ type tabSpec struct {
 // compris, est ignorée.
 const tabEnvKey, tabEnvVal = "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS", "1"
 
+// disableAgentViewEnv : sans elle, claude ouvre l'agent view au lieu de la session demandée.
+const disableAgentViewEnv = "CLAUDE_CODE_DISABLE_AGENT_VIEW=1"
+
 // applyTabEnv ajoute à command.Env les variables autorisées de requestedEnv ; à appeler après withPath, qui écrase command.Env.
 func applyTabEnv(command *exec.Cmd, requestedEnv map[string]string) {
+	command.Env = append(slices.DeleteFunc(command.Env, func(entry string) bool { return strings.HasPrefix(entry, "CLAUDE_CODE_DISABLE_AGENT_VIEW=") }), disableAgentViewEnv)
 	if requestedEnv[tabEnvKey] == tabEnvVal {
 		command.Env = append(slices.DeleteFunc(command.Env, func(entry string) bool { return strings.HasPrefix(entry, tabEnvKey+"=") }), tabEnvKey+"="+tabEnvVal)
 	}
