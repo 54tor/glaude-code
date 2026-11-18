@@ -630,7 +630,7 @@ function LiveSend({ id, dir, onSent, liveState, onAsk, onLead, bar, compactHint,
             className="session-text field-sizing-content max-h-48 min-h-14 w-full resize-none rounded-lg border border-input bg-background py-2 pr-10 pl-3 outline-none focus-visible:ring-3 focus-visible:ring-ring/80"
             aria-label={t("conversation.composer.sessionAria")}
           />
-          <div className="absolute right-1.5 bottom-1.5">
+          <div className="absolute right-1.5 bottom-1.5 max-md:hidden">
             <AttachButton onPick={pictures.pick} />
           </div>
         </div>
@@ -644,7 +644,7 @@ function LiveSend({ id, dir, onSent, liveState, onAsk, onLead, bar, compactHint,
         )}
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           {/* Téléphone : réglages sur une ligne à parts égales, actions sur la suivante avec l'envoi en largeur restante. */}
-          <div className={cn("flex min-w-0 items-center gap-2 max-md:w-full max-md:[&>*]:min-w-0 max-md:[&>*]:flex-1", !moreOpen && "max-md:hidden")}>
+          <div className={cn("flex min-w-0 items-center gap-2 max-md:grid max-md:w-full max-md:grid-cols-2 max-md:[&>*]:min-w-0", !moreOpen && "max-md:hidden")}>
             <LiveModeButton id={id} disabled={settingsDisabled} />
             <Choose
               value={sessionModel}
@@ -662,15 +662,21 @@ function LiveSend({ id, dir, onSent, liveState, onAsk, onLead, bar, compactHint,
               size="sm"
               disabled={settingsDisabled}
             />
-          </div>
-          <span className="ml-auto max-md:hidden" />
-          <div className="flex items-center gap-2 max-md:w-full max-md:flex-wrap">
-            <Button size="sm" variant={moreOpen ? "secondary" : "outline"} className="md:hidden" aria-expanded={moreOpen} aria-label={t("conversation.composer.moreSettings")} title={t("conversation.composer.moreSettings")} onClick={() => setMoreOpen(!moreOpen)}>
-              <SlidersHorizontal />
-            </Button>
-            <div className={cn(!moreOpen && "max-md:hidden")}>
+            <div className="md:hidden">
               <SlashMenu id={id} text={text} onSent={onSent} />
             </div>
+          </div>
+          <span className="ml-auto max-md:hidden" />
+          <div className="flex items-center gap-2 max-md:w-full">
+            <AttachButton onPick={pictures.pick} className="size-10 rounded-full bg-secondary md:hidden" />
+            <Button size="sm" variant="secondary" className="max-w-40 min-w-0 rounded-full md:hidden" aria-expanded={moreOpen} aria-label={t("conversation.composer.moreSettings")} title={t("conversation.composer.moreSettings")} onClick={() => setMoreOpen(!moreOpen)}>
+              <span className="truncate">{models().find(([modelKey]) => modelKey === sessionModel)?.[1] || t("conversation.composer.sessionModel")}</span>
+              {moreOpen ? <ChevronUp /> : <ChevronDown />}
+            </Button>
+            <div className="hidden md:block">
+              <SlashMenu id={id} text={text} onSent={onSent} />
+            </div>
+            <span className="flex-1 md:hidden" />
             {liveState.st?.thinking && (
               <Button
                 size="sm"
@@ -699,14 +705,14 @@ function LiveSend({ id, dir, onSent, liveState, onAsk, onLead, bar, compactHint,
               <Checkbox checked={waitIdle} onCheckedChange={(checked) => setWaitIdle(id, checked === true)} />
               {t("conversation.composer.waitIdle")}
             </label>
-            <div className="flex max-md:min-w-0 max-md:flex-1">
-              <Button size="sm" className="rounded-r-none max-md:min-w-0 max-md:flex-1" onClick={() => void send()} disabled={(!text.trim() && !pictures.images.length) || busy || !exec}>
+            <div className="flex">
+              <Button size="sm" className="rounded-r-none max-md:h-10 max-md:rounded-l-full max-md:px-3" onClick={() => void send()} disabled={(!text.trim() && !pictures.images.length) || busy || !exec}>
                 <Send /> <span className="truncate max-md:hidden">{t("conversation.composer.sendToSession")}</span>
-                <span className="truncate md:hidden">{t("conversation.composer.send")}</span>
+                <span className="sr-only md:hidden">{t("conversation.composer.send")}</span>
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button size="sm" className="rounded-l-none border-l border-primary-foreground/30 px-1.5" aria-label={t("conversation.composer.sendOptions")} disabled={(!text.trim() && !pictures.images.length) || busy || !exec}>
+                  <Button size="sm" className="rounded-l-none border-l border-primary-foreground/30 px-1.5 max-md:h-10 max-md:rounded-r-full" aria-label={t("conversation.composer.sendOptions")} disabled={(!text.trim() && !pictures.images.length) || busy || !exec}>
                     <ChevronDown />
                   </Button>
                 </DropdownMenuTrigger>

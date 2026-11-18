@@ -1,3 +1,4 @@
+import { cn } from "cn"
 import { hideHome } from "@/components/Message"
 import { useEffect, useRef, useState } from "react"
 import { FileText, Paperclip, X } from "lucide-react"
@@ -111,7 +112,7 @@ export function ImageChips({ images, busy, onRemove }: { images: Img[]; busy: bo
 }
 
 // Bouton « joindre » : sur mobile, le collage et le glisser-déposer n'existent pas.
-export function AttachButton({ onPick, disabled }: { onPick: (files: File[]) => void; disabled?: boolean }) {
+export function AttachButton({ onPick, disabled, className }: { onPick: (files: File[]) => void; disabled?: boolean; className?: string }) {
   const { t } = useTranslation()
   const fileInput = useRef<HTMLInputElement>(null)
   const handleFilesChosen = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -127,7 +128,7 @@ export function AttachButton({ onPick, disabled }: { onPick: (files: File[]) => 
         onClick={() => fileInput.current?.click()}
         title={t("shell.images.attach")}
         aria-label={t("shell.images.attach")}
-        className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50"
+        className={cn("inline-flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50", className)}
       >
         <Paperclip className="size-4" />
       </button>
