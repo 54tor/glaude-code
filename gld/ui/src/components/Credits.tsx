@@ -112,18 +112,23 @@ function Way({ icon: Icon, title, text, href }: { icon: typeof Star; title: stri
   )
 }
 
-export function CreditsButton() {
+// Sans `triggerless`, affiche le bouton cœur ; avec, le dialogue est piloté de l'extérieur (entrée du menu mobile).
+export function CreditsButton({ open: controlledOpen, onOpenChange, triggerless }: { open?: boolean; onOpenChange?: (isOpen: boolean) => void; triggerless?: boolean } = {}) {
   const { t } = useTranslation()
-  const [open, setOpen] = useState(false)
+  const [innerOpen, setInnerOpen] = useState(false)
+  const open = controlledOpen ?? innerOpen
+  const setOpen = onOpenChange ?? setInnerOpen
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <Tip label={t("shell.credits.support")}>
-        <DialogTrigger asChild>
-          <Button variant="ghost" size="icon" className="size-9 text-muted-foreground" aria-label={t("shell.credits.support")}>
-            <Heart className="size-6" />
-          </Button>
-        </DialogTrigger>
-      </Tip>
+      {!triggerless && (
+        <Tip label={t("shell.credits.support")}>
+          <DialogTrigger asChild>
+            <Button variant="ghost" size="icon" className="size-9 text-muted-foreground" aria-label={t("shell.credits.support")}>
+              <Heart className="size-6" />
+            </Button>
+          </DialogTrigger>
+        </Tip>
+      )}
       <DialogContent className="max-h-[90vh] gap-5 overflow-y-auto sm:max-w-xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-xl">

@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next"
 import { CleanupWarning } from "./CleanupWarning"
 import { SessionTrash } from "./SessionTrash"
 import { NavContentSearch } from "./NavContentSearch"
-import { LayoutDashboard, ChevronRight, FolderPlus, GalleryHorizontalEnd, FolderOpen, Star, Brain, Puzzle, SlidersHorizontal, Shredder, Trash2, History, FileText, Inbox, Search, ScanText, ShieldCheck, Tag, Users, X, Ellipsis, Globe } from "lucide-react"
+import { LayoutDashboard, ChevronRight, FolderPlus, GalleryHorizontalEnd, FolderOpen, Star, Brain, Puzzle, SlidersHorizontal, Shredder, Trash2, Heart, History, FileText, Inbox, Search, ScanText, ShieldCheck, Tag, Users, X, Ellipsis, Globe } from "lucide-react"
 import { tilde } from "@/lib/format"
 import { href, type Route } from "@/lib/route"
 import type { Node } from "@/lib/tree"
@@ -341,6 +341,7 @@ export function Sidebar({ searchRef, ...props }: SidebarProps) {
   const wide = useSyncExternalStore(onWide, () => matchMedia(MD).matches)
   const [isMoreOpen, setIsMoreOpen] = useState(false)
   const [isTrashOpen, setIsTrashOpen] = useState(false)
+  const [isCreditsOpen, setIsCreditsOpen] = useState(false)
   const isSecondaryHidden = !wide && !normalizedNavQuery && !isMoreOpen
   const body = (
     <>
@@ -409,6 +410,7 @@ export function Sidebar({ searchRef, ...props }: SidebarProps) {
       ) : (
       <ScrollArea className="min-h-0 flex-1">
         <CleanupWarning />
+        <CreditsButton triggerless open={isCreditsOpen} onOpenChange={setIsCreditsOpen} />
         <SessionTrash open={isTrashOpen} onClose={() => setIsTrashOpen(false)} reload={props.reload} />
         <nav className="px-2 pb-3" aria-label={t("shell.sidebar.navigation")}>
           {show(t("shell.app.title.home")) && <NavItem icon={LayoutDashboard} label={t("shell.app.title.home")} active={currentRoute.kind === "home"} {...link({ kind: "home" })} />}
@@ -435,6 +437,7 @@ export function Sidebar({ searchRef, ...props }: SidebarProps) {
               {...link({ kind: "snippets", path: "" })}
             />
           )}
+          {!wide && show(t("shell.credits.support")) && <NavItem icon={Heart} label={t("shell.credits.support")} active={false} onClick={() => setIsCreditsOpen(true)} />}
             </>
           )}
 

@@ -18,6 +18,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Renommer une session ouverte depuis gld n'exige plus de la fermer : `/rename <titre>` lui est envoyé dès qu'elle est au repos.
 
 ### Corrigé
+- Sur mobile, le menu burger contient une entrée « Soutenir Glaude-Code » (cœur) qui ouvre la fenêtre des crédits, jusque-là visible seulement sur grand écran.
 - La corbeille des sessions revient dans la barre latérale (elle n'était plus que sur la page « Toutes les sessions ») ; la confirmation de mise à la corbeille n'affiche plus les rappels « sessions ouvertes fermées » et « restaurables 30 jours ».
 - Sur écran tactile, tous les boutons et sélecteurs font au moins 44 px de haut (standard mobile), contre 24 à 36 px auparavant.
 - Sur mobile, la zone de saisie d'une session suit la disposition de Claude sur iPhone : le champ, puis une rangée avec un bouton rond « Joindre », une pastille du modèle courant qui déplie Mode, Modèle, Effort et Commandes, et un envoi arrondi.
