@@ -33,6 +33,7 @@ import { DocumentsDialog } from "./DocumentsDialog"
 import { CacheState, KeepWarmBanner, KeepWarmItem } from "./KeepWarm"
 import { useLocal } from "@/hooks/useLocal"
 import { useGit } from "@/hooks/useGit"
+import { useDoubleTapContextMenu } from "@/hooks/useDoubleTapContextMenu"
 import { groupTools, ToolAnchor } from "./ToolAnchor"
 import { GitRepo } from "./GitRepo"
 import { GitRepos } from "./GitRepos"
@@ -334,6 +335,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
     intersectionObserver.observe(topSentinel)
     return () => intersectionObserver.disconnect()
   }, [more, older, viewport])
+  const doubleTapMenu = useDoubleTapContextMenu()
   const toTop = () => viewport()?.scrollTo({ top: 0 })
   // La vue descend à l'ouverture, à l'envoi d'un message, et suit la fin tant que l'utilisateur y est. Dès qu'il remonte lire, elle ne
   // bouge plus ; le bouton « Aller à la fin » prend le relais.
@@ -542,7 +544,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
                   ) : (
                     <ContextMenu key={`${entry.o}.${entry.n ?? 0}`}>
                       <ContextMenuTrigger asChild className="select-text">
-                        <div onContextMenu={(contextMenuEvent) => {
+                        <div {...doubleTapMenu} onContextMenu={(contextMenuEvent) => {
                           const clickedElement = contextMenuEvent.target as HTMLElement
                           setHit({
                             sel: window.getSelection()?.toString() ?? "",
