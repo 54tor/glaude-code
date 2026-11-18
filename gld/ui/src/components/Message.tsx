@@ -144,7 +144,7 @@ function UserText({ t: text, conv }: { t: string; conv?: Conv }) {
     const pastedContent = pastedMatch[1]
     const lines = pastedContent.split("\n").length
     if (lines < PASTED_COLLAPSE_MIN_LINES) {
-      parts.push(<PlainText key={pastedMatch.index} t={pastedContent} />)
+      pushMarkdownWithUploads(pastedContent.trim(), `p${pastedMatch.index}`)
       at = pastedMatch.index + pastedMatch[0].length
       continue
     }

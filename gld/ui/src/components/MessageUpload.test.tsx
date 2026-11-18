@@ -36,3 +36,10 @@ test("un .md joint s'ouvre en modale et affiche son contenu relu par son seul no
   fireEvent.click(container.querySelector("button")!)
   await waitFor(() => expect(document.body.textContent).toContain("Titre joint"))
 })
+
+test("un fichier joint cité dans un bloc collé court devient une pastille", () => {
+  const record = { r: "user" as const, t: '<pasted_content id="a1">\nSortie en fichier joint : @~/.claude/gld-web-images/20261118-154029-43e5d3d7.txt\n</pasted_content id="a1">' }
+  const { container } = render(<Message m={record} conv={{ dir: "d", id: "i" }} />)
+  expect(container.textContent).not.toContain("gld-web-images")
+  expect(container.querySelector("button")?.textContent).toContain("TXT")
+})
