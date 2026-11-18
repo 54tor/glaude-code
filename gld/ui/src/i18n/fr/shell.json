@@ -498,8 +498,6 @@
       "closedMany": "Sessions fermées",
       "closedOne": "Session fermée",
       "trashTitle": "Mettre à la corbeille ?",
-      "trashClosing": "Les sessions ouvertes seront d'abord fermées.",
-      "trashRestorable": "Les sessions restent restaurables 30 jours (menu de la barre latérale : Corbeille).",
       "trashConfirm": "Mettre à la corbeille",
       "purgeTitle": "Supprimer les {{n}} revues de sécurité ?",
       "purgeBody": "Environ {{size}} : sessions automatiques dont le titre contient « Review this change for security vulnerabilities » ou « You previously flagged these candidate ».\n\nLes sessions vivantes sont épargnées. Suppression définitive.",

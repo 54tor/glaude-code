@@ -642,14 +642,12 @@ describe("fermeture et suppression", () => {
     expect(onDone).not.toHaveBeenCalled()
   })
 
-  it("remove : prévient si une session à supprimer est ouverte", () => {
+  it("remove : le corps du dialogue est le libellé passé, sans texte annexe", () => {
     const { result, setAsk } = setup({ live: ["a1"] })
     result.current.actions.remove([{ dir: "dir-a1", id: "a1" }], "« Titre a1 »")
-    const withLive = lastCall(setAsk) as Ask
-    expect(withLive.removes).toBe(true)
-    result.current.actions.remove([{ dir: "dir-a2", id: "a2" }], "« Titre a2 »")
-    const withoutLive = lastCall(setAsk) as Ask
-    expect(withLive.body.length).toBeGreaterThan(withoutLive.body.length)
+    const dialogue = lastCall(setAsk) as Ask
+    expect(dialogue.removes).toBe(true)
+    expect(dialogue.body).toBe("« Titre a1 »")
   })
 
   it("remove confirmé : décoche, appelle after, met à la corbeille, recharge, propose d'annuler", async () => {

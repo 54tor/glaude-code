@@ -1,5 +1,4 @@
-import { Menu, MessageSquarePlus, MoreHorizontal, Trash2, TriangleAlert, RefreshCcwDot } from "lucide-react"
-import { useState } from "react"
+import { Menu, MessageSquarePlus, MoreHorizontal, TriangleAlert, RefreshCcwDot } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import type { Group, Item, VGroup } from "@/lib/api"
 import type { Route } from "@/lib/route"
@@ -10,7 +9,6 @@ import { AccountButton } from "./AccountDialog"
 import { UserMenu } from "./auth/Profile"
 import { useCan } from "@/lib/auth"
 import { DD, GroupItems } from "./SessionMenu"
-import { SessionTrash } from "./SessionTrash"
 import { cn } from "@/lib/utils"
 
 const SEARCHABLE_ROUTE_KINDS: Route["kind"][] = ["recent", "all", "active", "project", "group", "dir"]
@@ -30,7 +28,6 @@ export function PageHeader({
   actions,
   groupActs,
   split,
-  reload,
   searchBox,
 }: {
   onMenu: () => void // mobile : ouvre le menu
@@ -45,12 +42,10 @@ export function PageHeader({
   rowCount: number
   actions: Actions
   groupActs: GroupActions
-  reload: () => Promise<void>
   searchBox?: React.ReactNode // champ de recherche de la vue
   split?: boolean // vue en deux colonnes pleine largeur : l'en-tête suit leur bord gauche plutôt que le conteneur centré
 }) {
   const { t } = useTranslation()
-  const [trashOpen, setTrashOpen] = useState(false)
   const can = useCan()
   const exec = can("exec") // sans ce droit sur le home, sessions et terminal sont refusés : on ne les propose pas
   // Même axe que le contenu de la vue : le titre ne reste pas collé à gauche quand la liste est centrée sur grand écran.
@@ -108,14 +103,6 @@ export function PageHeader({
                 <GroupItems M={DD} vg={viewGroup} page />
               </DropdownMenuContent>
             </DropdownMenu>
-          )}
-          {route.kind === "all" && (
-            <>
-              <Button variant="ghost" size="sm" onClick={() => setTrashOpen(true)}>
-                <Trash2 /> <span className="max-md:sr-only">{t("shell.sidebar.trash")}</span>
-              </Button>
-              <SessionTrash open={trashOpen} onClose={() => setTrashOpen(false)} reload={reload} />
-            </>
           )}
         </div>
       </header>

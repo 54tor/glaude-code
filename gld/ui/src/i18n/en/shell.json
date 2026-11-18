@@ -498,8 +498,6 @@
       "closedMany": "Sessions closed",
       "closedOne": "Session closed",
       "trashTitle": "Move to the trash?",
-      "trashClosing": "Open sessions will be closed first.",
-      "trashRestorable": "Sessions stay restorable for 30 days (sidebar menu: Trash).",
       "trashConfirm": "Move to the trash",
       "purgeTitle": "Delete the {{n}} security reviews?",
       "purgeBody": "About {{size}}: automatic sessions whose title contains “Review this change for security vulnerabilities” or “You previously flagged these candidate”.\n\nLive sessions are spared. Permanent deletion.",

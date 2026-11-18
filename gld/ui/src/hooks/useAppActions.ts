@@ -621,13 +621,11 @@ export function useAppActions(context: {
       }
     },
     remove: (items, what, after) => {
-      const someAreOpen = items.some((item) => live.has(item.id))
-      const closingNotice = someAreOpen ? "\n\n" + i18n.t("shell.act.trashClosing") : ""
       return setAsk({
         title: i18n.t("shell.act.trashTitle"),
         rows: items.map((item) => item.id),
         removes: true,
-        body: `${what}${closingNotice}\n\n${i18n.t("shell.act.trashRestorable")}`,
+        body: what,
         confirm: i18n.t("shell.act.trashConfirm"),
         run: async () => {
           after?.()

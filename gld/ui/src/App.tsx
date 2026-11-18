@@ -604,7 +604,6 @@ function Shell() {
             actions={actions}
             groupActs={groupActs}
             split={ROUTES_WITH_SPLIT_LAYOUT.includes(route.kind)}
-            reload={reload}
             searchBox={
               ROUTES_WITH_SEARCH_BOX.includes(route.kind) ? (
                 <SessionSearch q={searchQuery} setQ={setSearchQuery} adv={advancedSearch} setAdv={setAdvancedSearch} searching={isSearchingContent} memory={route.kind === "memory"} />
