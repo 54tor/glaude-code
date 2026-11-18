@@ -5,6 +5,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 ## [Non publié]
 
 ### Ajouté
+- Envoyer à Claude l'échec d'une poussée joint désormais la sortie complète (hook compris) en fichier `.txt`, au lieu des 120 dernières lignes dans le message ; la consigne demande de corriger, commiter, puis repousser la même branche vers le même remote.
 - Dans la conversation, un fichier joint qui n'est pas une image (`@~/.claude/gld-web-images/….md`) s'affiche en pastille « Pièce jointe (MD) » au lieu du chemin brut ; pour un `.md` ou `.txt` dont le contenu est vraiment du texte UTF-8 (1 Mio max), la pastille ouvre le fichier dans une modale (`GET /v1/sessions/{id}/conversation/uploads/{up}/text`).
 - L'écran de connexion de Claude (`/login`, « Paste code here ») s'affiche en carte : lien OAuth à ouvrir ou copier, champ pour coller le code, bouton Échap. Le lien, replié sur plusieurs lignes par le terminal, est reconstitué.
 - Le bouton « Pousser » ouvre un dialogue qui liste, par remote, les commits qu'il n'a pas encore (`GET /v1/git/unpushed`), et pousse la branche vers tous les remotes cochés, l'un après l'autre ; un échec n'arrête pas les suivants.

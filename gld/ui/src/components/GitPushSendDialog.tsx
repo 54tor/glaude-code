@@ -1,7 +1,9 @@
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { api } from "@/lib/api"
-import { errMsg } from "@/lib/apiError"
+import { authFetch } from "@/lib/auth"
+import { errMsg, qs, readResponse, v1 } from "@/lib/apiError"
+import { hideHome } from "@/components/Message"
 import { buildGitPushReport } from "@/lib/gitPushReport"
 import { dismissGitPush, gitPushOutputTail, type GitPushRun } from "@/hooks/useGitPush"
 import { Button } from "@/components/ui/button"
@@ -9,7 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { useActions, type Row } from "./actions"
 
 const SEND_TIMEOUT_MS = 20_000
-const REPORT_OUTPUT_LINES = 120
+const FULL_OUTPUT = Infinity
 const SHORT_ID_LENGTH = 8
 
 const sessionLabel = (row: Row) => row.s.title || row.s.id.slice(0, SHORT_ID_LENGTH)
@@ -19,7 +21,14 @@ export function GitPushSendDialog({ run, open, onOpenChange }: { run: GitPushRun
   const { t } = useTranslation()
   const actions = useActions()
   const sameFolderRows = actions.rows.filter((row) => row.g.project === run.dir || row.s.cwd === run.dir)
-  const report = () => buildGitPushReport(run, gitPushOutputTail(run.id, REPORT_OUTPUT_LINES))
+  // La sortie complète part en fichier .txt (le message a une taille limitée) ; la mention « @chemin » la désigne à Claude.
+  const report = async (sessionId?: string) => {
+    const output = gitPushOutputTail(run.id, FULL_OUTPUT)
+    if (!output) return buildGitPushReport(run)
+    const response = await authFetch(v1(`/uploads/files${qs({ id: sessionId })}`), { method: "POST", headers: { "X-File-Name": encodeURIComponent(`push-${run.branch}.txt`) }, body: output })
+    const uploaded = await readResponse<{ path?: string }>(response)
+    return buildGitPushReport(run, uploaded.path ? `@${hideHome(uploaded.path)}` : undefined)
+  }
   const finishSending = () => {
     onOpenChange(false)
     dismissGitPush(run.id)
@@ -28,9 +37,10 @@ export function GitPushSendDialog({ run, open, onOpenChange }: { run: GitPushRun
     const isLive = actions.live.has(row.s.id)
     let isDelivered = false
     try {
-      if (isLive && !actions.waiting.has(row.s.id)) await api.queueAdd(row.s.id, report())
-      else if (isLive) await api.sessionSend(row.s.id, report(), SEND_TIMEOUT_MS)
-      isDelivered = isLive || (await actions.resumeSend(row, report()))
+      const message = await report(row.s.id)
+      if (isLive && !actions.waiting.has(row.s.id)) await api.queueAdd(row.s.id, message)
+      else if (isLive) await api.sessionSend(row.s.id, message, SEND_TIMEOUT_MS)
+      isDelivered = isLive || (await actions.resumeSend(row, message))
     } catch (sendError) {
       toast.error(errMsg(sendError))
     }
@@ -38,8 +48,13 @@ export function GitPushSendDialog({ run, open, onOpenChange }: { run: GitPushRun
     toast.success(t("conversation.gitPush.sent", { title: sessionLabel(row) }))
     finishSending()
   }
-  const sendToNewSession = () => {
-    actions.newSession(run.dir, report())
+  const sendToNewSession = async () => {
+    try {
+      actions.newSession(run.dir, await report())
+    } catch (sendError) {
+      toast.error(errMsg(sendError))
+      return
+    }
     finishSending()
   }
   return (
