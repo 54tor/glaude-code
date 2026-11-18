@@ -18,6 +18,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Renommer une session ouverte depuis gld n'exige plus de la fermer : `/rename <titre>` lui est envoyé dès qu'elle est au repos.
 
 ### Corrigé
+- Un fichier joint `.md` ou `.txt` envoyé pendant le tour en cours s'affiche en pastille cliquable, et non plus en chemin brut `@~/…`.
 - Éditeur : le focus d'un onglet ne reste plus sur l'ancien onglet après une flèche, Début ou Fin quand l'affichage se met à jour entre-temps (test `IdeView` instable).
 - Ouvrir une session depuis gld ne bascule plus sur l'agent view de Claude Code : les onglets lancent `claude` avec `CLAUDE_CODE_DISABLE_AGENT_VIEW=1`.
 - La barre latérale, les snippets, les commandes slash et la configuration ne se figent plus : les milliers de dossiers `-tmp-…` laissés sous `projects/` par des outils éphémères coûtaient un parcours du disque chacun. gld retire désormais ceux qui n'ont aucun fichier, toutes les 6 h, et garde plus longtemps en mémoire les noms introuvables.

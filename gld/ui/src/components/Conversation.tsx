@@ -585,7 +585,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
             {turn?.msgs
               .filter((turnMessage) => tools || turnMessage.r !== "tool")
               .map((turnMessage, turnMessageIndex) => (
-                <Message key={`t${turnMessageIndex}`} m={turnMessage} />
+                <Message key={`t${turnMessageIndex}`} m={turnMessage} conv={{ dir, id, tools }} />
               ))}
             {turn?.running && (
               <p role="status" className="flex items-center gap-2 text-muted-foreground">
