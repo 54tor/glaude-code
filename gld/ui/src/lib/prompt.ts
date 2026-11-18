@@ -13,7 +13,7 @@ const LABEL_BEFORE_PREVIEW_PANEL = /^(.*?\S)\s{2,}(?=[┌╭]─{2,}[┐╮]\s*$
 const PREVIEW_PANEL_BOTTOM = /^[└╰]─*[┘╯]/
 const FRAME_LEFT_EDGE = /^(\s*)[│┃]\s?/
 const FRAME_RIGHT_EDGE = /\s*[│┃]\s*$/
-const DIALOG_FOOTER = /(esc|escape) to (cancel|exit|go back)|enter to (select|confirm)|to navigate|tab to amend|ready to submit|submit your answers|do you want to|would you like to|proceed\?/i
+const DIALOG_FOOTER = /(esc|escape) to (cancel|exit|go back)|enter to (select|confirm)|to navigate|tab to amend|ready to submit|submit your answers|1\.\s+submit answers|do you want to|would you like to|proceed\?/i
 const NUMBERED_OPTION = /^\s*(?:[❯>›]\s*)?([1-9])[.)]\s+(\S.*)$/
 const NOTES_HINT_LINE = /^\s*Notes:/i
 const UNNUMBERED_CHAT_LINE = /^\s*chat about this\s*$/i

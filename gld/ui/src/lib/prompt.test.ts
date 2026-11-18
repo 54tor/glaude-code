@@ -320,6 +320,22 @@ describe("parsePrompt : captures réelles", () => {
     const prompt = parsePrompt(real.review)!
     expect(prompt.options.map((opt) => opt.keys[0])).toEqual(["1", "2"])
   })
+  it("relecture sans la ligne « Ready to submit » (version récente du terminal)", () => {
+    const screen = `←  ☒ F3  ☒ Suite  ✔ Submit  →
+
+Review your answers
+
+ │ ● F1 corrigé. Pour F3, quelle voie ?
+   → Exclure les empreintes avec pair
+ │ ● Commiter le tracker ?
+   → Commiter puis répondre (Recommended)
+
+❯ 1. Submit answers
+  2. Cancel
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── nom-de-session ─`
+    const prompt = parsePrompt(screen)!
+    expect(prompt.options.map((opt) => opt.keys[0])).toEqual(["1", "2"])
+  })
 })
 
 describe("parsePrompt : autres dialogues réels", () => {
