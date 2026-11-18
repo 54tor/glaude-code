@@ -5,7 +5,7 @@ import { useDoubleTapContextMenu } from "./useDoubleTapContextMenu"
 
 function pointer(pointerType: string, x = 10, y = 10) {
   const target = document.createElement("div")
-  return { pointerType, clientX: x, clientY: y, target, stopPropagation: vi.fn() } as never
+  return { pointerType, clientX: x, clientY: y, target, stopPropagation: vi.fn() } as never as React.PointerEvent<HTMLElement> & { target: HTMLElement }
 }
 
 describe("useDoubleTapContextMenu", () => {
