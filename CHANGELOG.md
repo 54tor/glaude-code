@@ -18,6 +18,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Renommer une session ouverte depuis gld n'exige plus de la fermer : `/rename <titre>` lui est envoyé dès qu'elle est au repos.
 
 ### Corrigé
+- Sur mobile, le bouton « Aller au début » se réduit à une icône discrète dans le coin et ne recouvre plus le texte de la conversation.
 - Un fichier joint `.md` ou `.txt` envoyé pendant le tour en cours s'affiche en pastille cliquable, et non plus en chemin brut `@~/…`.
 - Éditeur : le focus d'un onglet ne reste plus sur l'ancien onglet après une flèche, Début ou Fin quand l'affichage se met à jour entre-temps (test `IdeView` instable).
 - Ouvrir une session depuis gld ne bascule plus sur l'agent view de Claude Code : les onglets lancent `claude` avec `CLAUDE_CODE_DISABLE_AGENT_VIEW=1`.

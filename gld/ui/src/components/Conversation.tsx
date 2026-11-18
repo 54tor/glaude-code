@@ -512,8 +512,8 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
         {session && <LiveStats live={live} s={session} project={row?.g.project ?? session.cwd} detail={detail} shown={statsOpen} onShown={setStatsOpen} />}
         <div className="relative flex min-h-0 flex-1 flex-col">
           {fromTop && (
-            <Button size="sm" variant="secondary" className="absolute top-3 right-4 z-10 rounded-full shadow-md" onClick={toTop} aria-label={t("conversation.view.toTop")}>
-              <ArrowUpToLine /> {t("conversation.view.toTop")}
+            <Button size="sm" variant="secondary" className="absolute top-2 right-2 z-10 size-8 rounded-full p-0 opacity-80 shadow-md md:top-3 md:right-4 md:h-8 md:w-auto md:px-3 md:opacity-100" onClick={toTop} title={t("conversation.view.toTop")} aria-label={t("conversation.view.toTop")}>
+              <ArrowUpToLine /> <span className="hidden md:inline">{t("conversation.view.toTop")}</span>
             </Button>
           )}
         <ScrollArea ref={setArea} className={cn("min-h-0 flex-1", isSettling && "invisible")}>
