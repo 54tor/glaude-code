@@ -668,7 +668,7 @@ function LiveSend({ id, dir, onSent, liveState, onAsk, onLead, bar, compactHint,
           </div>
           <span className="ml-auto max-md:hidden" />
           <div className="flex items-center gap-2 max-md:w-full">
-            <AttachButton onPick={pictures.pick} className="size-10 rounded-full bg-secondary md:hidden" />
+            <AttachButton onPick={pictures.pick} className="size-11 rounded-full bg-secondary md:hidden" />
             <Button size="sm" variant="secondary" className="max-w-40 min-w-0 rounded-full md:hidden" aria-expanded={moreOpen} aria-label={t("conversation.composer.moreSettings")} title={t("conversation.composer.moreSettings")} onClick={() => setMoreOpen(!moreOpen)}>
               <span className="truncate">{models().find(([modelKey]) => modelKey === sessionModel)?.[1] || t("conversation.composer.sessionModel")}</span>
               {moreOpen ? <ChevronUp /> : <ChevronDown />}
@@ -706,13 +706,13 @@ function LiveSend({ id, dir, onSent, liveState, onAsk, onLead, bar, compactHint,
               {t("conversation.composer.waitIdle")}
             </label>
             <div className="flex">
-              <Button size="sm" className="rounded-r-none max-md:h-10 max-md:rounded-l-full max-md:px-3" onClick={() => void send()} disabled={(!text.trim() && !pictures.images.length) || busy || !exec}>
+              <Button size="sm" className="rounded-r-none max-md:h-11 max-md:rounded-l-full max-md:px-3" onClick={() => void send()} disabled={(!text.trim() && !pictures.images.length) || busy || !exec}>
                 <Send /> <span className="truncate max-md:hidden">{t("conversation.composer.sendToSession")}</span>
                 <span className="sr-only md:hidden">{t("conversation.composer.send")}</span>
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button size="sm" className="rounded-l-none border-l border-primary-foreground/30 px-1.5 max-md:h-10 max-md:rounded-r-full" aria-label={t("conversation.composer.sendOptions")} disabled={(!text.trim() && !pictures.images.length) || busy || !exec}>
+                  <Button size="sm" className="rounded-l-none border-l border-primary-foreground/30 px-1.5 max-md:h-11 max-md:rounded-r-full" aria-label={t("conversation.composer.sendOptions")} disabled={(!text.trim() && !pictures.images.length) || busy || !exec}>
                     <ChevronDown />
                   </Button>
                 </DropdownMenuTrigger>
