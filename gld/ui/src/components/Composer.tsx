@@ -8,7 +8,7 @@ import { contextToMarkdown } from "@/lib/boxTable"
 import { modeOfScreen, parseBtw, parseLogin, parsePrompt, type Opt } from "@/lib/prompt"
 import { type Live } from "./LiveStatus"
 import { toast } from "sonner"
-import { ArrowDownToLine, Bug, ExternalLink, ChevronDown, ChevronUp, Copy, GitFork, Minimize2, Snowflake, Send, SendHorizontal, Square, SquareCheck, X } from "lucide-react"
+import { ArrowDownToLine, Bug, ExternalLink, ChevronDown, ChevronUp, Copy, GitFork, Minimize2, SlidersHorizontal, Snowflake, Send, SendHorizontal, Square, SquareCheck, X } from "lucide-react"
 import { useLocal } from "@/hooks/useLocal"
 import { draftOf, setDraft, useDraft } from "@/hooks/useDraft"
 import { setWaitIdle, useWaitIdle } from "@/hooks/useWaitIdle"
@@ -436,6 +436,7 @@ function LiveSend({ id, dir, onSent, liveState, onAsk, onLead, bar, compactHint,
   }
   const waitIdle = useWaitIdle(id)
   const [busy, setBusy] = useState(false)
+  const [moreOpen, setMoreOpen] = useState(false)
   const [asking, setAsking] = useState(false) // une question attend une réponse dans le terminal : rien ne s'y écrit tant qu'elle est ouverte
   const working = !!liveState.st?.thinking
   const [selectedIndex, setSelectedIndex] = useState(0)
@@ -643,7 +644,7 @@ function LiveSend({ id, dir, onSent, liveState, onAsk, onLead, bar, compactHint,
         )}
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           {/* Téléphone : réglages sur une ligne à parts égales, actions sur la suivante avec l'envoi en largeur restante. */}
-          <div className="flex min-w-0 items-center gap-2 max-md:w-full max-md:[&>*]:min-w-0 max-md:[&>*]:flex-1">
+          <div className={cn("flex min-w-0 items-center gap-2 max-md:w-full max-md:[&>*]:min-w-0 max-md:[&>*]:flex-1", !moreOpen && "max-md:hidden")}>
             <LiveModeButton id={id} disabled={settingsDisabled} />
             <Choose
               value={sessionModel}
@@ -664,7 +665,12 @@ function LiveSend({ id, dir, onSent, liveState, onAsk, onLead, bar, compactHint,
           </div>
           <span className="ml-auto max-md:hidden" />
           <div className="flex items-center gap-2 max-md:w-full max-md:flex-wrap">
-            <SlashMenu id={id} text={text} onSent={onSent} />
+            <Button size="sm" variant={moreOpen ? "secondary" : "outline"} className="md:hidden" aria-expanded={moreOpen} aria-label={t("conversation.composer.moreSettings")} title={t("conversation.composer.moreSettings")} onClick={() => setMoreOpen(!moreOpen)}>
+              <SlidersHorizontal />
+            </Button>
+            <div className={cn(!moreOpen && "max-md:hidden")}>
+              <SlashMenu id={id} text={text} onSent={onSent} />
+            </div>
             {liveState.st?.thinking && (
               <Button
                 size="sm"

@@ -135,6 +135,7 @@
       "waitIdle": "Wait until idle",
       "waitIdleTitle": "Send nothing while Claude is working: the message goes out once it is waiting",
       "sendInterrupting": "Send, interrupting",
+      "moreSettings": "Settings and commands",
       "sendOptions": "Send options",
       "interrupt": "Interrupt",
       "background": "Background",

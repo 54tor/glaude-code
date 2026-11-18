@@ -135,6 +135,7 @@
       "waitIdle": "Attendre le repos",
       "waitIdleTitle": "Ne rien envoyer pendant que Claude travaille : le message part dès qu'il attend",
       "sendInterrupting": "Envoyer en interrompant",
+      "moreSettings": "Réglages et commandes",
       "sendOptions": "Options d'envoi",
       "interrupt": "Interrompre",
       "background": "Arrière-plan",
