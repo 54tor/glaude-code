@@ -18,6 +18,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Renommer une session ouverte depuis gld n'exige plus de la fermer : `/rename <titre>` lui est envoyé dès qu'elle est au repos.
 
 ### Corrigé
+- Sur écran tactile, les champs de recherche (barre latérale et vues de sessions) passent à 44 px de haut avec des boutons « Contenu » et effacer plus grands, et le repère clavier « / » disparaît.
 - Sur mobile, un appui long dans la conversation lance la sélection native du texte (poignées et copie du système) ; le menu contextuel (copier la sélection, le bloc, le lien, le message, revenir en arrière) s'ouvre au double tap.
 - Sur mobile, le bouton « Aller au début » se réduit à une icône discrète dans le coin et ne recouvre plus le texte de la conversation.
 - Un fichier joint `.md` ou `.txt` envoyé pendant le tour en cours s'affiche en pastille cliquable, et non plus en chemin brut `@~/…`.

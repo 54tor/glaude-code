@@ -358,7 +358,7 @@ export function Sidebar({ searchRef, ...props }: SidebarProps) {
           </div>
         </div>
         <div className="relative">
-          <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground pointer-coarse:left-3 pointer-coarse:size-5" />
           <Input
             ref={searchRef}
             value={navQuery}
@@ -371,12 +371,12 @@ export function Sidebar({ searchRef, ...props }: SidebarProps) {
               keyboardEvent.currentTarget.blur()
             }}
             placeholder={t("shell.sidebar.searchPlaceholder")}
-            className="bg-background pr-16 pl-8 shadow-none"
+            className="bg-background pr-16 pl-8 shadow-none pointer-coarse:h-11 pointer-coarse:pr-24 pointer-coarse:pl-10"
             aria-label={t("shell.sidebar.searchLabel")}
           />
           <Tip label={isContentSearch ? t("shell.sidebar.contentClose") : t("shell.sidebar.contentSearch")}>
             <button
-              className={cn("absolute top-1/2 right-8 -translate-y-1/2 rounded-sm p-0.5 text-muted-foreground hover:text-foreground pointer-coarse:p-1.5", isContentSearch && "bg-accent text-foreground")}
+              className={cn("absolute top-1/2 right-8 -translate-y-1/2 rounded-sm p-0.5 text-muted-foreground hover:text-foreground pointer-coarse:right-11 pointer-coarse:p-2.5", isContentSearch && "bg-accent text-foreground")}
               onClick={() => setIsContentSearch(!isContentSearch)}
               aria-pressed={isContentSearch}
               aria-label={t("shell.sidebar.contentSearch")}
@@ -386,14 +386,14 @@ export function Sidebar({ searchRef, ...props }: SidebarProps) {
           </Tip>
           {navQuery ? (
             <button
-              className="absolute top-1/2 right-2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              className="absolute top-1/2 right-2 -translate-y-1/2 text-muted-foreground hover:text-foreground pointer-coarse:right-1 pointer-coarse:p-2.5"
               onClick={clearNavQuery}
               aria-label={t("shell.sidebar.clearSearch")}
             >
               <X className="size-4" />
             </button>
           ) : (
-            <kbd className="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 rounded-sm border bg-muted px-1.5 font-mono text-2xs text-muted-foreground">
+            <kbd className="pointer-events-none pointer-coarse:hidden absolute top-1/2 right-2 -translate-y-1/2 rounded-sm border bg-muted px-1.5 font-mono text-2xs text-muted-foreground">
               /
             </kbd>
           )}
