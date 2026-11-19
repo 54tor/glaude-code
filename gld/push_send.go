@@ -2,10 +2,11 @@ package main
 
 import (
 	"encoding/json"
-	"golang.org/x/sync/errgroup"
 	"net/http"
 	"net/url"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 
 	webpush "github.com/SherClockHolmes/webpush-go"
 )

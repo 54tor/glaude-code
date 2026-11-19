@@ -6,7 +6,6 @@ package main
 
 import (
 	"context"
-	"golang.org/x/sync/singleflight"
 	"net/http"
 	"os"
 	"os/exec"
@@ -16,6 +15,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/sync/singleflight"
 )
 
 type GitState struct {
