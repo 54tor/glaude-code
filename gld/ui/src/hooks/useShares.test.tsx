@@ -5,7 +5,14 @@ import { api, type ShareInfo } from "@/lib/api"
 import { ApiError } from "@/lib/apiError"
 import { resetShares, useShares } from "./useShares"
 
-const share = (id: string): ShareInfo => ({ id, dir: "/d", title: "t", handle: "h", open: true, invites: [] })
+const share = (id: string): ShareInfo => ({
+  id,
+  dir: "/d",
+  title: "t",
+  handle: "h",
+  open: true,
+  invites: [],
+})
 let seen: ReturnType<typeof useShares>[] = []
 const Probe = ({ fast }: { fast?: boolean }) => {
   seen.push(useShares(fast))
@@ -26,7 +33,9 @@ afterEach(() => {
 
 describe("useShares", () => {
   it("lit au montage puis toutes les 10 s, et s'arrête au démontage", async () => {
-    const mock = vi.spyOn(api, "shares").mockResolvedValue({ shares: [share("a")] })
+    const mock = vi
+      .spyOn(api, "shares")
+      .mockResolvedValue({ shares: [share("a")] })
     const { unmount } = render(<Probe />)
     await act(async () => {})
     expect(mock).toHaveBeenCalledTimes(1)
@@ -56,7 +65,9 @@ describe("useShares", () => {
   })
 
   it("un seul sondage pour plusieurs consommateurs", async () => {
-    const mock = vi.spyOn(api, "shares").mockResolvedValue({ shares: [share("a")] })
+    const mock = vi
+      .spyOn(api, "shares")
+      .mockResolvedValue({ shares: [share("a")] })
     render(
       <>
         <Probe />
@@ -69,7 +80,9 @@ describe("useShares", () => {
   })
 
   it("403 et 404 : rien partagé, sans erreur", async () => {
-    vi.spyOn(api, "shares").mockRejectedValue(new ApiError(403, "forbidden", "x"))
+    vi.spyOn(api, "shares").mockRejectedValue(
+      new ApiError(403, "forbidden", "x")
+    )
     render(<Probe />)
     await act(async () => {})
     expect(last().shares).toEqual([])
@@ -77,7 +90,9 @@ describe("useShares", () => {
   })
 
   it("autre erreur : error, shares reste nul", async () => {
-    vi.spyOn(api, "shares").mockRejectedValue(new ApiError(500, "internal", "x"))
+    vi.spyOn(api, "shares").mockRejectedValue(
+      new ApiError(500, "internal", "x")
+    )
     render(<Probe />)
     await act(async () => {})
     expect(last().shares).toBeNull()
@@ -111,7 +126,9 @@ describe("useShares", () => {
     const mock = vi.spyOn(api, "shares").mockResolvedValue({ shares: [] })
     render(<Probe />)
     await act(async () => {})
-    await act(async () => void document.dispatchEvent(new Event("visibilitychange")))
+    await act(
+      async () => void document.dispatchEvent(new Event("visibilitychange"))
+    )
     expect(mock).toHaveBeenCalledTimes(2)
   })
 })

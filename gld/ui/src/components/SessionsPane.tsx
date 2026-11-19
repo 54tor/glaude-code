@@ -1,6 +1,12 @@
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
-import { ChevronRight, Lock, Search, WifiOff, RefreshCcwDot } from "lucide-react"
+import {
+  ChevronRight,
+  Lock,
+  Search,
+  WifiOff,
+  RefreshCcwDot,
+} from "lucide-react"
 import type { VGroup } from "@/lib/api"
 import { tilde } from "@/lib/format"
 import { segs } from "@/lib/paths"
@@ -21,7 +27,17 @@ const MAX_PULL_PX = 100
 const REFRESHING_INDICATOR_HEIGHT_PX = 40
 const SKELETON_ROW_COUNT = 5
 
-function Empty({ title, text, icon: Icon = Search, children }: { title: string; text: string; icon?: typeof Search; children?: React.ReactNode }) {
+function Empty({
+  title,
+  text,
+  icon: Icon = Search,
+  children,
+}: {
+  title: string
+  text: string
+  icon?: typeof Search
+  children?: React.ReactNode
+}) {
   return (
     <div className="flex flex-col items-center gap-2 py-20 text-center">
       <Icon className="size-7 text-muted-foreground/40" />
@@ -83,7 +99,8 @@ export function SessionsPane({
   const [pull, setPull] = useState(0)
   const [refreshing, setRefreshing] = useState(false)
   const [startY, setStartY] = useState(-1)
-  const viewport = (scrollArea: Element) => scrollArea.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]')
+  const viewport = (scrollArea: Element) =>
+    scrollArea.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]')
   const onTouchStart = (touchEvent: React.TouchEvent) => {
     const isSingleTouch = touchEvent.touches.length === 1
     const isAtTop = (viewport(touchEvent.currentTarget)?.scrollTop ?? 1) === 0
@@ -115,7 +132,12 @@ export function SessionsPane({
     if (pulledFarEnough) return "text-primary"
     return ""
   }
-  const displayedProject = route.kind === "project" ? actions.projects.find((candidateProject) => candidateProject.name === route.name) : undefined
+  const displayedProject =
+    route.kind === "project"
+      ? actions.projects.find(
+          (candidateProject) => candidateProject.name === route.name
+        )
+      : undefined
   const emptyTitle = () => {
     if (route.kind === "group" && !vg) return t("shell.pane.groupMissing")
     if (route.kind === "dir" && dirMissing) return t("shell.pane.dirMissing")
@@ -129,16 +151,40 @@ export function SessionsPane({
     return t("shell.pane.nothing")
   }
   return (
-    <ScrollArea className="min-h-0 flex-1" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd} onTouchCancel={resetPull}>
+    <ScrollArea
+      className="min-h-0 flex-1"
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+      onTouchCancel={resetPull}
+    >
       {(pull > 0 || refreshing) && (
-        <div className="flex items-center justify-center overflow-hidden text-muted-foreground" style={{ height: refreshing ? REFRESHING_INDICATOR_HEIGHT_PX : pull }} aria-live="polite">
-          <RefreshCcwDot className={"size-4 " + pullIndicatorClassName()} aria-label={t("shell.pane.pullRefresh")} />
+        <div
+          className="flex items-center justify-center overflow-hidden text-muted-foreground"
+          style={{ height: refreshing ? REFRESHING_INDICATOR_HEIGHT_PX : pull }}
+          aria-live="polite"
+        >
+          <RefreshCcwDot
+            className={"size-4 " + pullIndicatorClassName()}
+            aria-label={t("shell.pane.pullRefresh")}
+          />
         </div>
       )}
       <div className="mx-auto max-w-page px-3 py-4 pb-24 md:px-6">
         {loading && error && (
-          <Empty icon={denied ? Lock : WifiOff} title={denied ? t("auth.denied.title") : t("shell.pane.unreachable")} text={error}>
-            <Button variant="outline" size="sm" className="mt-2" onClick={retry}>
+          <Empty
+            icon={denied ? Lock : WifiOff}
+            title={
+              denied ? t("auth.denied.title") : t("shell.pane.unreachable")
+            }
+            text={error}
+          >
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-2"
+              onClick={retry}
+            >
               {t("common.retry")}
             </Button>
           </Empty>
@@ -151,15 +197,47 @@ export function SessionsPane({
           </div>
         )}
 
-        {!loading && route.kind === "dir" && project && <ProjectHead key={project} project={project} missing={dirMissing} />}
-        {!loading && route.kind === "dir" && project && <Notes key={"notes:" + project} noteKey={"d/" + project} folder={dirMissing ? undefined : project} scope={[project]} rows={rows} />}
-        {!loading && route.kind === "project" && <ProjectHead key={"head-p:" + route.name} dirs={displayedProject?.dirs ?? []} projectName={route.name} />}
-        {!loading && route.kind === "project" && <ProjectOverview key={"ov-p:" + route.name} dirs={displayedProject?.dirs ?? []} go={go} />}
+        {!loading && route.kind === "dir" && project && (
+          <ProjectHead key={project} project={project} missing={dirMissing} />
+        )}
+        {!loading && route.kind === "dir" && project && (
+          <Notes
+            key={"notes:" + project}
+            noteKey={"d/" + project}
+            folder={dirMissing ? undefined : project}
+            scope={[project]}
+            rows={rows}
+          />
+        )}
         {!loading && route.kind === "project" && (
-          <Notes key={"notes-p:" + route.name} noteKey={"p/" + route.name} folder={displayedProject?.dirs[0]} scope={displayedProject?.dirs ?? []} rows={rows} />
+          <ProjectHead
+            key={"head-p:" + route.name}
+            dirs={displayedProject?.dirs ?? []}
+            projectName={route.name}
+          />
+        )}
+        {!loading && route.kind === "project" && (
+          <ProjectOverview
+            key={"ov-p:" + route.name}
+            dirs={displayedProject?.dirs ?? []}
+            go={go}
+          />
+        )}
+        {!loading && route.kind === "project" && (
+          <Notes
+            key={"notes-p:" + route.name}
+            noteKey={"p/" + route.name}
+            folder={displayedProject?.dirs[0]}
+            scope={displayedProject?.dirs ?? []}
+            rows={rows}
+          />
         )}
 
-        {!loading && projectDir && (route.kind === "dir" || route.kind === "group") && <ProjectMemory key={projectDir} dir={projectDir} />}
+        {!loading &&
+          projectDir &&
+          (route.kind === "dir" || route.kind === "group") && (
+            <ProjectMemory key={projectDir} dir={projectDir} />
+          )}
 
         {!loading && route.kind === "recent" && (
           <div className="space-y-8">
@@ -168,22 +246,40 @@ export function SessionsPane({
                 <div className="mb-1 flex items-center gap-3 border-b px-3 py-1.5">
                   <button
                     className="min-w-0 truncate text-sm font-semibold text-primary underline underline-offset-2 hover:decoration-2 pointer-coarse:min-h-8"
-                    onClick={() => go({ kind: "dir", key: segs(project, home).join("/") })}
+                    onClick={() =>
+                      go({ kind: "dir", key: segs(project, home).join("/") })
+                    }
                     title={t("shell.common.showFolder")}
                   >
                     {tilde(project, home)}
                   </button>
-                  <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">{t("shell.count.sessions", { count: projectRows.length })}</span>
-                  {projectRows.some((projectRow) => live.has(projectRow.s.id)) && <Live className="text-xs" waiting={projectRows.some((projectRow) => waiting.has(projectRow.s.id))} />}
+                  <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">
+                    {t("shell.count.sessions", { count: projectRows.length })}
+                  </span>
+                  {projectRows.some((projectRow) =>
+                    live.has(projectRow.s.id)
+                  ) && (
+                    <Live
+                      className="text-xs"
+                      waiting={projectRows.some((projectRow) =>
+                        waiting.has(projectRow.s.id)
+                      )}
+                    />
+                  )}
                   {!projectRows[0].g.missing && (
                     <Button
                       variant="ghost"
                       size="xs"
                       className="ml-auto text-muted-foreground max-md:pointer-coarse:hidden"
-                      onClick={() => actions.open({ dir: projectRows[0].s.dir })}
+                      onClick={() =>
+                        actions.open({ dir: projectRows[0].s.dir })
+                      }
                       title={t("shell.pane.resumeFolderHint")}
                     >
-                      <RefreshCcwDot /> <span className="hidden lg:inline">{t("shell.pane.resumeFolder")}</span>
+                      <RefreshCcwDot />{" "}
+                      <span className="hidden lg:inline">
+                        {t("shell.pane.resumeFolder")}
+                      </span>
                     </Button>
                   )}
                 </div>
@@ -195,21 +291,36 @@ export function SessionsPane({
 
         {!loading && route.kind === "dir" && grouped.n > 0 && (
           <label className="mb-2 flex w-fit cursor-pointer items-center gap-2 px-3 text-xs text-muted-foreground select-none hover:text-foreground">
-            <Checkbox checked={grouped.hide} onCheckedChange={(checkedState) => grouped.setHide(checkedState === true)} />
+            <Checkbox
+              checked={grouped.hide}
+              onCheckedChange={(checkedState) =>
+                grouped.setHide(checkedState === true)
+              }
+            />
             {t("shell.header.hideGrouped", { n: grouped.n })}
           </label>
         )}
 
         {!loading && route.kind !== "recent" && rows.length > 0 && (
-          <SessionList items={rows} showProject={route.kind !== "dir" && route.kind !== "group"} showCache={route.kind === "active"} flat={route.kind === "active"} />
+          <SessionList
+            items={rows}
+            showProject={route.kind !== "dir" && route.kind !== "group"}
+            showCache={route.kind === "active"}
+            flat={route.kind === "active"}
+          />
         )}
 
         {!loading && subs.length > 0 && (
-          <details open={rows.length === 0} className="group/subs mt-8 border-t pt-4">
+          <details
+            open={rows.length === 0}
+            className="group/subs mt-8 border-t pt-4"
+          >
             <summary className="flex cursor-pointer list-none items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground">
               <ChevronRight className="size-4 transition-transform group-open/subs:rotate-90" />
               {t("shell.pane.subfolders")}
-              <span className="text-xs font-normal tabular-nums">{subs.length}</span>
+              <span className="text-xs font-normal tabular-nums">
+                {subs.length}
+              </span>
             </summary>
             <div className="mt-2">
               <SessionList items={subs} showProject />
@@ -218,12 +329,14 @@ export function SessionsPane({
         )}
 
         {!loading && rows.length === 0 && subs.length === 0 && (
-          <Empty
-            title={emptyTitle()}
-            text={emptyText()}
-          >
+          <Empty title={emptyTitle()} text={emptyText()}>
             {qt && (
-              <Button variant="outline" size="sm" className="mt-2" onClick={clearSearch}>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-2"
+                onClick={clearSearch}
+              >
                 {t("shell.sidebar.clearSearch")}
               </Button>
             )}

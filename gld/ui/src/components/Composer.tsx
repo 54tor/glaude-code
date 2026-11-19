@@ -5,15 +5,42 @@ import { i18n } from "@/i18n"
 import { cn, copyText, isSend, keyHint } from "@/lib/utils"
 import { QuestionContext } from "@/components/QuestionContext"
 import { contextToMarkdown } from "@/lib/boxTable"
-import { modeOfScreen, parseBtw, parseLogin, parsePrompt, type Opt } from "@/lib/prompt"
+import {
+  modeOfScreen,
+  parseBtw,
+  parseLogin,
+  parsePrompt,
+  type Opt,
+} from "@/lib/prompt"
 import { type Live } from "./LiveStatus"
 import { toast } from "sonner"
-import { ArrowDownToLine, Bug, ExternalLink, ChevronDown, ChevronUp, Copy, GitFork, Minimize2, Snowflake, Send, SendHorizontal, Square, SquareCheck, X } from "lucide-react"
+import {
+  ArrowDownToLine,
+  Bug,
+  ExternalLink,
+  ChevronDown,
+  ChevronUp,
+  Copy,
+  GitFork,
+  Minimize2,
+  Snowflake,
+  Send,
+  SendHorizontal,
+  Square,
+  SquareCheck,
+  X,
+} from "lucide-react"
 import { useLocal } from "@/hooks/useLocal"
 import { draftOf, setDraft, useDraft } from "@/hooks/useDraft"
 import { setWaitIdle, useWaitIdle } from "@/hooks/useWaitIdle"
 import { Checkbox } from "@/components/ui/checkbox"
-import { efforts, modelKeyOf, models, withChoice, type Choice } from "@/lib/models"
+import {
+  efforts,
+  modelKeyOf,
+  models,
+  withChoice,
+  type Choice,
+} from "@/lib/models"
 import { ModelPicker } from "./ModelPicker"
 import { useMention } from "./Mention"
 import { Choose } from "./Choose"
@@ -22,7 +49,13 @@ import { errMsg, qs, readResponse, seg, v1 } from "@/lib/apiError"
 import { useActions } from "./actions"
 import { AttachButton, ImageChips, useImages } from "@/hooks/useImages"
 import { Button } from "@/components/ui/button"
-import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { readNdjson } from "@/lib/ndjson"
 import { authFetch, useCan } from "@/lib/auth"
 
@@ -39,8 +72,10 @@ const SCREEN_CHANGE_POLL_MS = 400
 const SCREEN_CHANGE_MAX_POLLS = 10
 const QUESTION_CLOSE_DELAY_MS = 800
 
-const wait = (delayMs: number) => new Promise((resolve) => setTimeout(resolve, delayMs))
-const appendToDraft = (draftText: string, addition: string) => (draftText.trim() ? `${draftText}\n${addition}` : addition)
+const wait = (delayMs: number) =>
+  new Promise((resolve) => setTimeout(resolve, delayMs))
+const appendToDraft = (draftText: string, addition: string) =>
+  draftText.trim() ? `${draftText}\n${addition}` : addition
 
 // File serveur : un refus (pleine, texte refusé) s'affiche et laisse le brouillon intact.
 async function addToQueue(id: string, text: string): Promise<boolean> {
@@ -76,20 +111,40 @@ async function retryItem(id: string, item: QItem) {
   }
 }
 // Une ligne de la file. Un envoi incertain se tranche (renvoyer ou retirer) ; un envoi en cours ne se retire plus.
-function QueueRow({ id, item, index, label, onSendNow }: { id: string; item: QItem; index: number; label?: ReactNode; onSendNow?: (item: QItem) => void }) {
+function QueueRow({
+  id,
+  item,
+  index,
+  label,
+  onSendNow,
+}: {
+  id: string
+  item: QItem
+  index: number
+  label?: ReactNode
+  onSendNow?: (item: QItem) => void
+}) {
   const { t } = useTranslation()
   let status: ReactNode
   if (item.state === "uncertain") {
     status = (
       <>
-        <span className="shrink-0 text-amber-600 dark:text-amber-400">{t("conversation.composer.sendUncertain")}</span>
-        <Button size="xs" variant="outline" onClick={() => void retryItem(id, item)}>
+        <span className="shrink-0 text-amber-600 dark:text-amber-400">
+          {t("conversation.composer.sendUncertain")}
+        </span>
+        <Button
+          size="xs"
+          variant="outline"
+          onClick={() => void retryItem(id, item)}
+        >
           {t("conversation.composer.resend")}
         </Button>
       </>
     )
   } else if (item.state === "sending") {
-    status = <span className="shrink-0">{t("conversation.composer.sending")}</span>
+    status = (
+      <span className="shrink-0">{t("conversation.composer.sending")}</span>
+    )
   } else {
     status = label && <span className="shrink-0">{label}</span>
   }
@@ -102,12 +157,22 @@ function QueueRow({ id, item, index, label, onSendNow }: { id: string; item: QIt
       </span>
       {status}
       {onSendNow && item.state === "queued" && (
-        <Button size="xs" variant="outline" title={t("conversation.composer.sendNowTitle")} onClick={() => onSendNow(item)}>
+        <Button
+          size="xs"
+          variant="outline"
+          title={t("conversation.composer.sendNowTitle")}
+          onClick={() => onSendNow(item)}
+        >
           <SendHorizontal /> {t("conversation.composer.sendNow")}
         </Button>
       )}
       {item.state !== "sending" && (
-        <Button size="icon-xs" variant="ghost" aria-label={t("conversation.composer.dequeue")} onClick={() => void removeFromQueue(id, item)}>
+        <Button
+          size="icon-xs"
+          variant="ghost"
+          aria-label={t("conversation.composer.dequeue")}
+          onClick={() => void removeFromQueue(id, item)}
+        >
           <X />
         </Button>
       )}
@@ -117,7 +182,11 @@ function QueueRow({ id, item, index, label, onSendNow }: { id: string; item: QIt
 function Author({ item }: { item: QItem }) {
   const { t } = useTranslation()
   if (item.author !== "guest") return null
-  return <span className="shrink-0 rounded bg-muted px-1 text-2xs uppercase">{item.label || t("conversation.composer.guest")}</span>
+  return (
+    <span className="shrink-0 rounded bg-muted px-1 text-2xs uppercase">
+      {item.label || t("conversation.composer.guest")}
+    </span>
+  )
 }
 
 // Modes d'autorisation de claude -p : sans terminal, Claude ne peut pas demander la permission.
@@ -149,7 +218,13 @@ const keepFocus = () => {
   requestAnimationFrame(() => field?.focus()) // après le rendu qui suit l'envoi
 }
 
-export type Turn = { id: string; msgs: Msg[]; running: boolean; error?: string; cost?: number }
+export type Turn = {
+  id: string
+  msgs: Msg[]
+  running: boolean
+  error?: string
+  cost?: number
+}
 
 // Écrire dans la session depuis le navigateur : claude -p --resume, réponse relayée au fil de l'eau (NDJSON).
 export function Composer({
@@ -222,7 +297,7 @@ export function Composer({
       setText("")
       api.rename({ dir, id }, { title: renameMatch[1] }).then(
         (response) => toast.success(response.message),
-        (error) => toast.error(errMsg(error)),
+        (error) => toast.error(errMsg(error))
       )
       void onDone()
       return
@@ -245,7 +320,8 @@ export function Composer({
     if (delivered) return
     // non délivré : jamais perdu, il revient dans le brouillon
     const currentDraft = draftOf(id).text
-    if (!currentDraft.includes(prompt)) setText(appendToDraft(currentDraft, prompt))
+    if (!currentDraft.includes(prompt))
+      setText(appendToDraft(currentDraft, prompt))
   }
   // Envoyer la tête de la file suspendue : son texte passe d'abord dans le brouillon (enregistré), puis la file le lâche, puis
   // l'envoi ; le brouillon d'origine n'est rendu qu'une fois l'envoi réussi, donc fermer l'onglet n'efface jamais le texte.
@@ -275,25 +351,42 @@ export function Composer({
     onStart?.()
     const fail = (error: string) => {
       setOwn(false)
-      setTurn((previousTurn) => previousTurn && { ...previousTurn, running: false, error })
+      setTurn(
+        (previousTurn) =>
+          previousTurn && { ...previousTurn, running: false, error }
+      )
       return false
     }
     stopped.current = false
     let failed = false
     let response: Response
     try {
-      response = await authFetch(v1(`/sessions/${seg(id)}/chat${qs({ dir })}`), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, args: withChoice(args, choice), mode }),
-      })
+      response = await authFetch(
+        v1(`/sessions/${seg(id)}/chat${qs({ dir })}`),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            prompt,
+            args: withChoice(args, choice),
+            mode,
+          }),
+        }
+      )
       if (!response.ok) await readResponse(response)
     } catch (error) {
       return fail(errMsg(error))
     }
     if (!response.body) return fail(`HTTP ${response.status}`)
     try {
-      for await (const event of readNdjson<{ msgs?: Msg[]; done?: boolean; ok?: boolean; error?: string; cost?: number; note?: string }>(response.body)) {
+      for await (const event of readNdjson<{
+        msgs?: Msg[]
+        done?: boolean
+        ok?: boolean
+        error?: string
+        cost?: number
+        note?: string
+      }>(response.body)) {
         if (event.note) toast.info(event.note)
         const turnFailed = !!event.done && !event.ok
         if (turnFailed) failed = true
@@ -301,9 +394,13 @@ export function Composer({
           (previousTurn) =>
             previousTurn && {
               ...previousTurn,
-              msgs: event.msgs ? [...previousTurn.msgs, ...event.msgs] : previousTurn.msgs,
+              msgs: event.msgs
+                ? [...previousTurn.msgs, ...event.msgs]
+                : previousTurn.msgs,
               running: event.done ? false : previousTurn.running,
-              error: turnFailed ? event.error || i18n.t("conversation.composer.failed") : previousTurn.error,
+              error: turnFailed
+                ? event.error || i18n.t("conversation.composer.failed")
+                : previousTurn.error,
               cost: event.cost ?? previousTurn.cost,
             }
         )
@@ -312,11 +409,21 @@ export function Composer({
       return fail(error instanceof Error ? error.message : String(error)) // connexion coupée en cours de réponse
     }
     const delivered = !failed || stopped.current // échec de claude (pas un arrêt demandé) : on ne sait pas si le message est parti
-    setTurn((previousTurn) => previousTurn && { ...previousTurn, running: false })
+    setTurn(
+      (previousTurn) => previousTurn && { ...previousTurn, running: false }
+    )
     await onDone() // le transcript est relu avant le tour suivant, qui efface sinon son propre affichage
-    if (delivered) api.rename({ dir, id }, { auto: true, keep: true }).then(() => onDone(), () => {}) // échec (session ouverte, IA indisponible) : le titre par défaut reste
+    if (delivered)
+      api.rename({ dir, id }, { auto: true, keep: true }).then(
+        () => onDone(),
+        () => {}
+      ) // échec (session ouverte, IA indisponible) : le titre par défaut reste
     // Écrire dans une session fermée (tiède) la rouvre : elle repasse dans les sessions actives.
-    if (delivered && wasClosed) api.open({ dir, id, args }).then(() => actions.touch(id), () => {})
+    if (delivered && wasClosed)
+      api.open({ dir, id, args }).then(
+        () => actions.touch(id),
+        () => {}
+      )
     setTimeout(() => setOwn(false), OWN_TURN_GRACE_MS)
     return delivered
   }
@@ -325,7 +432,20 @@ export function Composer({
     void api.chatStop(id).catch(() => {})
   }
 
-  if (live && !running && !own) return <LiveSend id={id} dir={dir} onSent={onSent} liveState={liveState} onAsk={onAsk} onLead={onLead} bar={extra} compactHint={compactHint} coldHint={coldHint} />
+  if (live && !running && !own)
+    return (
+      <LiveSend
+        id={id}
+        dir={dir}
+        onSent={onSent}
+        liveState={liveState}
+        onAsk={onAsk}
+        onLead={onLead}
+        bar={extra}
+        compactHint={compactHint}
+        coldHint={coldHint}
+      />
+    )
   return (
     <div className="border-t bg-muted/20 px-4 py-3">
       <div className="mx-auto max-w-page space-y-2">
@@ -348,7 +468,11 @@ export function Composer({
             }}
             onPaste={pictures.onPaste}
             onDrop={pictures.onDrop}
-            placeholder={keyHint(running ? t("conversation.composer.placeholderRunning") : t("conversation.composer.placeholder"))}
+            placeholder={keyHint(
+              running
+                ? t("conversation.composer.placeholderRunning")
+                : t("conversation.composer.placeholder")
+            )}
             rows={2}
             maxLength={MAX_MESSAGE_LENGTH}
             className="session-text field-sizing-content max-h-48 min-h-14 w-full resize-none rounded-lg border border-input bg-background py-2 pr-10 pl-3 outline-none focus-visible:ring-3 focus-visible:ring-ring/80 disabled:opacity-60"
@@ -358,11 +482,23 @@ export function Composer({
             <AttachButton onPick={pictures.pick} disabled={running} />
           </div>
         </div>
-        <ImageChips images={pictures.images} busy={pictures.busy} onRemove={pictures.remove} />
+        <ImageChips
+          images={pictures.images}
+          busy={pictures.busy}
+          onRemove={pictures.remove}
+        />
         {queue.length > 0 && (
-          <ul className="space-y-1 text-xs" aria-label={t("conversation.composer.queueAria")}>
+          <ul
+            className="space-y-1 text-xs"
+            aria-label={t("conversation.composer.queueAria")}
+          >
             {queue.map((queueItem, queueIndex) => (
-              <QueueRow key={queueItem.id} id={id} item={queueItem} index={queueIndex} />
+              <QueueRow
+                key={queueItem.id}
+                id={id}
+                item={queueItem}
+                index={queueIndex}
+              />
             ))}
             {!running && queue[0].state === "queued" && (
               <li className="flex items-center gap-2 text-muted-foreground">
@@ -379,17 +515,41 @@ export function Composer({
           </ul>
         )}
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          <Choose value={mode} onChange={setMode} options={modes()} label={t("conversation.composer.permissions")} disabled={running} size="sm" className="max-w-full min-w-0" />
-          <ModelPicker value={choice} onChange={setChoice} disabled={running} size="sm" />
-          {turn?.cost ? <span className="text-muted-foreground">{t("conversation.composer.cost", { cost: turn.cost.toFixed(2) })}</span> : null}
+          <Choose
+            value={mode}
+            onChange={setMode}
+            options={modes()}
+            label={t("conversation.composer.permissions")}
+            disabled={running}
+            size="sm"
+            className="max-w-full min-w-0"
+          />
+          <ModelPicker
+            value={choice}
+            onChange={setChoice}
+            disabled={running}
+            size="sm"
+          />
+          {turn?.cost ? (
+            <span className="text-muted-foreground">
+              {t("conversation.composer.cost", { cost: turn.cost.toFixed(2) })}
+            </span>
+          ) : null}
           <span className="ml-auto max-md:hidden" />
           {running ? (
             <Button size="sm" variant="outline" onClick={stop}>
               <Square /> {t("conversation.composer.stop")}
             </Button>
           ) : (
-            <Button size="sm" onClick={send} disabled={(!text.trim() && !pictures.images.length) || !exec}>
-              <Send /> <span className="max-md:sr-only">{t("conversation.composer.send")}</span>
+            <Button
+              size="sm"
+              onClick={send}
+              disabled={(!text.trim() && !pictures.images.length) || !exec}
+            >
+              <Send />{" "}
+              <span className="max-md:sr-only">
+                {t("conversation.composer.send")}
+              </span>
             </Button>
           )}
         </div>
@@ -404,10 +564,18 @@ export type ColdHintProps = { text: string; onNew: () => void }
 function ColdHint({ text, onNew }: ColdHintProps) {
   const { t } = useTranslation()
   return (
-    <p role="status" className="flex items-center gap-2 rounded-md bg-info/10 px-3 py-1 text-xs text-info">
+    <p
+      role="status"
+      className="flex items-center gap-2 rounded-md bg-info/10 px-3 py-1 text-xs text-info"
+    >
       <Snowflake className="size-3.5 shrink-0" aria-hidden />
       <span className="min-w-0 flex-1">{text}</span>
-      <Button size="xs" variant="outline" title={t("conversation.composer.coldNewTitle")} onClick={onNew}>
+      <Button
+        size="xs"
+        variant="outline"
+        title={t("conversation.composer.coldNewTitle")}
+        onClick={onNew}
+      >
         {t("conversation.composer.coldNew")}
       </Button>
     </p>
@@ -416,7 +584,27 @@ function ColdHint({ text, onNew }: ColdHintProps) {
 
 // Session ouverte dans un terminal : deux processus ne peuvent pas écrire le même transcript, donc pas de claude -p ici. Si la session
 // tourne dans tmux, le message y est collé puis validé ; sinon on l'explique.
-function LiveSend({ id, dir, onSent, liveState, onAsk, onLead, bar, compactHint, coldHint }: { id: string; dir: string; onSent: () => void; liveState: Live; onAsk?: (asking: boolean) => void; onLead?: (lead: string | null) => void; bar?: ReactNode; compactHint?: string | null; coldHint?: ColdHintProps | null }) {
+function LiveSend({
+  id,
+  dir,
+  onSent,
+  liveState,
+  onAsk,
+  onLead,
+  bar,
+  compactHint,
+  coldHint,
+}: {
+  id: string
+  dir: string
+  onSent: () => void
+  liveState: Live
+  onAsk?: (asking: boolean) => void
+  onLead?: (lead: string | null) => void
+  bar?: ReactNode
+  compactHint?: string | null
+  coldHint?: ColdHintProps | null
+}) {
   const { t } = useTranslation()
   const actions = useActions()
   const exec = useCan()("exec")
@@ -444,10 +632,19 @@ function LiveSend({ id, dir, onSent, liveState, onAsk, onLead, bar, compactHint,
   const pictures = useImages(id)
   useEffect(() => {
     let isMounted = true
-    api.sendInfo().then((sendInfo) => isMounted && setInfo(sendInfo), () => {})
+    api.sendInfo().then(
+      (sendInfo) => isMounted && setInfo(sendInfo),
+      () => {}
+    )
     api.slashCommands().then(
-      (response) => isMounted && setExtra(response.commands.map((command) => [command.cmd, command.desc] as const)),
-      () => {},
+      (response) =>
+        isMounted &&
+        setExtra(
+          response.commands.map(
+            (command) => [command.cmd, command.desc] as const
+          )
+        ),
+      () => {}
     )
     return () => {
       isMounted = false
@@ -462,16 +659,21 @@ function LiveSend({ id, dir, onSent, liveState, onAsk, onLead, bar, compactHint,
       ["/btw", i18n.t("conversation.slash.btw.hint")] as const,
       ...extra,
     ]
-    suggestions = knownCommands.filter(([command]) => command.startsWith(text) && command !== text)
+    suggestions = knownCommands.filter(
+      ([command]) => command.startsWith(text) && command !== text
+    )
   }
-  const highlightedIndex = suggestions.length ? selectedIndex % suggestions.length : 0
+  const highlightedIndex = suggestions.length
+    ? selectedIndex % suggestions.length
+    : 0
   // Un message part tout de suite, même pendant que Claude travaille (il le lit au prochain pas). Il est mis en file, et part dès que la
   // session attend, si une question attend (il répondrait à sa place) ou si « Attendre le repos » est coché.
   const post = async (full: string) => {
     setBusy(true)
     try {
       await api.sessionSend(id, full, LIVE_SEND_TIMEOUT_MS)
-      if (!full.startsWith("/")) api.rename({ dir, id }, { auto: true, keep: true }).catch(() => {}) // le serveur envoie /rename au repos, une fois
+      if (!full.startsWith("/"))
+        api.rename({ dir, id }, { auto: true, keep: true }).catch(() => {}) // le serveur envoie /rename au repos, une fois
       return true
     } catch (error) {
       toast.error(errMsg(error)) // le succès se voit dans la session : pas de notification
@@ -496,7 +698,9 @@ function LiveSend({ id, dir, onSent, liveState, onAsk, onLead, bar, compactHint,
       return
     }
     if (interrupt && working) {
-      await api.sessionKey(id, "Escape").catch((error) => toast.error(errMsg(error)))
+      await api
+        .sessionKey(id, "Escape")
+        .catch((error) => toast.error(errMsg(error)))
       await wait(INTERRUPT_SETTLE_MS)
     }
     const posted = await post(full)
@@ -517,9 +721,12 @@ function LiveSend({ id, dir, onSent, liveState, onAsk, onLead, bar, compactHint,
     } finally {
       refreshPending()
     }
-    await api.sessionKey(id, "Escape").catch((error) => toast.error(errMsg(error)))
+    await api
+      .sessionKey(id, "Escape")
+      .catch((error) => toast.error(errMsg(error)))
     await new Promise((resolve) => setTimeout(resolve, INTERRUPT_SETTLE_MS))
-    if (!(await post(queuedText))) setText(appendToDraft(draftOf(id).text, queuedText))
+    if (!(await post(queuedText)))
+      setText(appendToDraft(draftOf(id).text, queuedText))
     else onSent()
   }
   let headOfQueueLabel: string | undefined
@@ -540,8 +747,15 @@ function LiveSend({ id, dir, onSent, liveState, onAsk, onLead, bar, compactHint,
             t("conversation.composer.backgroundOnly")
           ) : (
             <>
-              <Trans i18nKey="conversation.composer.noTmux" components={[<code key="0" />]} />
-              {info && " " + t("conversation.composer.relaunch", { why: info.why ? ` (${info.why})` : "" })}
+              <Trans
+                i18nKey="conversation.composer.noTmux"
+                components={[<code key="0" />]}
+              />
+              {info &&
+                " " +
+                  t("conversation.composer.relaunch", {
+                    why: info.why ? ` (${info.why})` : "",
+                  })}
             </>
           )}
         </p>
@@ -562,30 +776,47 @@ function LiveSend({ id, dir, onSent, liveState, onAsk, onLead, bar, compactHint,
           extra={bar}
         />
         {compactHint && (
-          <p role="status" className="flex items-center gap-2 rounded-md bg-warning/10 px-3 py-1 text-xs text-warning">
+          <p
+            role="status"
+            className="flex items-center gap-2 rounded-md bg-warning/10 px-3 py-1 text-xs text-warning"
+          >
             <Minimize2 className="size-3.5 shrink-0" aria-hidden />
             <span className="min-w-0 flex-1">{compactHint}</span>
-            <Button size="xs" variant="outline" disabled={!exec} title={t("conversation.composer.compactTitle")} onClick={() => sendSlash(id, "/compact", text, onSent)}>
+            <Button
+              size="xs"
+              variant="outline"
+              disabled={!exec}
+              title={t("conversation.composer.compactTitle")}
+              onClick={() => sendSlash(id, "/compact", text, onSent)}
+            >
               {t("conversation.composer.compact")}
             </Button>
           </p>
         )}
         {coldHint && <ColdHint {...coldHint} />}
         {suggestions.length > 0 && (
-          <ul className="max-h-48 overflow-y-auto rounded-lg border bg-popover p-1 text-sm shadow-md" role="listbox" aria-label={t("conversation.composer.commandsAria")}>
+          <ul
+            className="max-h-48 overflow-y-auto rounded-lg border bg-popover p-1 text-sm shadow-md"
+            role="listbox"
+            aria-label={t("conversation.composer.commandsAria")}
+          >
             {suggestions.map(([cmd, label], suggestionIndex) => (
               <li
                 key={cmd}
                 role="option"
                 ref={(element) => {
-                  if (element && suggestionIndex === highlightedIndex) element.scrollIntoView({ block: "nearest" })
+                  if (element && suggestionIndex === highlightedIndex)
+                    element.scrollIntoView({ block: "nearest" })
                 }}
                 aria-selected={suggestionIndex === highlightedIndex}
                 onMouseDown={(mouseEvent) => {
                   mouseEvent.preventDefault()
                   setText(cmd + " ")
                 }}
-                className={cn("flex cursor-pointer items-baseline gap-2 rounded-md px-2 py-1", suggestionIndex === highlightedIndex && "bg-accent")}
+                className={cn(
+                  "flex cursor-pointer items-baseline gap-2 rounded-md px-2 py-1",
+                  suggestionIndex === highlightedIndex && "bg-accent"
+                )}
               >
                 <code className="text-xs">{cmd}</code>
                 <span className="text-muted-foreground">{label}</span>
@@ -613,8 +844,11 @@ function LiveSend({ id, dir, onSent, liveState, onAsk, onLead, bar, compactHint,
               }
               if (keyEvent.key === "ArrowDown" || keyEvent.key === "ArrowUp") {
                 keyEvent.preventDefault()
-                const step = keyEvent.key === "ArrowDown" ? 1 : suggestions.length - 1
-                setSelectedIndex((previousIndex) => (previousIndex + step) % suggestions.length)
+                const step =
+                  keyEvent.key === "ArrowDown" ? 1 : suggestions.length - 1
+                setSelectedIndex(
+                  (previousIndex) => (previousIndex + step) % suggestions.length
+                )
                 return
               }
               if (keyEvent.key === "Tab" || keyEvent.key === "Enter") {
@@ -634,30 +868,57 @@ function LiveSend({ id, dir, onSent, liveState, onAsk, onLead, bar, compactHint,
             <AttachButton onPick={pictures.pick} />
           </div>
         </div>
-        <ImageChips images={pictures.images} busy={pictures.busy} onRemove={pictures.remove} />
+        <ImageChips
+          images={pictures.images}
+          busy={pictures.busy}
+          onRemove={pictures.remove}
+        />
         {queue.length > 0 && (
-          <ul className="space-y-1 text-xs" aria-label={t("conversation.composer.queueAria")}>
+          <ul
+            className="space-y-1 text-xs"
+            aria-label={t("conversation.composer.queueAria")}
+          >
             {queue.map((queueItem, queueIndex) => (
-              <QueueRow key={queueItem.id} id={id} item={queueItem} index={queueIndex} label={queueIndex === 0 ? headOfQueueLabel : undefined} onSendNow={working && !asking ? sendNow : undefined} />
+              <QueueRow
+                key={queueItem.id}
+                id={id}
+                item={queueItem}
+                index={queueIndex}
+                label={queueIndex === 0 ? headOfQueueLabel : undefined}
+                onSendNow={working && !asking ? sendNow : undefined}
+              />
             ))}
           </ul>
         )}
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           {/* Téléphone : réglages sur une ligne à parts égales, actions sur la suivante avec l'envoi en largeur restante. */}
-          <div className={cn("flex min-w-0 items-center gap-2 max-md:grid max-md:w-full max-md:grid-cols-2 max-md:[&>*]:min-w-0", !moreOpen && "max-md:hidden")}>
+          <div
+            className={cn(
+              "flex min-w-0 items-center gap-2 max-md:grid max-md:w-full max-md:grid-cols-2 max-md:[&>*]:min-w-0",
+              !moreOpen && "max-md:hidden"
+            )}
+          >
             <LiveModeButton id={id} disabled={settingsDisabled} />
             <Choose
               value={sessionModel}
               onChange={(selectedModel) => postSetting("/model", selectedModel)}
-              options={[["", t("conversation.composer.modelEllipsis")], ...models().slice(1)]}
+              options={[
+                ["", t("conversation.composer.modelEllipsis")],
+                ...models().slice(1),
+              ]}
               label={t("conversation.composer.sessionModel")}
               size="sm"
               disabled={settingsDisabled}
             />
             <Choose
               value=""
-              onChange={(selectedEffort) => postSetting("/effort", selectedEffort)}
-              options={[["", t("conversation.composer.effortEllipsis")], ...efforts().slice(1)]}
+              onChange={(selectedEffort) =>
+                postSetting("/effort", selectedEffort)
+              }
+              options={[
+                ["", t("conversation.composer.effortEllipsis")],
+                ...efforts().slice(1),
+              ]}
               label={t("conversation.composer.sessionEffort")}
               size="sm"
               disabled={settingsDisabled}
@@ -668,9 +929,24 @@ function LiveSend({ id, dir, onSent, liveState, onAsk, onLead, bar, compactHint,
           </div>
           <span className="ml-auto max-md:hidden" />
           <div className="flex items-center gap-2 max-md:w-full">
-            <AttachButton onPick={pictures.pick} className="size-11 rounded-full bg-secondary md:hidden" />
-            <Button size="sm" variant="secondary" className="max-w-40 min-w-0 rounded-full md:hidden" aria-expanded={moreOpen} aria-label={t("conversation.composer.moreSettings")} title={t("conversation.composer.moreSettings")} onClick={() => setMoreOpen(!moreOpen)}>
-              <span className="truncate">{models().find(([modelKey]) => modelKey === sessionModel)?.[1] || t("conversation.composer.sessionModel")}</span>
+            <AttachButton
+              onPick={pictures.pick}
+              className="size-11 rounded-full bg-secondary md:hidden"
+            />
+            <Button
+              size="sm"
+              variant="secondary"
+              className="max-w-40 min-w-0 rounded-full md:hidden"
+              aria-expanded={moreOpen}
+              aria-label={t("conversation.composer.moreSettings")}
+              title={t("conversation.composer.moreSettings")}
+              onClick={() => setMoreOpen(!moreOpen)}
+            >
+              <span className="truncate">
+                {models().find(
+                  ([modelKey]) => modelKey === sessionModel
+                )?.[1] || t("conversation.composer.sessionModel")}
+              </span>
               {moreOpen ? <ChevronUp /> : <ChevronDown />}
             </Button>
             <div className="hidden md:block">
@@ -683,10 +959,15 @@ function LiveSend({ id, dir, onSent, liveState, onAsk, onLead, bar, compactHint,
                 variant="outline"
                 title={t("conversation.composer.interruptTitle")}
                 onClick={async () => {
-                  await api.sessionKey(id, "Escape").catch((error) => toast.error(errMsg(error)))
+                  await api
+                    .sessionKey(id, "Escape")
+                    .catch((error) => toast.error(errMsg(error)))
                 }}
               >
-                <Square /> <span className="max-md:sr-only">{t("conversation.composer.interrupt")}</span>
+                <Square />{" "}
+                <span className="max-md:sr-only">
+                  {t("conversation.composer.interrupt")}
+                </span>
               </Button>
             )}
             {liveState.st?.thinking && (
@@ -695,24 +976,54 @@ function LiveSend({ id, dir, onSent, liveState, onAsk, onLead, bar, compactHint,
                 variant="outline"
                 title={t("conversation.composer.backgroundTitle")}
                 onClick={async () => {
-                  await api.sessionKey(id, "CtrlB").catch((error) => toast.error(errMsg(error)))
+                  await api
+                    .sessionKey(id, "CtrlB")
+                    .catch((error) => toast.error(errMsg(error)))
                 }}
               >
-                <ArrowDownToLine /> <span className="max-md:sr-only">{t("conversation.composer.background")}</span>
+                <ArrowDownToLine />{" "}
+                <span className="max-md:sr-only">
+                  {t("conversation.composer.background")}
+                </span>
               </Button>
             )}
-            <label className="flex items-center gap-1.5 max-md:pointer-coarse:hidden" title={t("conversation.composer.waitIdleTitle")}>
-              <Checkbox checked={waitIdle} onCheckedChange={(checked) => setWaitIdle(id, checked === true)} />
+            <label
+              className="flex items-center gap-1.5 max-md:pointer-coarse:hidden"
+              title={t("conversation.composer.waitIdleTitle")}
+            >
+              <Checkbox
+                checked={waitIdle}
+                onCheckedChange={(checked) => setWaitIdle(id, checked === true)}
+              />
               {t("conversation.composer.waitIdle")}
             </label>
             <div className="flex">
-              <Button size="sm" className="rounded-r-none max-md:h-11 max-md:rounded-l-full max-md:px-3" onClick={() => void send()} disabled={(!text.trim() && !pictures.images.length) || busy || !exec}>
-                <Send /> <span className="truncate max-md:hidden">{t("conversation.composer.sendToSession")}</span>
-                <span className="sr-only md:hidden">{t("conversation.composer.send")}</span>
+              <Button
+                size="sm"
+                className="rounded-r-none max-md:h-11 max-md:rounded-l-full max-md:px-3"
+                onClick={() => void send()}
+                disabled={
+                  (!text.trim() && !pictures.images.length) || busy || !exec
+                }
+              >
+                <Send />{" "}
+                <span className="truncate max-md:hidden">
+                  {t("conversation.composer.sendToSession")}
+                </span>
+                <span className="sr-only md:hidden">
+                  {t("conversation.composer.send")}
+                </span>
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button size="sm" className="rounded-l-none border-l border-primary-foreground/30 px-1.5 max-md:h-11 max-md:rounded-r-full" aria-label={t("conversation.composer.sendOptions")} disabled={(!text.trim() && !pictures.images.length) || busy || !exec}>
+                  <Button
+                    size="sm"
+                    className="rounded-l-none border-l border-primary-foreground/30 px-1.5 max-md:h-11 max-md:rounded-r-full"
+                    aria-label={t("conversation.composer.sendOptions")}
+                    disabled={
+                      (!text.trim() && !pictures.images.length) || busy || !exec
+                    }
+                  >
                     <ChevronDown />
                   </Button>
                 </DropdownMenuTrigger>
@@ -723,7 +1034,9 @@ function LiveSend({ id, dir, onSent, liveState, onAsk, onLead, bar, compactHint,
                   <DropdownMenuCheckboxItem
                     className="hidden max-md:pointer-coarse:flex"
                     checked={waitIdle}
-                    onCheckedChange={(checked) => setWaitIdle(id, checked === true)}
+                    onCheckedChange={(checked) =>
+                      setWaitIdle(id, checked === true)
+                    }
                     onSelect={(selectEvent) => selectEvent.preventDefault()}
                     title={t("conversation.composer.waitIdleTitle")}
                   >
@@ -743,7 +1056,11 @@ function LiveSend({ id, dir, onSent, liveState, onAsk, onLead, bar, compactHint,
 function LiveModeButton({ id, disabled }: { id: string; disabled: boolean }) {
   const { t } = useTranslation()
   const [mode, setMode] = useState<ReturnType<typeof modeOfScreen>>(null)
-  const read = () => api.screen(id).then((terminalScreen) => setMode(modeOfScreen(terminalScreen.text)), () => {})
+  const read = () =>
+    api.screen(id).then(
+      (terminalScreen) => setMode(modeOfScreen(terminalScreen.text)),
+      () => {}
+    )
   useEffect(() => {
     read()
     const pollTimer = setInterval(() => {
@@ -762,14 +1079,34 @@ function LiveModeButton({ id, disabled }: { id: string; disabled: boolean }) {
     setTimeout(read, LIVE_MODE_REREAD_DELAY_MS)
   }
   return (
-    <Button size="sm" variant="outline" disabled={disabled} onClick={next} title={t("conversation.composer.liveModeTitle")}>
-      {t("conversation.composer.liveMode", { mode: t(`conversation.composer.liveModes.${mode ?? "unknown"}`) })}
+    <Button
+      size="sm"
+      variant="outline"
+      disabled={disabled}
+      onClick={next}
+      title={t("conversation.composer.liveModeTitle")}
+    >
+      {t("conversation.composer.liveMode", {
+        mode: t(`conversation.composer.liveModes.${mode ?? "unknown"}`),
+      })}
     </Button>
   )
 }
 
 // L'écran du terminal de la session (tmux) relu toutes les 1,5 s, pour proposer en boutons les options détectées.
-function TerminalPanel({ id, onAsk, onLead, onSent, extra }: { id: string; onAsk?: (asking: boolean) => void; onLead?: (lead: string | null) => void; onSent: () => void; extra?: ReactNode }) {
+function TerminalPanel({
+  id,
+  onAsk,
+  onLead,
+  onSent,
+  extra,
+}: {
+  id: string
+  onAsk?: (asking: boolean) => void
+  onLead?: (lead: string | null) => void
+  onSent: () => void
+  extra?: ReactNode
+}) {
   const { t } = useTranslation()
   const [screen, setScreen] = useState("")
   const busy = useRef(false) // une touche vient d'être envoyée : l'écran affiché peut être périmé
@@ -781,7 +1118,7 @@ function TerminalPanel({ id, onAsk, onLead, onSent, extra }: { id: string; onAsk
         (terminalScreen) => {
           if (isMounted && !busy.current) setScreen(terminalScreen.text)
         },
-        () => {},
+        () => {}
       )
     }
     load()
@@ -807,7 +1144,11 @@ function TerminalPanel({ id, onAsk, onLead, onSent, extra }: { id: string; onAsk
         await api.sessionKey(id, key)
         await wait(KEY_PRESS_INTERVAL_MS)
       }
-      for (let pollIndex = 0; pollIndex < SCREEN_CHANGE_MAX_POLLS; pollIndex++) {
+      for (
+        let pollIndex = 0;
+        pollIndex < SCREEN_CHANGE_MAX_POLLS;
+        pollIndex++
+      ) {
         await wait(SCREEN_CHANGE_POLL_MS)
         const terminalScreen = await api.screen(id).catch(() => null)
         if (!terminalScreen) continue
@@ -845,16 +1186,21 @@ function TerminalPanel({ id, onAsk, onLead, onSent, extra }: { id: string; onAsk
     if (option.chat) return press(...option.keys) // quitte la question : le texte part ensuite dans la zone de saisie normale
     // Champ libre : le curseur doit être sur la ligne sans la valider (case à cocher : chiffre = coche ; liste simple : chiffre = saut).
     const endsWithEnter = option.keys[option.keys.length - 1] === "Enter"
-    const keysWithoutValidation = endsWithEnter ? option.keys.slice(0, -1) : option.keys
+    const keysWithoutValidation = endsWithEnter
+      ? option.keys.slice(0, -1)
+      : option.keys
     await press(...(option.reach ?? keysWithoutValidation))
   }
   const reply = async () => {
     const text = answer.trim()
     if (!text) return
-    const typedOption = prompt?.options.find((option) => option.label === typing)
+    const typedOption = prompt?.options.find(
+      (option) => option.label === typing
+    )
     if (typedOption?.chat) await wait(QUESTION_CLOSE_DELAY_MS) // laisse la question se fermer
     try {
-      for (let erasedCount = 0; erasedCount < editLen.current; erasedCount++) await api.sessionKey(id, "Backspace")
+      for (let erasedCount = 0; erasedCount < editLen.current; erasedCount++)
+        await api.sessionKey(id, "Backspace")
       editLen.current = 0
       await api.sessionSend(id, text)
     } catch (error) {
@@ -868,7 +1214,7 @@ function TerminalPanel({ id, onAsk, onLead, onSent, extra }: { id: string; onAsk
   const copyWithToast = (copiedText: string) =>
     copyText(copiedText).then(
       () => toast.success(t("conversation.composer.screenCopied")),
-      () => toast.error(t("conversation.composer.copyFailed")),
+      () => toast.error(t("conversation.composer.copyFailed"))
     )
   const asking = !!prompt || !!login
   const [questionCollapsed, setQuestionCollapsed] = useState(false)
@@ -891,7 +1237,10 @@ function TerminalPanel({ id, onAsk, onLead, onSent, extra }: { id: string; onAsk
     ask.current?.(asking)
     return () => ask.current?.(false)
   }, [asking])
-  const leadMarkdown = !debug && prompt?.context && prompt.contextIsMessage ? contextToMarkdown(prompt.context) : null
+  const leadMarkdown =
+    !debug && prompt?.context && prompt.contextIsMessage
+      ? contextToMarkdown(prompt.context)
+      : null
   const lead = useRef(onLead)
   useEffect(() => {
     lead.current = onLead
@@ -911,42 +1260,101 @@ function TerminalPanel({ id, onAsk, onLead, onSent, extra }: { id: string; onAsk
           aria-label={t("conversation.composer.expandQuestion")}
         >
           <ChevronUp className="size-4 shrink-0" />
-          <span className="min-w-0 truncate font-medium">{prompt.question || t("conversation.composer.answerExpected")}</span>
+          <span className="min-w-0 truncate font-medium">
+            {prompt.question || t("conversation.composer.answerExpected")}
+          </span>
         </button>
       )}
       {prompt && !debug && !questionCollapsed && (
         <div className="max-h-[min(65dvh,36rem)] overflow-y-auto overscroll-contain rounded-lg border border-warning/50 bg-warning/10 px-3 py-2 text-sm">
           {prompt.tabs && prompt.tabs.length > 1 && (
-            <p className="mb-1.5 flex flex-wrap items-center gap-1 text-xs" aria-label={t("conversation.composer.tabsAria")}>
-              <Button size="xs" variant="ghost" disabled={pressing} onClick={() => press("Left")} aria-label={t("conversation.composer.prevTab")} title={t("conversation.composer.prevTab")}>
+            <p
+              className="mb-1.5 flex flex-wrap items-center gap-1 text-xs"
+              aria-label={t("conversation.composer.tabsAria")}
+            >
+              <Button
+                size="xs"
+                variant="ghost"
+                disabled={pressing}
+                onClick={() => press("Left")}
+                aria-label={t("conversation.composer.prevTab")}
+                title={t("conversation.composer.prevTab")}
+              >
                 ←
               </Button>
               {prompt.tabs.map((tab) => (
-                <span key={tab.label} className={tab.done ? "rounded-sm border border-success/40 px-1.5 text-success" : "rounded-sm border px-1.5 font-medium"}>
+                <span
+                  key={tab.label}
+                  className={
+                    tab.done
+                      ? "rounded-sm border border-success/40 px-1.5 text-success"
+                      : "rounded-sm border px-1.5 font-medium"
+                  }
+                >
                   {tab.done ? "✔" : "•"} {tab.label}
                 </span>
               ))}
-              <Button size="xs" variant="ghost" disabled={pressing} onClick={() => press("Right")} aria-label={t("conversation.composer.nextTab")} title={t("conversation.composer.nextTab")}>
+              <Button
+                size="xs"
+                variant="ghost"
+                disabled={pressing}
+                onClick={() => press("Right")}
+                aria-label={t("conversation.composer.nextTab")}
+                title={t("conversation.composer.nextTab")}
+              >
                 →
               </Button>
             </p>
           )}
-          {prompt.context && !prompt.contextIsMessage && <QuestionContext context={prompt.context} />}
-          {prompt.preview && <pre className="mb-2 max-h-60 overflow-auto rounded-md border bg-background/70 p-2 font-mono text-xs leading-tight whitespace-pre">{prompt.preview}</pre>}
+          {prompt.context && !prompt.contextIsMessage && (
+            <QuestionContext context={prompt.context} />
+          )}
+          {prompt.preview && (
+            <pre className="mb-2 max-h-60 overflow-auto rounded-md border bg-background/70 p-2 font-mono text-xs leading-tight whitespace-pre">
+              {prompt.preview}
+            </pre>
+          )}
           <div className="mb-1.5 flex items-start justify-between gap-2">
-            <p className="font-medium">{prompt.question || t("conversation.composer.answerExpected")}</p>
-            <Button size="xs" variant="ghost" className="shrink-0" onClick={() => setQuestionCollapsed(true)} title={t("conversation.composer.collapseQuestion")} aria-label={t("conversation.composer.collapseQuestion")}>
+            <p className="font-medium">
+              {prompt.question || t("conversation.composer.answerExpected")}
+            </p>
+            <Button
+              size="xs"
+              variant="ghost"
+              className="shrink-0"
+              onClick={() => setQuestionCollapsed(true)}
+              title={t("conversation.composer.collapseQuestion")}
+              aria-label={t("conversation.composer.collapseQuestion")}
+            >
               <ChevronDown />
             </Button>
           </div>
           <div className="flex flex-col items-stretch gap-1.5">
             {prompt.options.map((option) => (
               <div key={option.label} className="contents">
-                <Button size="sm" disabled={pressing} variant={typing === option.label ? "secondary" : "outline"} className="h-auto min-h-8 pointer-coarse:h-auto pointer-coarse:min-h-9 justify-start gap-2 py-1.5 text-left whitespace-normal" onClick={() => choose(option)} title={t("conversation.composer.keys", { keys: option.keys.join(", ") })}>
-                  {option.checked !== undefined && (option.checked ? <SquareCheck className="text-success" /> : <Square />)}
+                <Button
+                  size="sm"
+                  disabled={pressing}
+                  variant={typing === option.label ? "secondary" : "outline"}
+                  className="h-auto min-h-8 justify-start gap-2 py-1.5 text-left whitespace-normal pointer-coarse:h-auto pointer-coarse:min-h-9"
+                  onClick={() => choose(option)}
+                  title={t("conversation.composer.keys", {
+                    keys: option.keys.join(", "),
+                  })}
+                >
+                  {option.checked !== undefined &&
+                    (option.checked ? (
+                      <SquareCheck className="text-success" />
+                    ) : (
+                      <Square />
+                    ))}
                   <span className="min-w-0">
                     {option.label}
-                    {option.detail && <span className="block text-xs font-normal text-muted-foreground">{option.detail}</span>}
+                    {option.detail && (
+                      <span className="block text-xs font-normal text-muted-foreground">
+                        {option.detail}
+                      </span>
+                    )}
                   </span>
                 </Button>
                 {typing === option.label && (
@@ -954,7 +1362,9 @@ function TerminalPanel({ id, onAsk, onLead, onSent, extra }: { id: string; onAsk
                     <textarea
                       autoFocus
                       value={answer}
-                      onChange={(changeEvent) => setAnswer(changeEvent.target.value)}
+                      onChange={(changeEvent) =>
+                        setAnswer(changeEvent.target.value)
+                      }
                       onKeyDown={(keyEvent) => {
                         if (!isSend(keyEvent)) return
                         keyEvent.preventDefault()
@@ -962,7 +1372,9 @@ function TerminalPanel({ id, onAsk, onLead, onSent, extra }: { id: string; onAsk
                       }}
                       rows={2}
                       maxLength={MAX_MESSAGE_LENGTH}
-                      placeholder={keyHint(t("conversation.composer.answerPlaceholder"))}
+                      placeholder={keyHint(
+                        t("conversation.composer.answerPlaceholder")
+                      )}
                       className="field-sizing-content max-h-40 min-h-12 flex-1 resize-none rounded-lg border border-input bg-background px-3 py-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/80"
                       aria-label={t("conversation.composer.answerAria")}
                     />
@@ -974,11 +1386,24 @@ function TerminalPanel({ id, onAsk, onLead, onSent, extra }: { id: string; onAsk
               </div>
             ))}
             {prompt.submit && (
-              <Button size="sm" disabled={pressing} onClick={() => press(...prompt.submit!)} title={t("conversation.composer.validateTitle", { keys: prompt.submit.join(", ") })}>
+              <Button
+                size="sm"
+                disabled={pressing}
+                onClick={() => press(...prompt.submit!)}
+                title={t("conversation.composer.validateTitle", {
+                  keys: prompt.submit.join(", "),
+                })}
+              >
                 <Send /> {t("conversation.composer.validate")}
               </Button>
             )}
-            <Button size="sm" disabled={pressing} variant="ghost" className="justify-start" onClick={() => press("Escape")}>
+            <Button
+              size="sm"
+              disabled={pressing}
+              variant="ghost"
+              className="justify-start"
+              onClick={() => press("Escape")}
+            >
               {t("conversation.composer.escape")}
             </Button>
           </div>
@@ -987,14 +1412,25 @@ function TerminalPanel({ id, onAsk, onLead, onSent, extra }: { id: string; onAsk
       {login && !debug && (
         <div className="space-y-2 rounded-lg border border-warning/50 bg-warning/10 px-3 py-2 text-sm">
           <p className="font-medium">{t("conversation.composer.loginTitle")}</p>
-          <p className="text-xs text-muted-foreground">{t("conversation.composer.loginHelp")}</p>
+          <p className="text-xs text-muted-foreground">
+            {t("conversation.composer.loginHelp")}
+          </p>
           <div className="flex flex-wrap gap-1.5">
             <Button size="sm" variant="outline" asChild>
               <a href={login.url} target="_blank" rel="noopener noreferrer">
                 <ExternalLink /> {t("conversation.composer.loginOpen")}
               </a>
             </Button>
-            <Button size="sm" variant="outline" onClick={() => copyText(login.url).then(() => toast.success(t("conversation.composer.loginCopied")), () => toast.error(t("conversation.composer.copyFailed")))}>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                copyText(login.url).then(
+                  () => toast.success(t("conversation.composer.loginCopied")),
+                  () => toast.error(t("conversation.composer.copyFailed"))
+                )
+              }
+            >
               <Copy /> {t("conversation.composer.loginCopy")}
             </Button>
           </div>
@@ -1015,7 +1451,12 @@ function TerminalPanel({ id, onAsk, onLead, onSent, extra }: { id: string; onAsk
             <Button size="sm" onClick={reply} disabled={!answer.trim()}>
               <Send /> {t("conversation.composer.loginSend")}
             </Button>
-            <Button size="sm" variant="ghost" disabled={pressing} onClick={() => press("Escape")}>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={pressing}
+              onClick={() => press("Escape")}
+            >
               {t("conversation.composer.escape")}
             </Button>
           </div>
@@ -1023,16 +1464,35 @@ function TerminalPanel({ id, onAsk, onLead, onSent, extra }: { id: string; onAsk
       )}
       {btw && (
         <div className="space-y-1.5 rounded-lg border bg-background p-3 text-sm">
-          <p className="text-xs font-medium text-muted-foreground">/btw {btw.question}</p>
-          <pre className="max-h-72 overflow-auto font-sans break-words whitespace-pre-wrap">{btw.answer}</pre>
+          <p className="text-xs font-medium text-muted-foreground">
+            /btw {btw.question}
+          </p>
+          <pre className="max-h-72 overflow-auto font-sans break-words whitespace-pre-wrap">
+            {btw.answer}
+          </pre>
           <div className="flex flex-wrap gap-1.5">
-            <Button size="xs" variant="outline" onClick={() => copyWithToast(btw.answer)}>
+            <Button
+              size="xs"
+              variant="outline"
+              onClick={() => copyWithToast(btw.answer)}
+            >
               <Copy /> {t("conversation.composer.btwCopy")}
             </Button>
-            <Button size="xs" variant="outline" disabled={pressing} onClick={() => press("f")} title={t("conversation.composer.btwForkTitle")}>
+            <Button
+              size="xs"
+              variant="outline"
+              disabled={pressing}
+              onClick={() => press("f")}
+              title={t("conversation.composer.btwForkTitle")}
+            >
               <GitFork /> {t("conversation.composer.btwFork")}
             </Button>
-            <Button size="xs" variant="outline" disabled={pressing} onClick={() => press("Escape")}>
+            <Button
+              size="xs"
+              variant="outline"
+              disabled={pressing}
+              onClick={() => press("Escape")}
+            >
               {t("conversation.composer.btwClose")}
             </Button>
           </div>
@@ -1040,20 +1500,39 @@ function TerminalPanel({ id, onAsk, onLead, onSent, extra }: { id: string; onAsk
       )}
       {debug && (
         <div className="space-y-1.5 text-2xs">
-          <pre className="max-h-72 overflow-auto rounded-lg border bg-background px-3 py-2 font-mono leading-snug whitespace-pre" aria-label={t("conversation.composer.screenAria")}>
+          <pre
+            className="max-h-72 overflow-auto rounded-lg border bg-background px-3 py-2 font-mono leading-snug whitespace-pre"
+            aria-label={t("conversation.composer.screenAria")}
+          >
             {screen || t("conversation.composer.emptyScreen")}
           </pre>
-          <pre className="max-h-40 overflow-auto rounded-lg border bg-muted/40 px-3 py-2 font-mono leading-snug whitespace-pre-wrap" aria-label={t("conversation.composer.detectorAria")}>
-            {prompt ? JSON.stringify(prompt, null, 1) : t("conversation.composer.noPrompt")}
+          <pre
+            className="max-h-40 overflow-auto rounded-lg border bg-muted/40 px-3 py-2 font-mono leading-snug whitespace-pre-wrap"
+            aria-label={t("conversation.composer.detectorAria")}
+          >
+            {prompt
+              ? JSON.stringify(prompt, null, 1)
+              : t("conversation.composer.noPrompt")}
           </pre>
-          <Button size="xs" variant="outline" onClick={() => copyWithToast(screen)}>
+          <Button
+            size="xs"
+            variant="outline"
+            onClick={() => copyWithToast(screen)}
+          >
             <Copy /> {t("conversation.composer.copyScreen")}
           </Button>
         </div>
       )}
       <div className="flex items-center justify-end gap-1">
         {extra}
-        <Button size="xs" variant="ghost" className="text-muted-foreground max-md:pointer-coarse:hidden max-md:[&>svg]:hidden" onClick={() => setDebug(!debug)} aria-pressed={debug} title={t("conversation.composer.rawScreenTitle")}>
+        <Button
+          size="xs"
+          variant="ghost"
+          className="text-muted-foreground max-md:pointer-coarse:hidden max-md:[&>svg]:hidden"
+          onClick={() => setDebug(!debug)}
+          aria-pressed={debug}
+          title={t("conversation.composer.rawScreenTitle")}
+        >
           <Bug /> {t("conversation.composer.rawScreen")}
         </Button>
       </div>
@@ -1064,13 +1543,43 @@ function TerminalPanel({ id, onAsk, onLead, onSent, extra }: { id: string; onAsk
 // Commandes de Claude Code envoyées telles quelles à la session (elles s'exécutent dans son terminal). /compact accepte des consignes :
 // ce qui est écrit dans le champ s'y ajoute (« /compact garde les décisions d'architecture »).
 const slash = () => {
-  const labelAndHint = (name: string) => [i18n.t(`conversation.slash.${name}.label`), i18n.t(`conversation.slash.${name}.hint`)] as const
-  const commandNames = ["compact", "context", "cost", "usage", "clear", "model", "mcp", "status", "memory", "permissions", "agents", "rewind", "export", "doctor", "help"] as const
-  return commandNames.map((commandName) => [`/${commandName}`, ...labelAndHint(commandName)] as const)
+  const labelAndHint = (name: string) =>
+    [
+      i18n.t(`conversation.slash.${name}.label`),
+      i18n.t(`conversation.slash.${name}.hint`),
+    ] as const
+  const commandNames = [
+    "compact",
+    "context",
+    "cost",
+    "usage",
+    "clear",
+    "model",
+    "mcp",
+    "status",
+    "memory",
+    "permissions",
+    "agents",
+    "rewind",
+    "export",
+    "doctor",
+    "help",
+  ] as const
+  return commandNames.map(
+    (commandName) => [`/${commandName}`, ...labelAndHint(commandName)] as const
+  )
 }
 
-async function sendSlash(id: string, cmd: string, text: string, onSent: () => void) {
-  const full = cmd === "/compact" && text.trim() ? `${cmd} ${text.trim().replace(/\s+/g, " ")}` : cmd
+async function sendSlash(
+  id: string,
+  cmd: string,
+  text: string,
+  onSent: () => void
+) {
+  const full =
+    cmd === "/compact" && text.trim()
+      ? `${cmd} ${text.trim().replace(/\s+/g, " ")}`
+      : cmd
   try {
     await api.sessionSend(id, full)
     onSent()
@@ -1079,21 +1588,39 @@ async function sendSlash(id: string, cmd: string, text: string, onSent: () => vo
   }
 }
 
-function SlashMenu({ id, text, onSent }: { id: string; text: string; onSent: () => void }) {
+function SlashMenu({
+  id,
+  text,
+  onSent,
+}: {
+  id: string
+  text: string
+  onSent: () => void
+}) {
   const { t } = useTranslation()
   const run = (cmd: string) => sendSlash(id, cmd, text, onSent)
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button size="sm" variant="ghost" className="max-md:[&>svg]:hidden" title={t("conversation.composer.commandsTitle")}>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="max-md:[&>svg]:hidden"
+          title={t("conversation.composer.commandsTitle")}
+        >
           <Minimize2 /> {t("conversation.composer.commands")}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-72">
         {slash().map(([cmd, label, hint]) => (
-          <DropdownMenuItem key={cmd} onSelect={() => run(cmd)} className="flex-col items-start gap-0">
+          <DropdownMenuItem
+            key={cmd}
+            onSelect={() => run(cmd)}
+            className="flex-col items-start gap-0"
+          >
             <span>
-              {label} <code className="text-xs text-muted-foreground">{cmd}</code>
+              {label}{" "}
+              <code className="text-xs text-muted-foreground">{cmd}</code>
             </span>
             <span className="text-xs text-muted-foreground">{hint}</span>
           </DropdownMenuItem>

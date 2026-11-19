@@ -1,12 +1,27 @@
 import type { Group, Session } from "./api"
 import { segs } from "./paths"
 
-export type Node = { name: string; key: string; kids: Map<string, Node>; g: Group | null; ss: Session[] }
+export type Node = {
+  name: string
+  key: string
+  kids: Map<string, Node>
+  g: Group | null
+  ss: Session[]
+}
 export type Entry = { g: Group; ss: Session[] }
 
-const emptyNode = (name: string, key: string): Node => ({ name, key, kids: new Map(), g: null, ss: [] })
+const emptyNode = (name: string, key: string): Node => ({
+  name,
+  key,
+  kids: new Map(),
+  g: null,
+  ss: [],
+})
 
-export const sorted = (node: Node): Node[] => [...node.kids.values()].sort((left, right) => left.name.localeCompare(right.name))
+export const sorted = (node: Node): Node[] =>
+  [...node.kids.values()].sort((left, right) =>
+    left.name.localeCompare(right.name)
+  )
 
 // Arbre des projets sous ~ (ou /, ou un lecteur). Une chaîne de dossiers sans projet et à enfant unique
 // devient un seul niveau (a/b/c).
@@ -53,7 +68,9 @@ export function find(nodes: Node[], key: string): Node | null {
 // Toutes les sessions d'un dossier et de ses sous-dossiers, avec leur projet.
 export function under(node: Node): { s: Session; g: Group }[] {
   const group = node.g
-  const ownSessions = group ? node.ss.map((session) => ({ s: session, g: group })) : []
+  const ownSessions = group
+    ? node.ss.map((session) => ({ s: session, g: group }))
+    : []
   const descendantSessions = [...node.kids.values()].flatMap(under)
   return [...ownSessions, ...descendantSessions]
 }

@@ -29,10 +29,25 @@ function splitGlobs(text: string): string[] {
 
 const PREVIEW_FILE_LIMIT = 12
 
-type MatchResult = { files?: string[]; total?: number; truncated?: boolean; error?: string }
+type MatchResult = {
+  files?: string[]
+  total?: number
+  truncated?: boolean
+  error?: string
+}
 
 // Globs du champ `paths:` d'une règle globale, éditables, et aperçu des fichiers d'un projet qu'ils ciblent.
-export function ScopeBar({ file, projects, home, onSaved }: { file: MemFile; projects: MemProject[]; home: string; onSaved: () => void }) {
+export function ScopeBar({
+  file,
+  projects,
+  home,
+  onSaved,
+}: {
+  file: MemFile
+  projects: MemProject[]
+  home: string
+  onSaved: () => void
+}) {
   const { t } = useTranslation()
   const [text, setText] = useState((file.paths ?? []).join(", "))
   const [busy, setBusy] = useState(false)
@@ -66,7 +81,8 @@ export function ScopeBar({ file, projects, home, onSaved }: { file: MemFile; pro
     setBusy(false)
   }
   const renderMatchSummary = () => {
-    if (matches?.error) return <span className="text-destructive">{matches.error}</span>
+    if (matches?.error)
+      return <span className="text-destructive">{matches.error}</span>
     if (!matches) return null
     return (
       <span className="text-muted-foreground">
@@ -91,16 +107,22 @@ export function ScopeBar({ file, projects, home, onSaved }: { file: MemFile; pro
           {t("memory.scope.save")}
         </Button>
       </div>
-      <p className="text-muted-foreground">{scoped ? t("memory.scope.scoped") : t("memory.scope.unscoped")}</p>
+      <p className="text-muted-foreground">
+        {scoped ? t("memory.scope.scoped") : t("memory.scope.unscoped")}
+      </p>
       {scoped && existingProjects.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-muted-foreground">{t("memory.scope.previewIn")}</span>
+          <span className="text-muted-foreground">
+            {t("memory.scope.previewIn")}
+          </span>
           <Choose
             value={dir}
             onChange={setDir}
-            options={existingProjects.map((project) => [project.dir, tilde(project.project, home)] as const)}
+            options={existingProjects.map(
+              (project) => [project.dir, tilde(project.project, home)] as const
+            )}
             label={t("memory.scope.previewAria")}
-            className="min-w-0 max-w-72"
+            className="max-w-72 min-w-0"
           />
           {renderMatchSummary()}
         </div>

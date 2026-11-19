@@ -15,7 +15,8 @@ const readStoredState = (): Record<string, boolean> => {
 }
 let state: Record<string, boolean> = readStoredState()
 
-const notifySubscribers = () => subscribers.forEach((subscriber) => subscriber())
+const notifySubscribers = () =>
+  subscribers.forEach((subscriber) => subscriber())
 
 const subscribe = (subscriber: () => void) => {
   subscribers.add(subscriber)

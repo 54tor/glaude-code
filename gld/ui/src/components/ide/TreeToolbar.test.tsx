@@ -35,7 +35,16 @@ describe("TreeToolbar", () => {
   it("nouveau fichier, nouveau dossier, actualiser, tout replier, ouverture rapide", () => {
     const cmdCtx = ctx()
     const t = tree()
-    render(<TreeToolbar dir="/p" tree={t} ctx={cmdCtx} filter="" onFilter={() => {}} onRestored={() => {}} />)
+    render(
+      <TreeToolbar
+        dir="/p"
+        tree={t}
+        ctx={cmdCtx}
+        filter=""
+        onFilter={() => {}}
+        onRestored={() => {}}
+      />
+    )
     fireEvent.click(btn("Nouveau fichier"))
     expect(cmdCtx.newFile).toHaveBeenCalled()
     fireEvent.click(btn("Nouveau dossier"))
@@ -50,20 +59,53 @@ describe("TreeToolbar", () => {
 
   it("sans fs_write : création désactivée (pas masquée) avec la raison", () => {
     const cmdCtx = ctx(["fs_read"])
-    render(<TreeToolbar dir="/p" tree={tree()} ctx={cmdCtx} filter="" onFilter={() => {}} onRestored={() => {}} />)
+    render(
+      <TreeToolbar
+        dir="/p"
+        tree={tree()}
+        ctx={cmdCtx}
+        filter=""
+        onFilter={() => {}}
+        onRestored={() => {}}
+      />
+    )
     const element = btn("Nouveau fichier")
     expect(element.getAttribute("aria-disabled")).toBe("true")
     fireEvent.click(element)
     expect(cmdCtx.newFile).not.toHaveBeenCalled()
-    expect(document.getElementById(element.getAttribute("aria-describedby")!)?.textContent).toMatch(/pas le droit/)
+    expect(
+      document.getElementById(element.getAttribute("aria-describedby")!)
+        ?.textContent
+    ).toMatch(/pas le droit/)
   })
 
   it("le filtre remonte la saisie, vider remet tout", () => {
     const mock = vi.fn()
-    const { rerender } = render(<TreeToolbar dir="/p" tree={tree()} ctx={ctx()} filter="" onFilter={mock} onRestored={() => {}} />)
-    fireEvent.change(screen.getByRole("searchbox", { name: "Filtrer par nom" }), { target: { value: "Src" } })
+    const { rerender } = render(
+      <TreeToolbar
+        dir="/p"
+        tree={tree()}
+        ctx={ctx()}
+        filter=""
+        onFilter={mock}
+        onRestored={() => {}}
+      />
+    )
+    fireEvent.change(
+      screen.getByRole("searchbox", { name: "Filtrer par nom" }),
+      { target: { value: "Src" } }
+    )
     expect(mock).toHaveBeenLastCalledWith("Src")
-    rerender(<TreeToolbar dir="/p" tree={tree()} ctx={ctx()} filter="Src" onFilter={mock} onRestored={() => {}} />)
+    rerender(
+      <TreeToolbar
+        dir="/p"
+        tree={tree()}
+        ctx={ctx()}
+        filter="Src"
+        onFilter={mock}
+        onRestored={() => {}}
+      />
+    )
     fireEvent.click(btn("Effacer le filtre"))
     expect(mock).toHaveBeenLastCalledWith("")
   })
@@ -71,14 +113,27 @@ describe("TreeToolbar", () => {
   it("effacer le filtre par le bouton rend le focus au champ ; Échap vide aussi", () => {
     const Host = () => {
       const [filePath, setF] = useState("Src")
-      return <TreeToolbar dir="/p" tree={tree()} ctx={ctx()} filter={filePath} onFilter={setF} onRestored={() => {}} />
+      return (
+        <TreeToolbar
+          dir="/p"
+          tree={tree()}
+          ctx={ctx()}
+          filter={filePath}
+          onFilter={setF}
+          onRestored={() => {}}
+        />
+      )
     }
     render(<Host />)
-    const input = screen.getByRole("searchbox", { name: "Filtrer par nom" }) as HTMLInputElement
+    const input = screen.getByRole("searchbox", {
+      name: "Filtrer par nom",
+    }) as HTMLInputElement
     btn("Effacer le filtre").focus()
     fireEvent.click(btn("Effacer le filtre"))
     expect(input.value).toBe("")
-    expect(screen.queryByRole("button", { name: "Effacer le filtre" })).toBeNull()
+    expect(
+      screen.queryByRole("button", { name: "Effacer le filtre" })
+    ).toBeNull()
     expect(document.activeElement).toBe(input)
     fireEvent.change(input, { target: { value: "x" } })
     fireEvent.keyDown(input, { key: "Escape" })
@@ -88,7 +143,16 @@ describe("TreeToolbar", () => {
 
   it("Corbeille ouvre le dialogue de la corbeille", async () => {
     const trash = vi.spyOn(api, "fsTrash").mockResolvedValue({ items: [] })
-    render(<TreeToolbar dir="/p" tree={tree()} ctx={ctx()} filter="" onFilter={() => {}} onRestored={() => {}} />)
+    render(
+      <TreeToolbar
+        dir="/p"
+        tree={tree()}
+        ctx={ctx()}
+        filter=""
+        onFilter={() => {}}
+        onRestored={() => {}}
+      />
+    )
     fireEvent.click(btn("Corbeille"))
     expect(await screen.findByText("La corbeille est vide.")).toBeTruthy()
     expect(trash).toHaveBeenCalledWith("/p")

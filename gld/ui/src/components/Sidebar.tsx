@@ -3,7 +3,31 @@ import { useTranslation } from "react-i18next"
 import { CleanupWarning } from "./CleanupWarning"
 import { SessionTrash } from "./SessionTrash"
 import { NavContentSearch } from "./NavContentSearch"
-import { LayoutDashboard, ChevronRight, FolderPlus, GalleryHorizontalEnd, FolderOpen, Star, Brain, Puzzle, SlidersHorizontal, Shredder, Trash2, Heart, History, FileText, Inbox, Search, ScanText, ShieldCheck, Tag, Users, X, Ellipsis, Globe } from "lucide-react"
+import {
+  LayoutDashboard,
+  ChevronRight,
+  FolderPlus,
+  GalleryHorizontalEnd,
+  FolderOpen,
+  Star,
+  Brain,
+  Puzzle,
+  SlidersHorizontal,
+  Shredder,
+  Trash2,
+  Heart,
+  History,
+  FileText,
+  Inbox,
+  Search,
+  ScanText,
+  ShieldCheck,
+  Tag,
+  Users,
+  X,
+  Ellipsis,
+  Globe,
+} from "lucide-react"
 import { tilde } from "@/lib/format"
 import { href, type Route } from "@/lib/route"
 import type { Node } from "@/lib/tree"
@@ -12,7 +36,12 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { swipeHandlers } from "@/lib/swipe"
 import { Tip } from "@/components/ui/tooltip"
-import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu"
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -33,18 +62,37 @@ import { api } from "@/lib/api"
 import type { Project, Session, VGroup } from "@/lib/api"
 import { useActions, type Row } from "./actions"
 
-
 // Avec `to`, un vrai lien : clic du milieu ou Ctrl+clic ouvrent la vue dans un autre onglet.
-function NavItem({ icon: Icon, label, n: count, active, onClick, to }: { icon: typeof Inbox; label: string; n?: number; active: boolean; onClick: () => void; to?: Route }) {
+function NavItem({
+  icon: Icon,
+  label,
+  n: count,
+  active,
+  onClick,
+  to,
+}: {
+  icon: typeof Inbox
+  label: string
+  n?: number
+  active: boolean
+  onClick: () => void
+  to?: Route
+}) {
   const itemClassName = cn(
     "flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-sm transition-colors",
-    active ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground [&>svg]:text-primary" : "text-sidebar-foreground/85 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
+    active
+      ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground [&>svg]:text-primary"
+      : "text-sidebar-foreground/85 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
   )
   const body = (
     <>
       <Icon className="size-4 shrink-0 text-muted-foreground" />
       <span className="flex-1 truncate text-left">{label}</span>
-      {count !== undefined && <span className="text-xs text-muted-foreground tabular-nums">{count}</span>}
+      {count !== undefined && (
+        <span className="text-xs text-muted-foreground tabular-nums">
+          {count}
+        </span>
+      )}
     </>
   )
   if (to)
@@ -69,29 +117,64 @@ function NavItem({ icon: Icon, label, n: count, active, onClick, to }: { icon: t
   )
 }
 
-function KidsBadge({ n: localCount, open, live, onClick }: { n: number; open: boolean; live?: boolean; onClick: () => void }) {
+function KidsBadge({
+  n: localCount,
+  open,
+  live,
+  onClick,
+}: {
+  n: number
+  open: boolean
+  live?: boolean
+  onClick: () => void
+}) {
   const { t } = useTranslation()
   return (
     <button
       onClick={onClick}
       aria-expanded={open}
       aria-label={t("shell.list.subSessions", { count: localCount })}
-      className="flex h-6 shrink-0 items-center gap-0.5 rounded-md px-1 text-xs tabular-nums text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground"
+      className="flex h-6 shrink-0 items-center gap-0.5 rounded-md px-1 text-xs text-muted-foreground tabular-nums hover:bg-sidebar-accent/60 hover:text-foreground"
     >
       ×{localCount}
-      <ChevronRight className={cn("size-3 transition-transform", open && "rotate-90")} />
-      {live && <span className="ml-0.5 size-1.5 rounded-full bg-success" aria-label={t("shell.sidebar.open")} />}
+      <ChevronRight
+        className={cn("size-3 transition-transform", open && "rotate-90")}
+      />
+      {live && (
+        <span
+          className="ml-0.5 size-1.5 rounded-full bg-success"
+          aria-label={t("shell.sidebar.open")}
+        />
+      )}
     </button>
   )
 }
 
-function Heading({ children, action, fold }: { children: React.ReactNode; action?: React.ReactNode; fold?: { folded: boolean; toggle: () => void } }) {
+function Heading({
+  children,
+  action,
+  fold,
+}: {
+  children: React.ReactNode
+  action?: React.ReactNode
+  fold?: { folded: boolean; toggle: () => void }
+}) {
   return (
     <div className="mt-5 mb-1 flex items-center px-2">
       <h2 className="flex-1 text-xs font-semibold text-muted-foreground">
         {fold ? (
-          <button onClick={fold.toggle} aria-expanded={!fold.folded} className="flex items-center gap-1 hover:text-foreground pointer-coarse:min-h-11">
-            <ChevronRight className={cn("size-3.5 transition-transform", !fold.folded && "rotate-90")} aria-hidden />
+          <button
+            onClick={fold.toggle}
+            aria-expanded={!fold.folded}
+            className="flex items-center gap-1 hover:text-foreground pointer-coarse:min-h-11"
+          >
+            <ChevronRight
+              className={cn(
+                "size-3.5 transition-transform",
+                !fold.folded && "rotate-90"
+              )}
+              aria-hidden
+            />
             {children}
           </button>
         ) : (
@@ -107,16 +190,38 @@ function Heading({ children, action, fold }: { children: React.ReactNode; action
 // En orange, celles dont le cache expire dans moins de 10 minutes.
 const MIDDLE_MOUSE_BUTTON = 1
 
-function Hot({ rows, now, ttl, go, title, hint, foldKey }: { rows: Row[]; now: number; ttl: number; go: (route: Route) => void; title: string; hint: string; foldKey?: string }) {
+function Hot({
+  rows,
+  now,
+  ttl,
+  go,
+  title,
+  hint,
+  foldKey,
+}: {
+  rows: Row[]
+  now: number
+  ttl: number
+  go: (route: Route) => void
+  title: string
+  hint: string
+  foldKey?: string
+}) {
   const { t } = useTranslation()
   const actions = useActions()
   const [folded, setFolded] = useLocal(foldKey ?? "gld.hot.unfoldable", "")
   const fold = !!foldKey && folded === "1"
   // Un dossier par projet de travail, par ordre alphabétique ; dans un dossier, les sessions restent triées par date.
   const folders = new Map<string, Row[]>()
-  for (const row of rows) folders.set(row.g.project, [...(folders.get(row.g.project) ?? []), row])
-  const label = (projectPath: string) => projectPath.split("/").filter(Boolean).pop() ?? projectPath
-  const ordered = [...folders].sort(([firstProject], [secondProject]) => label(firstProject).localeCompare(label(secondProject)) || firstProject.localeCompare(secondProject))
+  for (const row of rows)
+    folders.set(row.g.project, [...(folders.get(row.g.project) ?? []), row])
+  const label = (projectPath: string) =>
+    projectPath.split("/").filter(Boolean).pop() ?? projectPath
+  const ordered = [...folders].sort(
+    ([firstProject], [secondProject]) =>
+      label(firstProject).localeCompare(label(secondProject)) ||
+      firstProject.localeCompare(secondProject)
+  )
   const [opened, setOpened] = useState<Set<string>>(new Set())
   const toggle = (id: string) =>
     setOpened((previouslyOpened) => {
@@ -130,47 +235,79 @@ function Hot({ rows, now, ttl, go, title, hint, foldKey }: { rows: Row[]; now: n
     const cold = now - session.mtime >= ttl // ouverte mais cache expiré
     const left = Math.max(1, Math.ceil((ttl - (now - session.mtime)) / 60))
     const isClosable = actions.live.has(session.id)
-    const cacheTitle = cold ? t("shell.sidebar.coldTitle", { title: session.title }) : t("shell.sidebar.hotTitle", { title: session.title, left })
-    const isMiddleButton = (mouseEvent: React.MouseEvent) => mouseEvent.button === MIDDLE_MOUSE_BUTTON
+    const cacheTitle = cold
+      ? t("shell.sidebar.coldTitle", { title: session.title })
+      : t("shell.sidebar.hotTitle", { title: session.title, left })
+    const isMiddleButton = (mouseEvent: React.MouseEvent) =>
+      mouseEvent.button === MIDDLE_MOUSE_BUTTON
     return (
       <Fragment key={session.id}>
-      <div className="flex items-center">
-      <ContextMenu>
-        <ContextMenuTrigger asChild>
-          <button
-            onClick={() => actions.read(session)}
-            onDoubleClick={() => go({ kind: "dir", key: segs(row.g.project, actions.home).join("/") })}
-            onMouseDown={(mouseEvent) => {
-              // sinon le navigateur passe en défilement automatique
-              if (isClosable && isMiddleButton(mouseEvent)) mouseEvent.preventDefault()
-            }}
-            onAuxClick={(mouseEvent) => {
-              if (!isClosable || !isMiddleButton(mouseEvent)) return
-              mouseEvent.preventDefault()
-              actions.stop([session.id])
-            }}
-            title={isClosable ? `${cacheTitle}\n${t("shell.sidebar.middleClose")}` : cacheTitle}
-            className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-sm text-sidebar-foreground/85 transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
-          >
-            <SessionStatusIcon session={session} now={now} ttl={ttl} />
-            <span className="flex-1 truncate text-left">{session.title}</span>
-            <span className="flex size-4 shrink-0 items-center justify-center">
-              {actions.live.has(session.id) &&
-                (actions.rc.has(session.id) ? (
-                  <Globe className="size-3.5 text-success" aria-label={t("shell.list.remoteControl")} />
-                ) : (
-                  <span className="size-1.5 rounded-full bg-success" aria-label={t("shell.sidebar.open")} />
-                ))}
-            </span>
-          </button>
-        </ContextMenuTrigger>
-        <ContextMenuContent className="w-64">
-          <SessionItems M={CM} row={row} full />
-        </ContextMenuContent>
-      </ContextMenu>
-      {kids.length > 0 && <KidsBadge n={kids.length} open={open} live={kids.some((childRow) => actions.live.has(childRow.s.id))} onClick={() => toggle(session.id)} />}
-      </div>
-      {open && <div className="ml-4 border-l pl-[7px]">{kids.map((childRow) => item(childRow))}</div>}
+        <div className="flex items-center">
+          <ContextMenu>
+            <ContextMenuTrigger asChild>
+              <button
+                onClick={() => actions.read(session)}
+                onDoubleClick={() =>
+                  go({
+                    kind: "dir",
+                    key: segs(row.g.project, actions.home).join("/"),
+                  })
+                }
+                onMouseDown={(mouseEvent) => {
+                  // sinon le navigateur passe en défilement automatique
+                  if (isClosable && isMiddleButton(mouseEvent))
+                    mouseEvent.preventDefault()
+                }}
+                onAuxClick={(mouseEvent) => {
+                  if (!isClosable || !isMiddleButton(mouseEvent)) return
+                  mouseEvent.preventDefault()
+                  actions.stop([session.id])
+                }}
+                title={
+                  isClosable
+                    ? `${cacheTitle}\n${t("shell.sidebar.middleClose")}`
+                    : cacheTitle
+                }
+                className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-sm text-sidebar-foreground/85 transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
+              >
+                <SessionStatusIcon session={session} now={now} ttl={ttl} />
+                <span className="flex-1 truncate text-left">
+                  {session.title}
+                </span>
+                <span className="flex size-4 shrink-0 items-center justify-center">
+                  {actions.live.has(session.id) &&
+                    (actions.rc.has(session.id) ? (
+                      <Globe
+                        className="size-3.5 text-success"
+                        aria-label={t("shell.list.remoteControl")}
+                      />
+                    ) : (
+                      <span
+                        className="size-1.5 rounded-full bg-success"
+                        aria-label={t("shell.sidebar.open")}
+                      />
+                    ))}
+                </span>
+              </button>
+            </ContextMenuTrigger>
+            <ContextMenuContent className="w-64">
+              <SessionItems M={CM} row={row} full />
+            </ContextMenuContent>
+          </ContextMenu>
+          {kids.length > 0 && (
+            <KidsBadge
+              n={kids.length}
+              open={open}
+              live={kids.some((childRow) => actions.live.has(childRow.s.id))}
+              onClick={() => toggle(session.id)}
+            />
+          )}
+        </div>
+        {open && (
+          <div className="ml-4 border-l pl-[7px]">
+            {kids.map((childRow) => item(childRow))}
+          </div>
+        )}
       </Fragment>
     )
   }
@@ -178,45 +315,67 @@ function Hot({ rows, now, ttl, go, title, hint, foldKey }: { rows: Row[]; now: n
     <>
       <Heading>
         {foldKey ? (
-          <button onClick={() => setFolded(fold ? "" : "1")} aria-expanded={!fold} title={hint} className="flex items-center gap-1 hover:text-foreground pointer-coarse:min-h-11">
-            <ChevronRight className={cn("size-3.5 transition-transform", !fold && "rotate-90")} aria-hidden />
+          <button
+            onClick={() => setFolded(fold ? "" : "1")}
+            aria-expanded={!fold}
+            title={hint}
+            className="flex items-center gap-1 hover:text-foreground pointer-coarse:min-h-11"
+          >
+            <ChevronRight
+              className={cn(
+                "size-3.5 transition-transform",
+                !fold && "rotate-90"
+              )}
+              aria-hidden
+            />
             {title} <span className="tabular-nums">{rows.length}</span>
           </button>
         ) : (
           <span title={hint}>{title}</span>
         )}
       </Heading>
-      {!fold && ordered.map(([project, projectRows]) => {
-        const { tops, kids } = nest(projectRows)
-        return (
-        <details key={project} open className="group/hot">
-          <ContextMenu>
-            <ContextMenuTrigger asChild>
-              <summary
-                title={tilde(project, actions.home)}
-                className="flex h-7 cursor-pointer list-none items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground hover:bg-muted pointer-coarse:h-11 [&::-webkit-details-marker]:hidden"
-              >
-                <ChevronRight className="size-3.5 shrink-0 transition-transform group-open/hot:rotate-90" aria-hidden />
-                <span className="flex-1 truncate">{label(project)}</span>
-                <span className="tabular-nums">{projectRows.length}</span>
-              </summary>
-            </ContextMenuTrigger>
-            <ProjectItems
-              g={projectRows[0].g}
-              ss={projectRows.map((projectRow) => projectRow.s)}
-              extra={
-                <ContextMenuItem onSelect={() => go({ kind: "dir", key: segs(project, actions.home).join("/") })}>
-                  <FolderOpen /> {t("shell.common.showFolder")}
-                </ContextMenuItem>
-              }
-            />
-          </ContextMenu>
-          <div className="ml-3 border-l pl-1">
-            {tops.map((topRow) => item(topRow, kids.get(topRow.s.id)))}
-          </div>
-        </details>
-        )
-      })}
+      {!fold &&
+        ordered.map(([project, projectRows]) => {
+          const { tops, kids } = nest(projectRows)
+          return (
+            <details key={project} open className="group/hot">
+              <ContextMenu>
+                <ContextMenuTrigger asChild>
+                  <summary
+                    title={tilde(project, actions.home)}
+                    className="flex h-7 cursor-pointer list-none items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground hover:bg-muted pointer-coarse:h-11 [&::-webkit-details-marker]:hidden"
+                  >
+                    <ChevronRight
+                      className="size-3.5 shrink-0 transition-transform group-open/hot:rotate-90"
+                      aria-hidden
+                    />
+                    <span className="flex-1 truncate">{label(project)}</span>
+                    <span className="tabular-nums">{projectRows.length}</span>
+                  </summary>
+                </ContextMenuTrigger>
+                <ProjectItems
+                  g={projectRows[0].g}
+                  ss={projectRows.map((projectRow) => projectRow.s)}
+                  extra={
+                    <ContextMenuItem
+                      onSelect={() =>
+                        go({
+                          kind: "dir",
+                          key: segs(project, actions.home).join("/"),
+                        })
+                      }
+                    >
+                      <FolderOpen /> {t("shell.common.showFolder")}
+                    </ContextMenuItem>
+                  }
+                />
+              </ContextMenu>
+              <div className="ml-3 border-l pl-1">
+                {tops.map((topRow) => item(topRow, kids.get(topRow.s.id)))}
+              </div>
+            </details>
+          )
+        })}
     </>
   )
 }
@@ -248,7 +407,8 @@ export type SidebarProps = {
 }
 
 // Seuil md de Tailwind : en dessous, le menu est un tiroir.
-export const MD = "(min-width: 768px) and (not ((pointer: coarse) and (max-height: 500px)))"
+export const MD =
+  "(min-width: 768px) and (not ((pointer: coarse) and (max-height: 500px)))"
 const onWide = (onChange: () => void) => {
   const wideQuery = matchMedia(MD)
   wideQuery.addEventListener("change", onChange)
@@ -256,7 +416,13 @@ const onWide = (onChange: () => void) => {
 }
 
 // Favoris : une sous-session favorite se range sous sa parente favorite, repliée par défaut.
-function FavSessions({ rows, read }: { rows: Row[]; read: (session: Session) => void }) {
+function FavSessions({
+  rows,
+  read,
+}: {
+  rows: Row[]
+  read: (session: Session) => void
+}) {
   const [opened, setOpened] = useState<Set<string>>(new Set())
   const { tops, kids } = nest(rows)
   const toggle = (id: string) =>
@@ -271,16 +437,31 @@ function FavSessions({ rows, read }: { rows: Row[]; read: (session: Session) => 
         <ContextMenu>
           <ContextMenuTrigger asChild>
             <div className="min-w-0 flex-1">
-              <NavItem icon={Star} label={row.s.title} active={false} onClick={() => read(row.s)} />
+              <NavItem
+                icon={Star}
+                label={row.s.title}
+                active={false}
+                onClick={() => read(row.s)}
+              />
             </div>
           </ContextMenuTrigger>
           <ContextMenuContent className="w-64">
             <SessionItems M={CM} row={row} full />
           </ContextMenuContent>
         </ContextMenu>
-        {childRows.length > 0 && <KidsBadge n={childRows.length} open={opened.has(row.s.id)} onClick={() => toggle(row.s.id)} />}
+        {childRows.length > 0 && (
+          <KidsBadge
+            n={childRows.length}
+            open={opened.has(row.s.id)}
+            onClick={() => toggle(row.s.id)}
+          />
+        )}
       </div>
-      {opened.has(row.s.id) && <div className="ml-4 border-l pl-[7px]">{childRows.map((childRow) => item(childRow))}</div>}
+      {opened.has(row.s.id) && (
+        <div className="ml-4 border-l pl-[7px]">
+          {childRows.map((childRow) => item(childRow))}
+        </div>
+      )}
     </Fragment>
   )
   return <>{tops.map((topRow) => item(topRow, kids.get(topRow.s.id)))}</>
@@ -291,23 +472,40 @@ function filterTree(nodes: Node[], query: string): Node[] {
   return nodes.flatMap((node) => {
     const matchingKids = filterTree([...node.kids.values()], query)
     if (!node.key.toLowerCase().includes(query)) return matchingKids
-    return [{ ...node, name: node.key, kids: new Map<string, Node>() }, ...matchingKids]
+    return [
+      { ...node, name: node.key, kids: new Map<string, Node>() },
+      ...matchingKids,
+    ]
   })
 }
 
 // Pied de navbar : version courante (un build de travail affiche son `git describe`) et lien vers la release plus récente.
 function VersionFooter() {
   const { t } = useTranslation()
-  const [updateInfo, setUpdateInfo] = useState<{ current: string; latest: string; url: string; newer: boolean }>()
+  const [updateInfo, setUpdateInfo] = useState<{
+    current: string
+    latest: string
+    url: string
+    newer: boolean
+  }>()
   useEffect(() => {
     api.updateInfo().then(setUpdateInfo, () => {})
   }, [])
   return (
     <div className="flex items-center gap-2 border-t px-4 py-2 text-xs text-muted-foreground tabular-nums">
-      {updateInfo && <span className="truncate" title={updateInfo.current}>{updateInfo.current}</span>}
+      {updateInfo && (
+        <span className="truncate" title={updateInfo.current}>
+          {updateInfo.current}
+        </span>
+      )}
       <div className="ml-auto flex shrink-0 items-center gap-2">
         {updateInfo?.newer && (
-          <a href={updateInfo.url} target="_blank" rel="noopener noreferrer" className="font-medium text-primary hover:underline">
+          <a
+            href={updateInfo.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-primary hover:underline"
+          >
             {t("shell.sidebar.updateTo", { latest: updateInfo.latest })}
           </a>
         )}
@@ -327,14 +525,22 @@ export function Sidebar({ searchRef, ...props }: SidebarProps) {
     setIsContentSearch(false)
   }
   const normalizedNavQuery = navQuery.trim().toLowerCase()
-  const show = (label: string) => !normalizedNavQuery || label.toLowerCase().includes(normalizedNavQuery)
-  const tree = normalizedNavQuery ? filterTree(props.tree, normalizedNavQuery) : props.tree
+  const show = (label: string) =>
+    !normalizedNavQuery || label.toLowerCase().includes(normalizedNavQuery)
+  const tree = normalizedNavQuery
+    ? filterTree(props.tree, normalizedNavQuery)
+    : props.tree
   const favGroups = props.favGroups.filter(({ vg }) => show(vg.name))
   const actions = useActions()
   const [projFold, setProjFold] = useLocal("gld.projects.folded", "")
   const [localFold, setLocalFold] = useLocal("gld.local.folded", "")
   const openRows = props.hot.filter((hotRow) => actions.live.has(hotRow.s.id))
-  const warmRows = props.hot.filter((hotRow) => !hotRow.s.parent && !actions.live.has(hotRow.s.id) && props.now - hotRow.s.mtime < props.ttl)
+  const warmRows = props.hot.filter(
+    (hotRow) =>
+      !hotRow.s.parent &&
+      !actions.live.has(hotRow.s.id) &&
+      props.now - hotRow.s.mtime < props.ttl
+  )
   const favRows = props.favRows.filter((favRow) => show(favRow.s.title))
   const currentRoute = props.route
   const link = (to: Route) => ({ to, onClick: () => props.go(to) })
@@ -350,7 +556,11 @@ export function Sidebar({ searchRef, ...props }: SidebarProps) {
           <img src="/icons/icon-192.png" alt="" className="size-10 shrink-0" />
           <div className="leading-tight">
             <p className="text-md font-semibold tracking-tight">Glaude Code</p>
-            <p className="text-xs text-muted-foreground tabular-nums">{props.loading ? t("common.loading") : t("shell.count.sessions", { count: props.total })}</p>
+            <p className="text-xs text-muted-foreground tabular-nums">
+              {props.loading
+                ? t("common.loading")
+                : t("shell.count.sessions", { count: props.total })}
+            </p>
           </div>
           <div className="ml-auto flex items-center gap-0.5">
             <PairButton />
@@ -368,7 +578,8 @@ export function Sidebar({ searchRef, ...props }: SidebarProps) {
             onChange={(changeEvent) => setNavQuery(changeEvent.target.value)}
             // Échap vide la recherche et rend le focus à la page : j/k/t/d reprennent leur rôle de raccourcis.
             onKeyDown={(keyboardEvent) => {
-              if (keyboardEvent.key === "Enter" && navQuery.trim()) setIsContentSearch(true)
+              if (keyboardEvent.key === "Enter" && navQuery.trim())
+                setIsContentSearch(true)
               if (keyboardEvent.key !== "Escape") return
               clearNavQuery()
               keyboardEvent.currentTarget.blur()
@@ -377,9 +588,18 @@ export function Sidebar({ searchRef, ...props }: SidebarProps) {
             className="bg-background pr-16 pl-8 shadow-none pointer-coarse:h-11 pointer-coarse:pr-24 pointer-coarse:pl-10"
             aria-label={t("shell.sidebar.searchLabel")}
           />
-          <Tip label={isContentSearch ? t("shell.sidebar.contentClose") : t("shell.sidebar.contentSearch")}>
+          <Tip
+            label={
+              isContentSearch
+                ? t("shell.sidebar.contentClose")
+                : t("shell.sidebar.contentSearch")
+            }
+          >
             <button
-              className={cn("absolute top-1/2 right-8 -translate-y-1/2 rounded-sm p-0.5 text-muted-foreground hover:text-foreground pointer-coarse:right-11 pointer-coarse:p-2.5", isContentSearch && "bg-accent text-foreground")}
+              className={cn(
+                "absolute top-1/2 right-8 -translate-y-1/2 rounded-sm p-0.5 text-muted-foreground hover:text-foreground pointer-coarse:right-11 pointer-coarse:p-2.5",
+                isContentSearch && "bg-accent text-foreground"
+              )}
               onClick={() => setIsContentSearch(!isContentSearch)}
               aria-pressed={isContentSearch}
               aria-label={t("shell.sidebar.contentSearch")}
@@ -396,7 +616,7 @@ export function Sidebar({ searchRef, ...props }: SidebarProps) {
               <X className="size-4" />
             </button>
           ) : (
-            <kbd className="pointer-events-none pointer-coarse:hidden absolute top-1/2 right-2 -translate-y-1/2 rounded-sm border bg-muted px-1.5 font-mono text-2xs text-muted-foreground">
+            <kbd className="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 rounded-sm border bg-muted px-1.5 font-mono text-2xs text-muted-foreground pointer-coarse:hidden">
               /
             </kbd>
           )}
@@ -405,148 +625,334 @@ export function Sidebar({ searchRef, ...props }: SidebarProps) {
 
       {isContentSearch ? (
         <ScrollArea className="min-h-0 flex-1">
-          <NavContentSearch query={navQuery.trim()} findSession={props.findSession} projects={props.projects} read={props.read} go={props.go} />
+          <NavContentSearch
+            query={navQuery.trim()}
+            findSession={props.findSession}
+            projects={props.projects}
+            read={props.read}
+            go={props.go}
+          />
         </ScrollArea>
       ) : (
-      <ScrollArea className="min-h-0 flex-1">
-        <CleanupWarning />
-        <CreditsButton triggerless open={isCreditsOpen} onOpenChange={setIsCreditsOpen} />
-        <SessionTrash open={isTrashOpen} onClose={() => setIsTrashOpen(false)} reload={props.reload} />
-        <nav className="px-2 pb-3" aria-label={t("shell.sidebar.navigation")}>
-          {show(t("shell.app.title.home")) && <NavItem icon={LayoutDashboard} label={t("shell.app.title.home")} active={currentRoute.kind === "home"} {...link({ kind: "home" })} />}
-          {show(t("shell.sidebar.carousel")) && <NavItem icon={GalleryHorizontalEnd} label={t("shell.sidebar.carousel")} n={props.carousel.n} active={props.carousel.on} onClick={props.carousel.start} />}
-          {show(t("shell.app.title.all")) && <NavItem icon={Inbox} label={t("shell.app.title.all")} n={props.counts.all} active={currentRoute.kind === "all"} {...link({ kind: "all" })} />}
-          {show(t("shell.sidebar.trash")) && <NavItem icon={Trash2} label={t("shell.sidebar.trash")} active={false} onClick={() => setIsTrashOpen(true)} />}
-          {!wide && !normalizedNavQuery && (
-            <NavItem icon={Ellipsis} label={isMoreOpen ? t("shell.sidebar.less") : t("shell.sidebar.more")} active={false} onClick={() => setIsMoreOpen(!isMoreOpen)} />
-          )}
-          {!isSecondaryHidden && (
-            <>
-          {show(t("shell.app.title.tabs")) && <NavItem icon={History} label={t("shell.app.title.tabs")} active={currentRoute.kind === "tabs"} {...link({ kind: "tabs" })} />}
-          {show(t("shell.app.title.extensions")) && <NavItem icon={Puzzle} label={t("shell.app.title.extensions")} active={currentRoute.kind === "extensions" || currentRoute.kind === "skills"} {...link({ kind: "extensions" })} />}
-          {show(t("teams.title")) && <NavItem icon={Users} label={t("teams.title")} active={currentRoute.kind === "teams" || currentRoute.kind === "team"} {...link({ kind: "teams" })} />}
-          {!normalizedNavQuery && <InvitesButton />}
-          {show(t("shell.app.title.config")) && <NavItem icon={SlidersHorizontal} label={t("shell.app.title.config")} active={currentRoute.kind === "config"} {...link({ kind: "config", tab: "" })} />}
-          {show(t("shell.app.title.memory")) && <NavItem icon={Brain} label={t("shell.app.title.memory")} active={currentRoute.kind === "memory"} {...link({ kind: "memory", key: "" })} />}
-          {props.snippets !== null && show(t("shell.app.title.snippets")) && (
-            <NavItem
-              icon={FileText}
-              label={t("shell.app.title.snippets")}
-              n={props.snippets}
-              active={currentRoute.kind === "snippets"}
-              {...link({ kind: "snippets", path: "" })}
-            />
-          )}
-          {!wide && show(t("shell.credits.support")) && <NavItem icon={Heart} label={t("shell.credits.support")} active={false} onClick={() => setIsCreditsOpen(true)} />}
-            </>
-          )}
+        <ScrollArea className="min-h-0 flex-1">
+          <CleanupWarning />
+          <CreditsButton
+            triggerless
+            open={isCreditsOpen}
+            onOpenChange={setIsCreditsOpen}
+          />
+          <SessionTrash
+            open={isTrashOpen}
+            onClose={() => setIsTrashOpen(false)}
+            reload={props.reload}
+          />
+          <nav className="px-2 pb-3" aria-label={t("shell.sidebar.navigation")}>
+            {show(t("shell.app.title.home")) && (
+              <NavItem
+                icon={LayoutDashboard}
+                label={t("shell.app.title.home")}
+                active={currentRoute.kind === "home"}
+                {...link({ kind: "home" })}
+              />
+            )}
+            {show(t("shell.sidebar.carousel")) && (
+              <NavItem
+                icon={GalleryHorizontalEnd}
+                label={t("shell.sidebar.carousel")}
+                n={props.carousel.n}
+                active={props.carousel.on}
+                onClick={props.carousel.start}
+              />
+            )}
+            {show(t("shell.app.title.all")) && (
+              <NavItem
+                icon={Inbox}
+                label={t("shell.app.title.all")}
+                n={props.counts.all}
+                active={currentRoute.kind === "all"}
+                {...link({ kind: "all" })}
+              />
+            )}
+            {show(t("shell.sidebar.trash")) && (
+              <NavItem
+                icon={Trash2}
+                label={t("shell.sidebar.trash")}
+                active={false}
+                onClick={() => setIsTrashOpen(true)}
+              />
+            )}
+            {!wide && !normalizedNavQuery && (
+              <NavItem
+                icon={Ellipsis}
+                label={
+                  isMoreOpen ? t("shell.sidebar.less") : t("shell.sidebar.more")
+                }
+                active={false}
+                onClick={() => setIsMoreOpen(!isMoreOpen)}
+              />
+            )}
+            {!isSecondaryHidden && (
+              <>
+                {show(t("shell.app.title.tabs")) && (
+                  <NavItem
+                    icon={History}
+                    label={t("shell.app.title.tabs")}
+                    active={currentRoute.kind === "tabs"}
+                    {...link({ kind: "tabs" })}
+                  />
+                )}
+                {show(t("shell.app.title.extensions")) && (
+                  <NavItem
+                    icon={Puzzle}
+                    label={t("shell.app.title.extensions")}
+                    active={
+                      currentRoute.kind === "extensions" ||
+                      currentRoute.kind === "skills"
+                    }
+                    {...link({ kind: "extensions" })}
+                  />
+                )}
+                {show(t("teams.title")) && (
+                  <NavItem
+                    icon={Users}
+                    label={t("teams.title")}
+                    active={
+                      currentRoute.kind === "teams" ||
+                      currentRoute.kind === "team"
+                    }
+                    {...link({ kind: "teams" })}
+                  />
+                )}
+                {!normalizedNavQuery && <InvitesButton />}
+                {show(t("shell.app.title.config")) && (
+                  <NavItem
+                    icon={SlidersHorizontal}
+                    label={t("shell.app.title.config")}
+                    active={currentRoute.kind === "config"}
+                    {...link({ kind: "config", tab: "" })}
+                  />
+                )}
+                {show(t("shell.app.title.memory")) && (
+                  <NavItem
+                    icon={Brain}
+                    label={t("shell.app.title.memory")}
+                    active={currentRoute.kind === "memory"}
+                    {...link({ kind: "memory", key: "" })}
+                  />
+                )}
+                {props.snippets !== null &&
+                  show(t("shell.app.title.snippets")) && (
+                    <NavItem
+                      icon={FileText}
+                      label={t("shell.app.title.snippets")}
+                      n={props.snippets}
+                      active={currentRoute.kind === "snippets"}
+                      {...link({ kind: "snippets", path: "" })}
+                    />
+                  )}
+                {!wide && show(t("shell.credits.support")) && (
+                  <NavItem
+                    icon={Heart}
+                    label={t("shell.credits.support")}
+                    active={false}
+                    onClick={() => setIsCreditsOpen(true)}
+                  />
+                )}
+              </>
+            )}
 
-          {!normalizedNavQuery && openRows.length > 0 && <Hot rows={openRows} now={props.now} ttl={props.ttl} go={props.go} title={t("shell.sidebar.hot")} hint={t("shell.sidebar.hotHint")} foldKey="gld.hot.openFolded" />}
-          {!normalizedNavQuery && warmRows.length > 0 && <Hot rows={warmRows} now={props.now} ttl={props.ttl} go={props.go} title={t("shell.sidebar.warmClosed")} hint={t("shell.sidebar.warmClosedHint")} foldKey="gld.hot.warmFolded" />}
+            {!normalizedNavQuery && openRows.length > 0 && (
+              <Hot
+                rows={openRows}
+                now={props.now}
+                ttl={props.ttl}
+                go={props.go}
+                title={t("shell.sidebar.hot")}
+                hint={t("shell.sidebar.hotHint")}
+                foldKey="gld.hot.openFolded"
+              />
+            )}
+            {!normalizedNavQuery && warmRows.length > 0 && (
+              <Hot
+                rows={warmRows}
+                now={props.now}
+                ttl={props.ttl}
+                go={props.go}
+                title={t("shell.sidebar.warmClosed")}
+                hint={t("shell.sidebar.warmClosedHint")}
+                foldKey="gld.hot.warmFolded"
+              />
+            )}
 
-          {(favRows.length > 0 || favGroups.length > 0) && (
-            <>
-              <Heading>{t("shell.sidebar.favorites")}</Heading>
-              {favGroups.map(({ vg, key }) => (
-                <ContextMenu key={key + "\0" + vg.name}>
-                  <ContextMenuTrigger asChild>
-                    <div>
-                      <NavItem
-                        icon={Tag}
-                        label={vg.name}
-                        n={props.groupCount(vg)}
-                        active={currentRoute.kind === "group" && currentRoute.name === vg.name && currentRoute.key === key}
-                        {...link({ kind: "group", name: vg.name, key })}
-                      />
-                    </div>
-                  </ContextMenuTrigger>
-                  <ContextMenuContent className="w-72">
-                    <GroupItems M={CM} vg={vg} />
-                  </ContextMenuContent>
-                </ContextMenu>
-              ))}
-              <FavSessions rows={favRows} read={props.read} />
-            </>
-          )}
+            {(favRows.length > 0 || favGroups.length > 0) && (
+              <>
+                <Heading>{t("shell.sidebar.favorites")}</Heading>
+                {favGroups.map(({ vg, key }) => (
+                  <ContextMenu key={key + "\0" + vg.name}>
+                    <ContextMenuTrigger asChild>
+                      <div>
+                        <NavItem
+                          icon={Tag}
+                          label={vg.name}
+                          n={props.groupCount(vg)}
+                          active={
+                            currentRoute.kind === "group" &&
+                            currentRoute.name === vg.name &&
+                            currentRoute.key === key
+                          }
+                          {...link({ kind: "group", name: vg.name, key })}
+                        />
+                      </div>
+                    </ContextMenuTrigger>
+                    <ContextMenuContent className="w-72">
+                      <GroupItems M={CM} vg={vg} />
+                    </ContextMenuContent>
+                  </ContextMenu>
+                ))}
+                <FavSessions rows={favRows} read={props.read} />
+              </>
+            )}
 
-          {actions.projects.some((project) => show(project.name) || project.dirs.some((directory) => show(directory))) && (
-            <>
-              <Heading fold={{ folded: projFold === "1", toggle: () => setProjFold(projFold ? "" : "1") }}>{t("shell.sidebar.projects")}</Heading>
-              {projFold !== "1" && <ProjectList route={currentRoute} go={props.go} q={normalizedNavQuery} />}
-            </>
-          )}
+            {actions.projects.some(
+              (project) =>
+                show(project.name) ||
+                project.dirs.some((directory) => show(directory))
+            ) && (
+              <>
+                <Heading
+                  fold={{
+                    folded: projFold === "1",
+                    toggle: () => setProjFold(projFold ? "" : "1"),
+                  }}
+                >
+                  {t("shell.sidebar.projects")}
+                </Heading>
+                {projFold !== "1" && (
+                  <ProjectList
+                    route={currentRoute}
+                    go={props.go}
+                    q={normalizedNavQuery}
+                  />
+                )}
+              </>
+            )}
 
-          <DropZone onDir={actions.addDirPath}>
-          <Heading
-            fold={{ folded: localFold === "1", toggle: () => setLocalFold(localFold ? "" : "1") }}
-            action={
-              <Tip label={t("shell.sidebar.addDirHint")}>
-                <Button variant="ghost" size="icon-xs" onClick={actions.addDir} aria-label={t("shell.sidebar.addDir")}>
-                  <FolderPlus />
-                </Button>
-              </Tip>
-            }
-          >
-            {t("shell.sidebar.local")}
-          </Heading>
-          {localFold !== "1" && props.loading && (
-            <div className="space-y-2 px-2">
-              <Skeleton className="h-6 w-full" />
-              <Skeleton className="h-6 w-4/5" />
-              <Skeleton className="h-6 w-3/5" />
-            </div>
-          )}
-          {localFold !== "1" && !props.loading && (
-            <ProjectTree
-              nodes={tree}
-              sel={currentRoute.kind === "dir" ? currentRoute.key : ""}
-              onSel={(key) => props.go({ kind: "dir", key })}
-              selGroup={currentRoute.kind === "group" ? currentRoute.key + "\0" + currentRoute.name : ""}
-              onGroup={(virtualGroup, key) => props.go({ kind: "group", name: virtualGroup.name, key })}
-            />
-          )}
-          </DropZone>
-          {normalizedNavQuery && <NavItem icon={X} label={t("shell.sidebar.clearSearch")} active={false} onClick={clearNavQuery} />}
-        </nav>
-      </ScrollArea>
+            <DropZone onDir={actions.addDirPath}>
+              <Heading
+                fold={{
+                  folded: localFold === "1",
+                  toggle: () => setLocalFold(localFold ? "" : "1"),
+                }}
+                action={
+                  <Tip label={t("shell.sidebar.addDirHint")}>
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      onClick={actions.addDir}
+                      aria-label={t("shell.sidebar.addDir")}
+                    >
+                      <FolderPlus />
+                    </Button>
+                  </Tip>
+                }
+              >
+                {t("shell.sidebar.local")}
+              </Heading>
+              {localFold !== "1" && props.loading && (
+                <div className="space-y-2 px-2">
+                  <Skeleton className="h-6 w-full" />
+                  <Skeleton className="h-6 w-4/5" />
+                  <Skeleton className="h-6 w-3/5" />
+                </div>
+              )}
+              {localFold !== "1" && !props.loading && (
+                <ProjectTree
+                  nodes={tree}
+                  sel={currentRoute.kind === "dir" ? currentRoute.key : ""}
+                  onSel={(key) => props.go({ kind: "dir", key })}
+                  selGroup={
+                    currentRoute.kind === "group"
+                      ? currentRoute.key + "\0" + currentRoute.name
+                      : ""
+                  }
+                  onGroup={(virtualGroup, key) =>
+                    props.go({ kind: "group", name: virtualGroup.name, key })
+                  }
+                />
+              )}
+            </DropZone>
+            {normalizedNavQuery && (
+              <NavItem
+                icon={X}
+                label={t("shell.sidebar.clearSearch")}
+                active={false}
+                onClick={clearNavQuery}
+              />
+            )}
+          </nav>
+        </ScrollArea>
       )}
 
       {(props.auto.n > 0 || props.args) && (
-      <div className="space-y-2 border-t p-3">
-        {props.auto.n > 0 && (
-          <div className="flex items-center gap-1">
-            <div className="min-w-0 flex-1">
-              <NavItem icon={ShieldCheck} label={t("shell.app.title.auto")} n={props.auto.n} active={props.auto.on} {...link({ kind: "auto" })} />
+        <div className="space-y-2 border-t p-3">
+          {props.auto.n > 0 && (
+            <div className="flex items-center gap-1">
+              <div className="min-w-0 flex-1">
+                <NavItem
+                  icon={ShieldCheck}
+                  label={t("shell.app.title.auto")}
+                  n={props.auto.n}
+                  active={props.auto.on}
+                  {...link({ kind: "auto" })}
+                />
+              </div>
+              <Button
+                variant="ghost"
+                size="xs"
+                className="text-destructive hover:text-destructive"
+                onClick={props.auto.purge}
+              >
+                <Shredder /> {t("shell.sidebar.clean")}
+              </Button>
             </div>
-            <Button variant="ghost" size="xs" className="text-destructive hover:text-destructive" onClick={props.auto.purge}>
-              <Shredder /> {t("shell.sidebar.clean")}
-            </Button>
-          </div>
-        )}
-        {props.args && (
-          <code className="block truncate px-1 text-xs text-muted-foreground" title={t("shell.sidebar.argsHint")}>
-            {props.args}
-          </code>
-        )}
-      </div>
+          )}
+          {props.args && (
+            <code
+              className="block truncate px-1 text-xs text-muted-foreground"
+              title={t("shell.sidebar.argsHint")}
+            >
+              {props.args}
+            </code>
+          )}
+        </div>
       )}
       <VersionFooter />
     </>
   )
   if (wide)
     return (
-      <aside id="menu" aria-label={t("shell.sidebar.menu")} className="flex w-72 shrink-0 flex-col border-r bg-sidebar lg:w-80">
+      <aside
+        id="menu"
+        aria-label={t("shell.sidebar.menu")}
+        className="flex w-72 shrink-0 flex-col border-r bg-sidebar lg:w-80"
+      >
         {body}
       </aside>
     )
   // Petit écran : tiroir modal (focus piégé, Échap, page derrière inerte) au lieu d'une colonne translatée hors de l'écran.
   return (
-    <Dialog open={props.open} onOpenChange={(isOpen) => !isOpen && props.onClose()}>
-      <DialogContent sheet={false}
+    <Dialog
+      open={props.open}
+      onOpenChange={(isOpen) => !isOpen && props.onClose()}
+    >
+      <DialogContent
+        sheet={false}
         id="menu"
         aria-describedby={undefined}
         showCloseButton={false}
-        {...swipeHandlers((swipeDirection) => swipeDirection === "left" && props.onClose())}
+        {...swipeHandlers(
+          (swipeDirection) => swipeDirection === "left" && props.onClose()
+        )}
         // Focus sur le tiroir lui-même, pas sur son premier bouton : sinon l'infobulle de ce bouton s'ouvre sur la recherche.
         onOpenAutoFocus={(focusEvent) => {
           focusEvent.preventDefault()
@@ -556,7 +962,7 @@ export function Sidebar({ searchRef, ...props }: SidebarProps) {
         // Le tiroir s'ouvre depuis le bouton de l'en-tête, hors de tout DialogTrigger : on lui rend le focus à la main.
         onCloseAutoFocus={(focusEvent) => {
           focusEvent.preventDefault()
-          document.querySelector<HTMLElement>('[data-menu-trigger]')?.focus()
+          document.querySelector<HTMLElement>("[data-menu-trigger]")?.focus()
         }}
         className="safe-t safe-b top-0 left-0 flex h-[var(--app-h,100dvh)] w-[85vw] max-w-sm translate-x-0 translate-y-0 flex-col gap-0 rounded-none border-0 border-r bg-sidebar p-0 text-sidebar-foreground duration-200 sm:max-w-sm data-open:zoom-in-100 data-open:slide-in-from-left data-closed:zoom-out-100 data-closed:slide-out-to-left"
       >

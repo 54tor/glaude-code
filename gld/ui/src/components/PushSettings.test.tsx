@@ -22,10 +22,21 @@ const ouvrir = async () => {
 }
 
 beforeEach(() => {
-  vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} })
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  )
   setAuth({ state: "open" })
   vi.mocked(push.pushSupported).mockReturnValue(true)
-  vi.mocked(push.currentPushState).mockResolvedValue({ subscribed: false, asking: false, waiting: false })
+  vi.mocked(push.currentPushState).mockResolvedValue({
+    subscribed: false,
+    asking: false,
+    waiting: false,
+  })
   vi.mocked(push.subscribePush).mockResolvedValue(undefined)
   vi.mocked(push.unsubscribePush).mockResolvedValue(undefined)
 })
@@ -52,21 +63,35 @@ describe("PushSection", () => {
     fireEvent.click(screen.getAllByRole("switch")[0])
     await flush()
 
-    expect(push.subscribePush).toHaveBeenCalledWith({ asking: true, waiting: true })
+    expect(push.subscribePush).toHaveBeenCalledWith({
+      asking: true,
+      waiting: true,
+    })
   })
 
   it("change un type en conservant l'autre", async () => {
-    vi.mocked(push.currentPushState).mockResolvedValue({ subscribed: true, asking: true, waiting: true })
+    vi.mocked(push.currentPushState).mockResolvedValue({
+      subscribed: true,
+      asking: true,
+      waiting: true,
+    })
     await ouvrir()
 
     fireEvent.click(screen.getAllByRole("switch")[2])
     await flush()
 
-    expect(push.subscribePush).toHaveBeenCalledWith({ asking: true, waiting: false })
+    expect(push.subscribePush).toHaveBeenCalledWith({
+      asking: true,
+      waiting: false,
+    })
   })
 
   it("désactive via unsubscribePush", async () => {
-    vi.mocked(push.currentPushState).mockResolvedValue({ subscribed: true, asking: true, waiting: true })
+    vi.mocked(push.currentPushState).mockResolvedValue({
+      subscribed: true,
+      asking: true,
+      waiting: true,
+    })
     await ouvrir()
 
     fireEvent.click(screen.getAllByRole("switch")[0])

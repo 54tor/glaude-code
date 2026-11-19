@@ -22,9 +22,15 @@ export const packDir = (key: string, label: string) => {
   return base
 }
 
-export const projectLabel = (path: string) => path.split(/[\\/]/).filter(Boolean).pop() ?? ""
+export const projectLabel = (path: string) =>
+  path.split(/[\\/]/).filter(Boolean).pop() ?? ""
 
-export const packOf = (entries: PackEntry[]) => JSON.stringify({ format: FORMAT, version: FORMAT_VERSION, entries }, null, 2) + "\n"
+export const packOf = (entries: PackEntry[]) =>
+  JSON.stringify(
+    { format: FORMAT, version: FORMAT_VERSION, entries },
+    null,
+    2
+  ) + "\n"
 
 export function parsePack(raw: string): PackEntry[] {
   const invalidPackError = () => new Error(i18n.t("memory.pack.invalid"))
@@ -34,13 +40,26 @@ export function parsePack(raw: string): PackEntry[] {
   } catch {
     throw invalidPackError()
   }
-  const hasValidHeader = parsedPack?.format === FORMAT && parsedPack.version === FORMAT_VERSION
-  if (!hasValidHeader || !Array.isArray(parsedPack.entries) || parsedPack.entries.length > MAX_PACK) throw invalidPackError()
+  const hasValidHeader =
+    parsedPack?.format === FORMAT && parsedPack.version === FORMAT_VERSION
+  if (
+    !hasValidHeader ||
+    !Array.isArray(parsedPack.entries) ||
+    parsedPack.entries.length > MAX_PACK
+  )
+    throw invalidPackError()
   return parsedPack.entries.map((entry: Partial<PackEntry>) => {
-    const hasValidName = typeof entry?.name === "string" && NAME.test(entry.name) && entry.name !== "MEMORY.md"
-    const hasValidText = typeof entry?.text === "string" && entry.text.length <= MAX_TEXT
+    const hasValidName =
+      typeof entry?.name === "string" &&
+      NAME.test(entry.name) &&
+      entry.name !== "MEMORY.md"
+    const hasValidText =
+      typeof entry?.text === "string" && entry.text.length <= MAX_TEXT
     if (!hasValidName || !hasValidText) throw invalidPackError()
-    const project = typeof entry.project === "string" ? entry.project.slice(0, MAX_PROJECT_LENGTH) : ""
+    const project =
+      typeof entry.project === "string"
+        ? entry.project.slice(0, MAX_PROJECT_LENGTH)
+        : ""
     return { project, name: entry.name as string, text: entry.text as string }
   })
 }
@@ -63,12 +82,19 @@ export function downloadPack(entries: PackEntry[]) {
         .filter((zipPath) => zipPath.startsWith(projectDir))
         .map((zipPath) => zipPath.slice(projectDir.length))
     )
-    const fileName = takenNames.has(entry.name) ? freeName(entry.name, takenNames) : entry.name
+    const fileName = takenNames.has(entry.name)
+      ? freeName(entry.name, takenNames)
+      : entry.name
     zipFiles[projectDir + fileName] = strToU8(entry.text)
   }
   const downloadLink = document.createElement("a")
-  downloadLink.href = URL.createObjectURL(new Blob([zipSync(zipFiles) as BlobPart], { type: "application/zip" }))
+  downloadLink.href = URL.createObjectURL(
+    new Blob([zipSync(zipFiles) as BlobPart], { type: "application/zip" })
+  )
   downloadLink.download = "gld-memoires.zip"
   downloadLink.click()
-  setTimeout(() => URL.revokeObjectURL(downloadLink.href), OBJECT_URL_LIFETIME_MS)
+  setTimeout(
+    () => URL.revokeObjectURL(downloadLink.href),
+    OBJECT_URL_LIFETIME_MS
+  )
 }

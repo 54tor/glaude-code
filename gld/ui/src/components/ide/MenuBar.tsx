@@ -3,11 +3,19 @@ import { useTranslation } from "react-i18next"
 import { Menubar } from "radix-ui"
 import { CheckIcon } from "lucide-react"
 import { isEditableTarget } from "@/lib/editable"
-import { ariaKeys, commands, showKeys, type CmdCtx, type Command } from "./commands"
+import {
+  ariaKeys,
+  commands,
+  showKeys,
+  type CmdCtx,
+  type Command,
+} from "./commands"
 import type { ViewPrefValues } from "./useViewPrefs"
 
 const GROUPS: Command["group"][] = ["file", "edit", "find", "view", "goto"]
-type Toggle = { [K in keyof ViewPrefValues]: ViewPrefValues[K] extends boolean ? K : never }[keyof ViewPrefValues]
+type Toggle = {
+  [K in keyof ViewPrefValues]: ViewPrefValues[K] extends boolean ? K : never
+}[keyof ViewPrefValues]
 const CHECKS: Record<string, Toggle> = {
   "view.wordWrap": "wordWrap",
   "view.minimap": "minimap",
@@ -20,7 +28,15 @@ const itemCls =
 
 // aria-disabled plutôt que disabled : l'entrée reste atteignable au clavier pour lire la raison du refus.
 // Focus donné à l'éditeur AVANT la commande : celles qui ouvrent un widget de Monaco (recherche, ligne, palette) le reprennent ensuite.
-function Entry({ command, ctx, onRan }: { command: Command; ctx: CmdCtx; onRan(): void }) {
+function Entry({
+  command,
+  ctx,
+  onRan,
+}: {
+  command: Command
+  ctx: CmdCtx
+  onRan(): void
+}) {
   const { t } = useTranslation()
   const id = useId()
   const off = !command.enabled(ctx)
@@ -82,11 +98,22 @@ export function MenuBar({ ctx }: { ctx: CmdCtx }) {
   }
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      const isAltOnly = event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey
-      if (!isAltOnly || event.defaultPrevented || isEditableTarget(event.target)) return
-      const insideDialog = event.target instanceof Element && event.target.closest("[role=dialog], [role=alertdialog]")
+      const isAltOnly =
+        event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey
+      if (
+        !isAltOnly ||
+        event.defaultPrevented ||
+        isEditableTarget(event.target)
+      )
+        return
+      const insideDialog =
+        event.target instanceof Element &&
+        event.target.closest("[role=dialog], [role=alertdialog]")
       if (insideDialog) return
-      const group = GROUPS.find((candidate) => t(`ide.menubar.key.${candidate}`) === event.key.toLowerCase())
+      const group = GROUPS.find(
+        (candidate) =>
+          t(`ide.menubar.key.${candidate}`) === event.key.toLowerCase()
+      )
       if (!group) return
       event.preventDefault()
       setOpen(group)
@@ -95,7 +122,12 @@ export function MenuBar({ ctx }: { ctx: CmdCtx }) {
     return () => document.removeEventListener("keydown", onKeyDown)
   }, [t])
   return (
-    <Menubar.Root value={open} onValueChange={setOpen} aria-label={t("ide.menubar.label")} className="flex shrink-0 flex-wrap items-center gap-0.5 border-b px-1 py-0.5">
+    <Menubar.Root
+      value={open}
+      onValueChange={setOpen}
+      aria-label={t("ide.menubar.label")}
+      className="flex shrink-0 flex-wrap items-center gap-0.5 border-b px-1 py-0.5"
+    >
       {GROUPS.map((group) => (
         <Menubar.Menu key={group} value={group}>
           <Menubar.Trigger
@@ -105,11 +137,21 @@ export function MenuBar({ ctx }: { ctx: CmdCtx }) {
             {t(`ide.menubar.${group}`)}
           </Menubar.Trigger>
           <Menubar.Portal>
-            <Menubar.Content align="start" sideOffset={4} onCloseAutoFocus={closeFocus} className="z-50 min-w-56 rounded-lg border bg-popover p-1 text-popover-foreground shadow-md">
+            <Menubar.Content
+              align="start"
+              sideOffset={4}
+              onCloseAutoFocus={closeFocus}
+              className="z-50 min-w-56 rounded-lg border bg-popover p-1 text-popover-foreground shadow-md"
+            >
               {commands
                 .filter((command) => command.group === group)
                 .map((command) => (
-                  <Entry key={command.id} command={command} ctx={ctx} onRan={onRan} />
+                  <Entry
+                    key={command.id}
+                    command={command}
+                    ctx={ctx}
+                    onRan={onRan}
+                  />
                 ))}
             </Menubar.Content>
           </Menubar.Portal>

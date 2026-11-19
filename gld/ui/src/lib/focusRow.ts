@@ -4,7 +4,9 @@ const SESSION_ROW_SELECTOR = "[data-row][data-id]"
 // le dialogue garde alors son comportement.
 export function focusRow(id?: string): boolean {
   if (!id) return false
-  const rowElement = document.querySelector<HTMLElement>(`[data-row][data-id="${CSS.escape(id)}"]`)
+  const rowElement = document.querySelector<HTMLElement>(
+    `[data-row][data-id="${CSS.escape(id)}"]`
+  )
   if (!rowElement) return false
   rowElement.focus()
   return true
@@ -12,7 +14,9 @@ export function focusRow(id?: string): boolean {
 
 // Ligne la plus proche qui restera quand ces sessions auront disparu : à calculer avant la suppression.
 export function rowAfter(ids: string[]): string | undefined {
-  const rowIds = [...document.querySelectorAll<HTMLElement>(SESSION_ROW_SELECTOR)].map((rowElement) => rowElement.dataset.id ?? "")
+  const rowIds = [
+    ...document.querySelectorAll<HTMLElement>(SESSION_ROW_SELECTOR),
+  ].map((rowElement) => rowElement.dataset.id ?? "")
   const firstRemovedIndex = rowIds.findIndex((rowId) => ids.includes(rowId))
   if (firstRemovedIndex < 0) return undefined
   const staysAfterRemoval = (rowId: string) => !ids.includes(rowId)

@@ -4,7 +4,10 @@ import { expect, it, vi } from "vitest"
 import { DIR_MIME } from "@/lib/dnd"
 import { DropZone } from "./DropZone"
 
-const dt = (data: Record<string, string>) => ({ types: Object.keys(data), getData: (key: string) => data[key] ?? "" })
+const dt = (data: Record<string, string>) => ({
+  types: Object.keys(data),
+  getData: (key: string) => data[key] ?? "",
+})
 
 it("appelle onDir avec le dossier déposé et ignore les autres glissements", () => {
   const onDir = vi.fn()

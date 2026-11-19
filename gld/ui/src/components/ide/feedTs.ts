@@ -26,12 +26,21 @@ const compareStrings = (left: string, right: string) => {
 }
 
 // Sources données au service TypeScript de Monaco : les plus proches du fichier actif d'abord.
-export function pickFeed(files: { path: string; size: number }[], near: string): string[] {
+export function pickFeed(
+  files: { path: string; size: number }[],
+  near: string
+): string[] {
   const here = dirSegs(near)
-  const eligible = files.filter((file) => file.size <= MAX_FILE && FEEDABLE.test(file.path))
-  const distanceByPath = new Map(eligible.map((file) => [file.path, distance(dirSegs(file.path), here)]))
+  const eligible = files.filter(
+    (file) => file.size <= MAX_FILE && FEEDABLE.test(file.path)
+  )
+  const distanceByPath = new Map(
+    eligible.map((file) => [file.path, distance(dirSegs(file.path), here)])
+  )
   eligible.sort(
-    (left, right) => distanceByPath.get(left.path)! - distanceByPath.get(right.path)! || compareStrings(left.path, right.path)
+    (left, right) =>
+      distanceByPath.get(left.path)! - distanceByPath.get(right.path)! ||
+      compareStrings(left.path, right.path)
   )
   const out: string[] = []
   let total = 0
@@ -45,11 +54,18 @@ export function pickFeed(files: { path: string; size: number }[], near: string):
 }
 
 // Lecture par lots ; la taille annoncée par l'index peut avoir grandi depuis, d'où le second plafond sur le contenu reçu.
-export async function runFeed(dir: string, paths: string[], sink: (path: string, content: string) => void, signal: AbortSignal) {
+export async function runFeed(
+  dir: string,
+  paths: string[],
+  sink: (path: string, content: string) => void,
+  signal: AbortSignal
+) {
   let total = 0
   for (let batchStart = 0; batchStart < paths.length; batchStart += BATCH) {
     if (signal.aborted) return
-    const response = await api.fsFiles(dir, paths.slice(batchStart, batchStart + BATCH)).catch(() => null)
+    const response = await api
+      .fsFiles(dir, paths.slice(batchStart, batchStart + BATCH))
+      .catch(() => null)
     if (signal.aborted || !response) return
     for (const file of response.files ?? []) {
       total += file.content.length
@@ -60,16 +76,25 @@ export async function runFeed(dir: string, paths: string[], sink: (path: string,
 }
 
 // live : onglet actif lu au moment de l'alimentation, sans relancer le calcul à chaque changement d'onglet.
-export function useTsFeed(dir: string, files: FsIndexEntry[], state: IndexState, live: RefObject<{ active: string }>) {
+export function useTsFeed(
+  dir: string,
+  files: FsIndexEntry[],
+  state: IndexState,
+  live: RefObject<{ active: string }>
+) {
   const fed = useRef(new Map<string, string>()) // chemin → « mtime:taille » de l'index au moment de l'alimentation
   // Alimentation du service TypeScript : seulement les fichiers de l'index, et seulement ceux qui ont changé depuis.
   useEffect(() => {
     if (state === "building") return
-    const stamp = new Map(files.map((file) => [file.path, `${file.mtime}:${file.size}`]))
+    const stamp = new Map(
+      files.map((file) => [file.path, `${file.mtime}:${file.size}`])
+    )
     const picked = pickFeed(files, live.current.active)
     const keep = new Set(picked)
     const gone = [...fed.current.keys()].filter((path) => !keep.has(path))
-    const todo = picked.filter((path) => fed.current.get(path) !== stamp.get(path))
+    const todo = picked.filter(
+      (path) => fed.current.get(path) !== stamp.get(path)
+    )
     if (!gone.length && !todo.length) return
     const abortController = new AbortController()
     import("./CodeEditor")
@@ -91,7 +116,11 @@ export function useTsFeed(dir: string, files: FsIndexEntry[], state: IndexState,
   useEffect(() => {
     const fedAtMount = fed.current
     return () => {
-      if (fedAtMount.size) import("./CodeEditor").then((editorModule) => editorModule.clearTsLibs(), () => {})
+      if (fedAtMount.size)
+        import("./CodeEditor").then(
+          (editorModule) => editorModule.clearTsLibs(),
+          () => {}
+        )
       fedAtMount.clear()
     }
   }, [dir])

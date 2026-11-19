@@ -5,14 +5,60 @@ import { i18n } from "@/i18n"
 
 // Les textes sont dans le catalogue (config.keys.<id>) ; ici, seulement la correspondance chemin -> id.
 const PLAIN = new Set([
-  "model", "effortLevel", "language", "theme", "editorMode", "cleanupPeriodDays", "env", "attribution", "permissions", "hooks", "worktree",
-  "workflowKeywordTriggerEnabled", "enabledPlugins", "extraKnownMarketplaces", "feedbackDrafts", "modelSettings", "promptSuggestionEnabled",
-  "awaySummaryEnabled", "dialogExpiry", "pluginConfigs", "skipDangerousModePermissionPrompt", "skipWorkflowUsageWarning", "preferredNotifChannel",
-  "autoCompactEnabled", "idleCompaction", "switchModelsOnFlag", "fileCheckpointingEnabled", "teammateMode", "remoteControlAtStartup",
-  "crossSessionInbound", "inputNeededNotifEnabled", "agentPushNotifEnabled", "useAutoModeDuringPlan", "autoMode",
-  "alwaysThinkingEnabled", "fastMode", "autoMemoryEnabled", "includeGitInstructions", "respectGitignore", "showThinkingSummaries",
-  "showTurnDuration", "spinnerTipsEnabled", "terminalProgressBarEnabled", "prefersReducedMotion", "autoScrollEnabled", "verbose",
-  "autoConnectIde", "viewMode", "outputStyle", "plansDirectory", "defaultShell", "autoUpdatesChannel", "diffTool", "askUserQuestionTimeout",
+  "model",
+  "effortLevel",
+  "language",
+  "theme",
+  "editorMode",
+  "cleanupPeriodDays",
+  "env",
+  "attribution",
+  "permissions",
+  "hooks",
+  "worktree",
+  "workflowKeywordTriggerEnabled",
+  "enabledPlugins",
+  "extraKnownMarketplaces",
+  "feedbackDrafts",
+  "modelSettings",
+  "promptSuggestionEnabled",
+  "awaySummaryEnabled",
+  "dialogExpiry",
+  "pluginConfigs",
+  "skipDangerousModePermissionPrompt",
+  "skipWorkflowUsageWarning",
+  "preferredNotifChannel",
+  "autoCompactEnabled",
+  "idleCompaction",
+  "switchModelsOnFlag",
+  "fileCheckpointingEnabled",
+  "teammateMode",
+  "remoteControlAtStartup",
+  "crossSessionInbound",
+  "inputNeededNotifEnabled",
+  "agentPushNotifEnabled",
+  "useAutoModeDuringPlan",
+  "autoMode",
+  "alwaysThinkingEnabled",
+  "fastMode",
+  "autoMemoryEnabled",
+  "includeGitInstructions",
+  "respectGitignore",
+  "showThinkingSummaries",
+  "showTurnDuration",
+  "spinnerTipsEnabled",
+  "terminalProgressBarEnabled",
+  "prefersReducedMotion",
+  "autoScrollEnabled",
+  "verbose",
+  "autoConnectIde",
+  "viewMode",
+  "outputStyle",
+  "plansDirectory",
+  "defaultShell",
+  "autoUpdatesChannel",
+  "diffTool",
+  "askUserQuestionTimeout",
 ])
 const DOTTED: Record<string, string> = {
   "attribution.commit": "attributionCommit",
@@ -41,7 +87,8 @@ export function describeKey(path: string): string | undefined {
   if (DOTTED[path]) return doc(DOTTED[path])
   if (PLAIN.has(path)) return doc(path)
   for (const [prefix, catalogKey] of NAMED_PREFIXES) {
-    if (path.startsWith(prefix)) return i18n.t(catalogKey, { name: path.slice(prefix.length) })
+    if (path.startsWith(prefix))
+      return i18n.t(catalogKey, { name: path.slice(prefix.length) })
   }
   for (const section of SECTION_PREFIXES) {
     if (path.startsWith(section + ".")) return doc(section)

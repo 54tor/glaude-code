@@ -5,8 +5,26 @@ import { api, type InviteInfo, type ShareInfo } from "@/lib/api"
 import { resetShares } from "@/hooks/useShares"
 import { InvitesButton } from "./InvitesButton"
 
-const inv = (inviteInfo: Partial<InviteInfo> = {}): InviteInfo => ({ id: "i1", seq: 1, name: "", label: "Léa", mode: "rw", state: "connected", lastSeen: 0, redeemed: true, queue: [], ...inviteInfo })
-const sh = (id: string, invites: InviteInfo[]): ShareInfo => ({ id, dir: "/d", title: id, handle: "h", open: true, invites })
+const inv = (inviteInfo: Partial<InviteInfo> = {}): InviteInfo => ({
+  id: "i1",
+  seq: 1,
+  name: "",
+  label: "Léa",
+  mode: "rw",
+  state: "connected",
+  lastSeen: 0,
+  redeemed: true,
+  queue: [],
+  ...inviteInfo,
+})
+const sh = (id: string, invites: InviteInfo[]): ShareInfo => ({
+  id,
+  dir: "/d",
+  title: id,
+  handle: "h",
+  open: true,
+  invites,
+})
 const q = (id: string) => ({ id, text: "x", state: "queued" as const, at: 1 })
 const mount = async (shares: ShareInfo[]) => {
   vi.spyOn(api, "shares").mockResolvedValue({ shares })
@@ -27,18 +45,32 @@ describe("InvitesButton", () => {
   })
 
   it("pastille = invités connectés + messages en attente de tous les partages", async () => {
-    await mount([sh("a", [inv({ queue: [q("1"), q("2")] }), inv({ id: "i2", state: "away" })]), sh("b", [inv({ id: "i3", queue: [q("3")] })])])
-    const element = screen.getByRole("button", { name: /2 connecté.*3 message/ })
+    await mount([
+      sh("a", [
+        inv({ queue: [q("1"), q("2")] }),
+        inv({ id: "i2", state: "away" }),
+      ]),
+      sh("b", [inv({ id: "i3", queue: [q("3")] })]),
+    ])
+    const element = screen.getByRole("button", {
+      name: /2 connecté.*3 message/,
+    })
     expect(element.textContent).toContain("5")
   })
 
   it("aucune pastille quand le compte est nul", async () => {
     await mount([sh("a", [inv({ state: "pending" })])])
-    expect(screen.getByRole("button", { name: /0 connecté/ }).textContent).not.toContain("0")
+    expect(
+      screen.getByRole("button", { name: /0 connecté/ }).textContent
+    ).not.toContain("0")
   })
 
   it("affiche le nombre de sessions partagées ouvertes", async () => {
-    await mount([sh("a", [inv()]), { ...sh("b", [inv({ id: "i2" })]), open: false }, sh("c", [inv({ id: "i3" })])])
+    await mount([
+      sh("a", [inv()]),
+      { ...sh("b", [inv({ id: "i2" })]), open: false },
+      sh("c", [inv({ id: "i3" })]),
+    ])
     expect(screen.getByText("2 ouverte(s)")).toBeTruthy()
   })
 

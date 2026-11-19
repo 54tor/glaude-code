@@ -1,4 +1,12 @@
-import { AlarmClock, Coins, Coffee, Fan, Info, Microwave, Snowflake } from "lucide-react"
+import {
+  AlarmClock,
+  Coins,
+  Coffee,
+  Fan,
+  Info,
+  Microwave,
+  Snowflake,
+} from "lucide-react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { api, type Session } from "@/lib/api"
@@ -6,13 +14,28 @@ import { errMsg } from "@/lib/apiError"
 import { cn } from "@/lib/utils"
 import { refreshWarm, useKeepWarm } from "@/hooks/useKeepWarm"
 import { Button } from "@/components/ui/button"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { useActions } from "./actions"
 
 export const CACHE_EXPIRY_WARNING_MINUTES = 10
 const PING_CAP_CHOICES = [3, 6, 12, 24]
 
-const setKeepWarm = async (session: Session, on: boolean, max?: number, reheat?: boolean) => {
+const setKeepWarm = async (
+  session: Session,
+  on: boolean,
+  max?: number,
+  reheat?: boolean
+) => {
   try {
     await api.keepWarmSet({ dir: session.dir, id: session.id, on, max, reheat })
   } catch (error) {
@@ -26,14 +49,29 @@ function Offers({ s: session }: { s: Session }) {
   const { t } = useTranslation()
   const actions = useActions()
   // cache expiré : le premier ping le reconstruit en entier
-  const cold = actions.caps(session).hotCache && actions.hotLeft(session) === null
+  const cold =
+    actions.caps(session).hotCache && actions.hotLeft(session) === null
   return (
     <>
-      <DropdownMenuLabel className="whitespace-normal">{t(cold ? "conversation.keepWarm.coldLabel" : "conversation.keepWarm.menuLabel")}</DropdownMenuLabel>
+      <DropdownMenuLabel className="whitespace-normal">
+        {t(
+          cold
+            ? "conversation.keepWarm.coldLabel"
+            : "conversation.keepWarm.menuLabel"
+        )}
+      </DropdownMenuLabel>
       <DropdownMenuSeparator />
       {PING_CAP_CHOICES.map((pingCap) => (
-        <DropdownMenuItem key={pingCap} onSelect={() => setKeepWarm(session, true, pingCap, cold)}>
-          {t(cold ? "conversation.keepWarm.reheatAtMost" : "conversation.keepWarm.atMost", { count: pingCap })}
+        <DropdownMenuItem
+          key={pingCap}
+          onSelect={() => setKeepWarm(session, true, pingCap, cold)}
+        >
+          {t(
+            cold
+              ? "conversation.keepWarm.reheatAtMost"
+              : "conversation.keepWarm.atMost",
+            { count: pingCap }
+          )}
         </DropdownMenuItem>
       ))}
     </>
@@ -53,7 +91,8 @@ export function KeepWarmItem({ s: session }: { s: Session }) {
       </DropdownMenuItem>
     )
   // un ping part dans un terminal : une tâche de fond n'en a pas
-  const cannotPing = !actions.live.has(session.id) || actions.background.has(session.id)
+  const cannotPing =
+    !actions.live.has(session.id) || actions.background.has(session.id)
   if (cannotPing)
     return (
       <DropdownMenuItem disabled>
@@ -80,20 +119,46 @@ export function KeepWarmBanner({ s: session }: { s: Session }) {
   const hasNothingToShow = !warm?.on && !warm?.note
   if (!actions.caps(session).keepWarm || hasNothingToShow) return null
   return (
-    <div className={cn("flex flex-wrap items-center gap-x-3 gap-y-1 border-b px-4 py-1.5 text-xs md:px-6", warm.on ? "border-warning/40 bg-warning/10 text-warning" : "bg-muted/40 text-muted-foreground")}>
-      {warm.on ? <Microwave className="warm-wave size-4 shrink-0" /> : <Coins className="size-4 shrink-0" />}
+    <div
+      className={cn(
+        "flex flex-wrap items-center gap-x-3 gap-y-1 border-b px-4 py-1.5 text-xs md:px-6",
+        warm.on
+          ? "border-warning/40 bg-warning/10 text-warning"
+          : "bg-muted/40 text-muted-foreground"
+      )}
+    >
+      {warm.on ? (
+        <Microwave className="warm-wave size-4 shrink-0" />
+      ) : (
+        <Coins className="size-4 shrink-0" />
+      )}
       {warm.on ? (
         <>
-          <span className="font-medium">{t("conversation.keepWarm.bannerActive")}</span>
-          <span className="tabular-nums">{t("conversation.keepWarm.pings", { count: warm.pings, pings: warm.pings, max: warm.max })}</span>
+          <span className="font-medium">
+            {t("conversation.keepWarm.bannerActive")}
+          </span>
+          <span className="tabular-nums">
+            {t("conversation.keepWarm.pings", {
+              count: warm.pings,
+              pings: warm.pings,
+              max: warm.max,
+            })}
+          </span>
           <span>{t("conversation.keepWarm.bannerHint")}</span>
         </>
       ) : (
         <span>{warm.note}</span>
       )}
-      {warm.note && warm.on && <span className="text-destructive">{warm.note}</span>}
+      {warm.note && warm.on && (
+        <span className="text-destructive">{warm.note}</span>
+      )}
       {warm.on && (
-        <Button size="xs" variant="outline" className="ml-auto" onClick={() => setKeepWarm(session, false)}>
+        <Button
+          size="xs"
+          variant="outline"
+          className="ml-auto"
+          onClick={() => setKeepWarm(session, false)}
+        >
           {t("conversation.keepWarm.stop")}
         </Button>
       )}
@@ -111,7 +176,8 @@ export function CacheState({ s: session }: { s: Session }) {
   const isCold = minutesLeft === null
   if (!actions.caps(session).hotCache) return null
   const isAsking = actions.asking.has(session.id)
-  const isWorking = actions.live.has(session.id) && !actions.waiting.has(session.id)
+  const isWorking =
+    actions.live.has(session.id) && !actions.waiting.has(session.id)
   const isExpiring = !isCold && minutesLeft <= CACHE_EXPIRY_WARNING_MINUTES
   const isKeptWarm = !!warm?.on
   // Même priorité d'icône que la barre latérale : une seule icône d'état.
@@ -126,7 +192,10 @@ export function CacheState({ s: session }: { s: Session }) {
     stateLabel = t("shell.sidebar.working")
   } else if (isKeptWarm) {
     icon = <Microwave className="warm-wave size-3.5" />
-    stateLabel = t("conversation.keepWarm.stateWarm", { pings: warm.pings, max: warm.max })
+    stateLabel = t("conversation.keepWarm.stateWarm", {
+      pings: warm.pings,
+      max: warm.max,
+    })
     if (!isCold) stateLabel += ` · ${cacheDelayLabel}`
   } else if (isExpiring) {
     icon = <AlarmClock className="size-3.5" />
@@ -135,7 +204,12 @@ export function CacheState({ s: session }: { s: Session }) {
     icon = <Snowflake className="size-3.5" />
     stateLabel = t("conversation.keepWarm.cold")
   }
-  const tone = isKeptWarm || (isWorking && !isAsking) ? "text-success" : isCold ? "text-sky-600 dark:text-sky-300" : "text-warning"
+  const tone =
+    isKeptWarm || (isWorking && !isAsking)
+      ? "text-success"
+      : isCold
+        ? "text-sky-600 dark:text-sky-300"
+        : "text-warning"
   const chip = (
     <>
       {icon}
@@ -152,22 +226,37 @@ export function CacheState({ s: session }: { s: Session }) {
     )
   if (isKeptWarm)
     return (
-      <Button variant="ghost" size="xs" className={chipClass} onClick={() => setKeepWarm(session, false)} title={t("conversation.keepWarm.stopTitle")}>
+      <Button
+        variant="ghost"
+        size="xs"
+        className={chipClass}
+        onClick={() => setKeepWarm(session, false)}
+        title={t("conversation.keepWarm.stopTitle")}
+      >
         {chip}
       </Button>
     )
   // un ping part dans un terminal : une tâche de fond n'en a pas
-  const cannotPing = !actions.live.has(session.id) || actions.background.has(session.id)
+  const cannotPing =
+    !actions.live.has(session.id) || actions.background.has(session.id)
   if (cannotPing)
     return (
-      <span className={chipClass} title={`${hotTitle}\n${t("conversation.keepWarm.closedTitle")}`}>
+      <span
+        className={chipClass}
+        title={`${hotTitle}\n${t("conversation.keepWarm.closedTitle")}`}
+      >
         {chip}
       </span>
     )
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="xs" className={chipClass} title={`${hotTitle}\n${t("conversation.keepWarm.buttonTitle")}`}>
+        <Button
+          variant="ghost"
+          size="xs"
+          className={chipClass}
+          title={`${hotTitle}\n${t("conversation.keepWarm.buttonTitle")}`}
+        >
           {chip}
         </Button>
       </DropdownMenuTrigger>

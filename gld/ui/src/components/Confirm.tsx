@@ -21,7 +21,13 @@ export type Ask = {
   removes?: boolean
 }
 
-export function Confirm({ ask, onClose }: { ask: Ask | null; onClose: () => void }) {
+export function Confirm({
+  ask,
+  onClose,
+}: {
+  ask: Ask | null
+  onClose: () => void
+}) {
   const { t } = useTranslation()
   // next : ligne voisine, retenue au clic (la ligne supprimée a souvent disparu quand le dialogue finit de se fermer)
   const lastAsk = useRef<{ ask: Ask | null; next?: string }>({ ask: null })
@@ -30,21 +36,25 @@ export function Confirm({ ask, onClose }: { ask: Ask | null; onClose: () => void
   }, [ask])
   const restoreRowFocus = (closeEvent: Event) => {
     const { ask: rememberedAsk, next: nextRow } = lastAsk.current
-    if (focusRow(nextRow ?? rememberedAsk?.rows?.[0])) closeEvent.preventDefault()
+    if (focusRow(nextRow ?? rememberedAsk?.rows?.[0]))
+      closeEvent.preventDefault()
   }
   return (
     <AlertDialog open={!!ask} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <AlertDialogContent onCloseAutoFocus={restoreRowFocus}>
         <AlertDialogHeader>
           <AlertDialogTitle>{ask?.title}</AlertDialogTitle>
-          <AlertDialogDescription className="min-w-0 whitespace-pre-line [overflow-wrap:anywhere]">{ask?.body}</AlertDialogDescription>
+          <AlertDialogDescription className="min-w-0 [overflow-wrap:anywhere] whitespace-pre-line">
+            {ask?.body}
+          </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
           <AlertDialogAction
             variant="destructive"
             onClick={() => {
-              if (ask?.removes && ask.rows) lastAsk.current.next = rowAfter(ask.rows)
+              if (ask?.removes && ask.rows)
+                lastAsk.current.next = rowAfter(ask.rows)
               ask?.run()
             }}
           >

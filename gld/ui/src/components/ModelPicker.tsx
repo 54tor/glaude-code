@@ -14,7 +14,9 @@ const defaultModel = () =>
   (userModel ??= api
     .config()
     .then((overview) => {
-      const userSettings = overview.files.find((file) => file.id === USER_SETTINGS_FILE_ID)?.data as UserSettings | undefined
+      const userSettings = overview.files.find(
+        (file) => file.id === USER_SETTINGS_FILE_ID
+      )?.data as UserSettings | undefined
       return userSettings?.model || userSettings?.env?.ANTHROPIC_MODEL || ""
     })
     .catch(() => ""))
@@ -38,18 +40,47 @@ export function ModelPicker({
   useEffect(() => void defaultModel().then(setDefaultModelName), [])
   const defaultModelLabel = () => {
     const matchingKey = modelKeyOf(defaultModelName)
-    return models().find(([modelValue]) => modelValue === matchingKey)?.[1] ?? defaultModelName
+    return (
+      models().find(([modelValue]) => modelValue === matchingKey)?.[1] ??
+      defaultModelName
+    )
   }
-  const labelOption = ([modelValue, modelLabel]: ReturnType<typeof models>[number]) => {
+  const labelOption = ([modelValue, modelLabel]: ReturnType<
+    typeof models
+  >[number]) => {
     const isDefaultOption = !modelValue && defaultModelName
     if (!isDefaultOption) return [modelValue, modelLabel]
-    return [modelValue, t("conversation.models.defaultIs", { model: defaultModelLabel() })]
+    return [
+      modelValue,
+      t("conversation.models.defaultIs", { model: defaultModelLabel() }),
+    ]
   }
   const opts = models().map(labelOption) as unknown as ReturnType<typeof models>
   return (
-    <div className={cn("flex min-w-0 flex-wrap gap-2 max-md:flex-1 max-md:flex-nowrap", className)}>
-      <Choose value={value.model} onChange={(model) => onChange({ ...value, model })} options={opts} label={t("conversation.modelPicker.model")} disabled={disabled} size={size} className="max-md:min-w-0 max-md:flex-1" />
-      <Choose value={value.effort} onChange={(effort) => onChange({ ...value, effort })} options={efforts()} label={t("conversation.modelPicker.effort")} disabled={disabled} size={size} className="max-md:min-w-0 max-md:flex-1" />
+    <div
+      className={cn(
+        "flex min-w-0 flex-wrap gap-2 max-md:flex-1 max-md:flex-nowrap",
+        className
+      )}
+    >
+      <Choose
+        value={value.model}
+        onChange={(model) => onChange({ ...value, model })}
+        options={opts}
+        label={t("conversation.modelPicker.model")}
+        disabled={disabled}
+        size={size}
+        className="max-md:min-w-0 max-md:flex-1"
+      />
+      <Choose
+        value={value.effort}
+        onChange={(effort) => onChange({ ...value, effort })}
+        options={efforts()}
+        label={t("conversation.modelPicker.effort")}
+        disabled={disabled}
+        size={size}
+        className="max-md:min-w-0 max-md:flex-1"
+      />
     </div>
   )
 }

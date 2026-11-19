@@ -3,16 +3,38 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { api, type Session, type VGroup } from "@/lib/api"
 import { resetShares } from "@/hooks/useShares"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { ActionsCtx, type Actions, type Row } from "./actions"
 import { DD, GroupItems, SessionDropdown, SessionItems } from "./SessionMenu"
 
-class ResizeObserverStub { observe() {} unobserve() {} disconnect() {} }
-globalThis.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver
+class ResizeObserverStub {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+globalThis.ResizeObserver =
+  ResizeObserverStub as unknown as typeof ResizeObserver
 Element.prototype.scrollIntoView = () => {}
 
-const session = (id: string, overrides: Partial<Session> = {}): Session => ({ id, dir: `dir-${id}`, title: `Titre ${id}`, named: true, cwd: "/home/bob/p", mtime: 1, kb: 1, tok: { in: 0, out: 0, cr: 0, cw: 0 }, ...overrides })
-const row = (id: string, project = "/home/bob/p", missing = false): Row => ({ s: session(id), g: { project, missing, sessions: [] } })
+const session = (id: string, overrides: Partial<Session> = {}): Session => ({
+  id,
+  dir: `dir-${id}`,
+  title: `Titre ${id}`,
+  named: true,
+  cwd: "/home/bob/p",
+  mtime: 1,
+  kb: 1,
+  tok: { in: 0, out: 0, cr: 0, cw: 0 },
+  ...overrides,
+})
+const row = (id: string, project = "/home/bob/p", missing = false): Row => ({
+  s: session(id),
+  g: { project, missing, sessions: [] },
+})
 
 type Overrides = Partial<Record<keyof Actions, unknown>>
 const buildActions = (overrides: Overrides = {}) => {
@@ -34,8 +56,29 @@ const buildActions = (overrides: Overrides = {}) => {
     stop: vi.fn(),
     remove: vi.fn(),
   }
-  const groupActs = { rows: vi.fn(() => [row("a"), row("b")]), open: vi.fn(), refs: vi.fn(), prompt: vi.fn(), export: vi.fn(), select: vi.fn(), fav: vi.fn(), rename: vi.fn(), remove: vi.fn(), show: vi.fn() }
-  const actions = { ...calls, groupActs, vgroups: [] as VGroup[], favs: new Set<string>(), live: new Set<string>(), picked: new Set<string>(), selected: [] as Row[], inGroup: null, ...overrides } as unknown as Actions
+  const groupActs = {
+    rows: vi.fn(() => [row("a"), row("b")]),
+    open: vi.fn(),
+    refs: vi.fn(),
+    prompt: vi.fn(),
+    export: vi.fn(),
+    select: vi.fn(),
+    fav: vi.fn(),
+    rename: vi.fn(),
+    remove: vi.fn(),
+    show: vi.fn(),
+  }
+  const actions = {
+    ...calls,
+    groupActs,
+    vgroups: [] as VGroup[],
+    favs: new Set<string>(),
+    live: new Set<string>(),
+    picked: new Set<string>(),
+    selected: [] as Row[],
+    inGroup: null,
+    ...overrides,
+  } as unknown as Actions
   return { actions, calls, groupActs }
 }
 
@@ -120,7 +163,11 @@ describe("SessionItems — une session", () => {
     const after = vi.fn()
     menu(actions, <SessionItems M={DD} row={row("s1")} after={after} />)
     await choose("Supprimer")
-    expect(calls.remove).toHaveBeenCalledWith([{ dir: "dir-s1", id: "s1" }], "« Titre s1 »", after)
+    expect(calls.remove).toHaveBeenCalledWith(
+      [{ dir: "dir-s1", id: "s1" }],
+      "« Titre s1 »",
+      after
+    )
   })
 
   it("entrées « full » (clic droit) : lire, reprendre dans un terminal, sélectionner", async () => {
@@ -144,20 +191,36 @@ describe("SessionItems — une session", () => {
   })
 
   it("session cochée : l'entrée propose de la désélectionner", async () => {
-    const { actions } = buildActions({ picked: new Set(["s1"]), selected: [row("s1")] })
+    const { actions } = buildActions({
+      picked: new Set(["s1"]),
+      selected: [row("s1")],
+    })
     menu(actions, <SessionItems M={DD} row={row("s1")} full />)
     expect(await screen.findByText("Désélectionner")).toBeTruthy()
   })
 
   it("dans un groupe virtuel : « Retirer du groupe » ne retire que cette session", async () => {
-    const { actions, calls } = buildActions({ inGroup: { name: "G", project: "/home/bob/p", ids: ["s1"] } })
+    const { actions, calls } = buildActions({
+      inGroup: { name: "G", project: "/home/bob/p", ids: ["s1"] },
+    })
     menu(actions, <SessionItems M={DD} row={row("s1")} />)
     await choose("Retirer du groupe")
     expect(calls.ungroup).toHaveBeenCalledWith(["s1"])
   })
 
   it("partage existant : l'entrée l'indique", async () => {
-    vi.mocked(api.shares).mockResolvedValue({ shares: [{ id: "s1", dir: "/d", title: "t", handle: "h", open: true, invites: [{ id: "i1" } as never] }] })
+    vi.mocked(api.shares).mockResolvedValue({
+      shares: [
+        {
+          id: "s1",
+          dir: "/d",
+          title: "t",
+          handle: "h",
+          open: true,
+          invites: [{ id: "i1" } as never],
+        },
+      ],
+    })
     const { actions } = buildActions()
     menu(actions, <SessionItems M={DD} row={row("s1")} />)
     expect(await screen.findByText("Partage…")).toBeTruthy()
@@ -209,7 +272,12 @@ describe("SessionItems — une session", () => {
 
 describe("SessionItems — sélection multiple", () => {
   const selection = [row("s1"), row("s2")]
-  const selectionActions = (overrides: Overrides = {}) => buildActions({ picked: new Set(["s1", "s2"]), selected: selection, ...overrides })
+  const selectionActions = (overrides: Overrides = {}) =>
+    buildActions({
+      picked: new Set(["s1", "s2"]),
+      selected: selection,
+      ...overrides,
+    })
 
   it("s'applique à toute la sélection, avec son effectif en titre", async () => {
     const { actions, calls } = selectionActions({ live: new Set(["s2"]) })
@@ -228,7 +296,13 @@ describe("SessionItems — sélection multiple", () => {
     const { actions, calls } = selectionActions()
     menu(actions, <SessionItems M={DD} row={selection[0]} />)
     await choose("Supprimer 2 sessions")
-    expect(calls.remove).toHaveBeenCalledWith([{ dir: "dir-s1", id: "s1" }, { dir: "dir-s2", id: "s2" }], "les 2 sessions sélectionnées")
+    expect(calls.remove).toHaveBeenCalledWith(
+      [
+        { dir: "dir-s1", id: "s1" },
+        { dir: "dir-s2", id: "s2" },
+      ],
+      "les 2 sessions sélectionnées"
+    )
   })
 
   it("aucune session ouverte : pas de « Fermer les sessions ouvertes »", async () => {
@@ -240,20 +314,32 @@ describe("SessionItems — sélection multiple", () => {
 
   it("sessions de plusieurs dossiers : le groupe est désactivé", async () => {
     const mixed = [row("s1", "/home/bob/p"), row("s2", "/home/bob/q")]
-    const { actions } = buildActions({ picked: new Set(["s1", "s2"]), selected: mixed })
+    const { actions } = buildActions({
+      picked: new Set(["s1", "s2"]),
+      selected: mixed,
+    })
     menu(actions, <SessionItems M={DD} row={mixed[0]} />)
-    const mixedItem = await screen.findByText("Groupe : sessions de plusieurs dossiers")
-    expect(mixedItem.closest("[role=menuitem]")?.getAttribute("aria-disabled")).toBe("true")
+    const mixedItem = await screen.findByText(
+      "Groupe : sessions de plusieurs dossiers"
+    )
+    expect(
+      mixedItem.closest("[role=menuitem]")?.getAttribute("aria-disabled")
+    ).toBe("true")
   })
 
   it("une seule session cochée : menu de session simple", async () => {
-    const { actions } = buildActions({ picked: new Set(["s1"]), selected: [row("s1")] })
+    const { actions } = buildActions({
+      picked: new Set(["s1"]),
+      selected: [row("s1")],
+    })
     menu(actions, <SessionItems M={DD} row={row("s1")} />)
     expect(await screen.findByText("Renommer…")).toBeTruthy()
   })
 
   it("dans un groupe : retire toute la sélection", async () => {
-    const { actions, calls } = selectionActions({ inGroup: { name: "G", project: "/home/bob/p", ids: ["s1", "s2"] } })
+    const { actions, calls } = selectionActions({
+      inGroup: { name: "G", project: "/home/bob/p", ids: ["s1", "s2"] },
+    })
     menu(actions, <SessionItems M={DD} row={selection[0]} />)
     await choose("Retirer du groupe")
     expect(calls.ungroup).toHaveBeenCalledWith(["s1", "s2"])
@@ -261,7 +347,11 @@ describe("SessionItems — sélection multiple", () => {
 })
 
 describe("GroupItems", () => {
-  const virtualGroup: VGroup = { name: "Refonte", project: "/home/bob/p", ids: ["a", "b"] }
+  const virtualGroup: VGroup = {
+    name: "Refonte",
+    project: "/home/bob/p",
+    ids: ["a", "b"],
+  }
 
   it("entrées d'un groupe : chacune appelle l'action du groupe", async () => {
     const { actions, groupActs } = buildActions()
@@ -295,11 +385,21 @@ describe("GroupItems", () => {
     const { actions, groupActs } = buildActions()
     groupActs.rows.mockReturnValue([])
     menu(actions, <GroupItems M={DD} vg={virtualGroup} />)
-    for (const label of ["Reprendre les 0 session", "Copier les références", "Exporter en Markdown", "Sélectionner ses sessions"]) {
+    for (const label of [
+      "Reprendre les 0 session",
+      "Copier les références",
+      "Exporter en Markdown",
+      "Sélectionner ses sessions",
+    ]) {
       const item = (await screen.findByText(label)).closest("[role=menuitem]")
       expect(item?.getAttribute("aria-disabled")).toBe("true")
     }
-    expect(screen.getByText("Renommer…").closest("[role=menuitem]")?.getAttribute("aria-disabled")).toBeNull()
+    expect(
+      screen
+        .getByText("Renommer…")
+        .closest("[role=menuitem]")
+        ?.getAttribute("aria-disabled")
+    ).toBeNull()
   })
 
   it("groupe favori : propose de le retirer des favoris", async () => {
@@ -321,7 +421,10 @@ describe("SessionDropdown", () => {
       </ActionsCtx.Provider>
     )
     expect(screen.queryByText("Informations…")).toBeNull()
-    fireEvent.pointerDown(screen.getByRole("button", { name: "plus" }), { button: 0, ctrlKey: false })
+    fireEvent.pointerDown(screen.getByRole("button", { name: "plus" }), {
+      button: 0,
+      ctrlKey: false,
+    })
     expect(await screen.findByText("entrée-lecteur")).toBeTruthy()
     expect(screen.getByText("Informations…")).toBeTruthy()
   })

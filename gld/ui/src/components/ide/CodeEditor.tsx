@@ -36,7 +36,11 @@ const libs = new Map<string, monaco.IDisposable>()
 export function setTsLib(path: string, content: string | null) {
   libs.get(path)?.dispose()
   libs.delete(path)
-  if (content !== null) libs.set(path, typescriptDefaults.addExtraLib(content, monaco.Uri.file(path).toString()))
+  if (content !== null)
+    libs.set(
+      path,
+      typescriptDefaults.addExtraLib(content, monaco.Uri.file(path).toString())
+    )
 }
 export function clearTsLibs() {
   for (const lib of libs.values()) lib.dispose()
@@ -62,12 +66,28 @@ type Props = {
   onChange(value: string): void
   onSave(value: string): void
 }
-export default function CodeEditor({ path, value, readOnly, theme, focus, wordWrap, minimap, fontSize, editorRef, scrollLink, onFontSize, onChange, onSave }: Props) {
+export default function CodeEditor({
+  path,
+  value,
+  readOnly,
+  theme,
+  focus,
+  wordWrap,
+  minimap,
+  fontSize,
+  editorRef,
+  scrollLink,
+  onFontSize,
+  onChange,
+  onSave,
+}: Props) {
   const box = useRef<HTMLDivElement>(null)
   const model = useRef<monaco.editor.ITextModel | null>(null)
   const editor = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
   const callbacks = useRef({ onChange, onSave, onFontSize, fontSize })
-  const handle = useRef<{ editorHandle: EditorHandle; notify(): void } | null>(null)
+  const handle = useRef<{ editorHandle: EditorHandle; notify(): void } | null>(
+    null
+  )
   // Valeurs émises que le parent n'a pas encore renvoyées : une frappe entre un rendu et son effet ferait sinon revenir le texte d'avant.
   const pendingValues = useRef<string[]>([])
   useEffect(() => {
@@ -88,14 +108,18 @@ export default function CodeEditor({ path, value, readOnly, theme, focus, wordWr
     const keyListener = codeEditor.onKeyDown((keyEvent) => {
       const hasCtrlOrMeta = keyEvent.ctrlKey || keyEvent.metaKey
       const hasOtherModifier = keyEvent.altKey || keyEvent.shiftKey
-      const isSaveShortcut = hasCtrlOrMeta && !hasOtherModifier && keyEvent.keyCode === monaco.KeyCode.KeyS
+      const isSaveShortcut =
+        hasCtrlOrMeta &&
+        !hasOtherModifier &&
+        keyEvent.keyCode === monaco.KeyCode.KeyS
       if (!isSaveShortcut) return
       keyEvent.preventDefault()
       callbacks.current.onSave(textModel.getValue())
     })
     const contentListener = textModel.onDidChangeContent(() => {
       const currentValue = textModel.getValue()
-      if (pendingValues.current.push(currentValue) > MAX_PENDING_VALUES) pendingValues.current.shift()
+      if (pendingValues.current.push(currentValue) > MAX_PENDING_VALUES)
+        pendingValues.current.shift()
       callbacks.current.onChange(currentValue)
     })
     // alive : une poignée gardée après le démontage ne touche plus un éditeur libéré.
@@ -108,7 +132,10 @@ export default function CodeEditor({ path, value, readOnly, theme, focus, wordWr
       return {
         line: position?.lineNumber ?? 1,
         col: position?.column ?? 1,
-        selected: selections.reduce((total, range) => total + textModel.getValueLengthInRange(range), 0),
+        selected: selections.reduce(
+          (total, range) => total + textModel.getValueLengthInRange(range),
+          0
+        ),
         eol: textModel.getEOL() === "\r\n" ? "CRLF" : "LF",
         language: textModel.getLanguageId(),
         indent: `${options.insertSpaces ? "spaces" : "tabs"}:${options.tabSize}`,
@@ -127,7 +154,8 @@ export default function CodeEditor({ path, value, readOnly, theme, focus, wordWr
       codeEditor.onDidChangeModelContent(notify),
       codeEditor.onDidChangeModelOptions(notify),
     ]
-    const action = (id: string) => () => void (alive && codeEditor.getAction(id)?.run())
+    const action = (id: string) => () =>
+      void (alive && codeEditor.getAction(id)?.run())
     const editorHandle: EditorHandle = {
       undo: () => void (alive && codeEditor.trigger("keyboard", "undo", null)),
       redo: () => void (alive && codeEditor.trigger("keyboard", "redo", null)),
@@ -137,7 +165,12 @@ export default function CodeEditor({ path, value, readOnly, theme, focus, wordWr
       palette: action("editor.action.quickCommand"),
       focus: () => void (alive && codeEditor.focus()),
       zoom: (delta) =>
-        void (alive && callbacks.current.onFontSize?.(zoomed(callbacks.current.fontSize ?? DEFAULT_FONT_SIZE, delta))),
+        void (
+          alive &&
+          callbacks.current.onFontSize?.(
+            zoomed(callbacks.current.fontSize ?? DEFAULT_FONT_SIZE, delta)
+          )
+        ),
       subscribe(listener) {
         if (!alive) return () => {}
         listeners.add(listener)
@@ -170,12 +203,19 @@ export default function CodeEditor({ path, value, readOnly, theme, focus, wordWr
   useEffect(() => {
     const codeEditor = editor.current
     if (!scrollLink || !codeEditor) return
-    const scrollableHeight = () => Math.max(1, codeEditor.getScrollHeight() - codeEditor.getLayoutInfo().height)
+    const scrollableHeight = () =>
+      Math.max(
+        1,
+        codeEditor.getScrollHeight() - codeEditor.getLayoutInfo().height
+      )
     const detach = scrollLink.attachEditor((ratio) => {
       const target = ratio * scrollableHeight()
-      if (Math.abs(codeEditor.getScrollTop() - target) > SCROLL_TOLERANCE_PX) codeEditor.setScrollTop(target)
+      if (Math.abs(codeEditor.getScrollTop() - target) > SCROLL_TOLERANCE_PX)
+        codeEditor.setScrollTop(target)
     })
-    const listener = codeEditor.onDidScrollChange(() => scrollLink.fromEditor(codeEditor.getScrollTop() / scrollableHeight()))
+    const listener = codeEditor.onDidScrollChange(() =>
+      scrollLink.fromEditor(codeEditor.getScrollTop() / scrollableHeight())
+    )
     return () => {
       detach()
       listener.dispose()
@@ -188,9 +228,11 @@ export default function CodeEditor({ path, value, readOnly, theme, focus, wordWr
   // Rechargement depuis le disque : seule une valeur que nous n'avons pas émise vient de l'extérieur.
   useEffect(() => {
     const pendingIndex = pendingValues.current.indexOf(value)
-    if (pendingIndex >= 0) return void pendingValues.current.splice(0, pendingIndex + 1)
+    if (pendingIndex >= 0)
+      return void pendingValues.current.splice(0, pendingIndex + 1)
     pendingValues.current = []
-    if (model.current && model.current.getValue() !== value) model.current.setValue(value)
+    if (model.current && model.current.getValue() !== value)
+      model.current.setValue(value)
   }, [value])
   useEffect(() => {
     if (focus) editor.current?.focus()
@@ -207,15 +249,34 @@ export default function CodeEditor({ path, value, readOnly, theme, focus, wordWr
 }
 
 // Comparaison disque / onglet : à droite le modèle même de l'onglet, donc éditable et synchronisé avec lui.
-export function DiffView({ path, original, modified, theme }: { path: string; original: string; modified: string; theme: Theme }) {
+export function DiffView({
+  path,
+  original,
+  modified,
+  theme,
+}: {
+  path: string
+  original: string
+  modified: string
+  theme: Theme
+}) {
   const box = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const tabModel = monaco.editor.getModel(monaco.Uri.file(path))
     const modifiedModel = tabModel ?? monaco.editor.createModel(modified)
-    const originalModel = monaco.editor.createModel(original, modifiedModel.getLanguageId())
-    const diffEditor = monaco.editor.createDiffEditor(box.current!, { ...base(theme), originalEditable: false })
+    const originalModel = monaco.editor.createModel(
+      original,
+      modifiedModel.getLanguageId()
+    )
+    const diffEditor = monaco.editor.createDiffEditor(box.current!, {
+      ...base(theme),
+      originalEditable: false,
+    })
     // Modèle de vue gardé : diffEditor.dispose() ne l'arrête pas, et un calcul en vol sur un modèle disposé lève « no diff result available ».
-    const viewModel = diffEditor.createViewModel({ original: originalModel, modified: modifiedModel })
+    const viewModel = diffEditor.createViewModel({
+      original: originalModel,
+      modified: modifiedModel,
+    })
     diffEditor.setModel(viewModel)
     return () => {
       diffEditor.dispose()

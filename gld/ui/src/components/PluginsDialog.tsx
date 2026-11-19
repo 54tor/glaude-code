@@ -83,7 +83,10 @@ export function usePluginRun(projects: Project[], after: () => unknown) {
   const [busy, setBusy] = useState("")
   const dirOf = (plugin: PluginInst) => {
     if (plugin.scope === "user") return ""
-    return projects.find((candidate) => candidate.project === plugin.project)?.dir ?? null
+    return (
+      projects.find((candidate) => candidate.project === plugin.project)?.dir ??
+      null
+    )
   }
   const run = async (
     key: string,
@@ -147,7 +150,11 @@ export function PluginsPanel({
               const dir = dirOf(plugin)
               const key = pluginKey(plugin)
               const isDisabled = busy === key || dir === null
-              const toggleLabel = t(plugin.enabled ? "skills.plugins.disable" : "skills.plugins.enable")
+              const toggleLabel = t(
+                plugin.enabled
+                  ? "skills.plugins.disable"
+                  : "skills.plugins.enable"
+              )
               return (
                 <li
                   key={key}
@@ -177,7 +184,9 @@ export function PluginsPanel({
                   >
                     <Power
                       className={
-                        plugin.enabled ? "text-success" : "text-muted-foreground"
+                        plugin.enabled
+                          ? "text-success"
+                          : "text-muted-foreground"
                       }
                     />
                   </Button>
@@ -187,7 +196,9 @@ export function PluginsPanel({
                     disabled={isDisabled}
                     title={t("skills.plugins.update")}
                     aria-label={t("skills.plugins.update")}
-                    onClick={() => run(key, "update", plugin.id, plugin.scope, dir ?? "")}
+                    onClick={() =>
+                      run(key, "update", plugin.id, plugin.scope, dir ?? "")
+                    }
                   >
                     <RefreshCw />
                   </Button>
@@ -259,7 +270,8 @@ export function PluginsCatalog({
         if (isLatestRequest()) setData({ available: response.available ?? [] })
       },
       (searchError) => {
-        if (isLatestRequest()) setData({ available: [], error: errMsg(searchError) })
+        if (isLatestRequest())
+          setData({ available: [], error: errMsg(searchError) })
       }
     )
   }, [])
@@ -272,22 +284,38 @@ export function PluginsCatalog({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const installIds = async (pluginIds: string[]) => {
     setBusy(pluginIds.join(","))
-    const [targetScope, targetProject] = scope === "user" ? ["user", ""] : ["project", scope.slice(PROJECT_SCOPE_PREFIX_LENGTH)]
+    const [targetScope, targetProject] =
+      scope === "user"
+        ? ["user", ""]
+        : ["project", scope.slice(PROJECT_SCOPE_PREFIX_LENGTH)]
     const failed: { item: string; error: { message: string } }[] = []
     for (const pluginId of pluginIds) {
       try {
         await api.pluginAct("install", pluginId, targetScope, targetProject)
       } catch (installError) {
-        failed.push({ item: pluginId, error: { message: errMsg(installError) } })
+        failed.push({
+          item: pluginId,
+          error: { message: errMsg(installError) },
+        })
       }
     }
     const installedCount = pluginIds.length - failed.length
     await reportAction(async () => ({
-      message: installedCount > 0 ? t("skills.plugins.installedCount", { count: installedCount }) : undefined,
+      message:
+        installedCount > 0
+          ? t("skills.plugins.installedCount", { count: installedCount })
+          : undefined,
       failed,
     }))
     setBusy("")
-    setSelectedIds((previous) => new Set([...previous].filter((pluginId) => failed.some((failure) => failure.item === pluginId))))
+    setSelectedIds(
+      (previous) =>
+        new Set(
+          [...previous].filter((pluginId) =>
+            failed.some((failure) => failure.item === pluginId)
+          )
+        )
+    )
     await load(searchQuery)
     onChange()
   }
@@ -307,15 +335,23 @@ export function PluginsCatalog({
     for (const plugin of data?.available ?? []) {
       const isInstalled = ids ? ids.has(plugin.id) : plugin.installed
       if (isInstalled) continue
-      pluginsByMarket.set(plugin.marketplace, [...(pluginsByMarket.get(plugin.marketplace) ?? []), plugin])
+      pluginsByMarket.set(plugin.marketplace, [
+        ...(pluginsByMarket.get(plugin.marketplace) ?? []),
+        plugin,
+      ])
     }
     return [...pluginsByMarket.entries()]
   }, [data, ids])
   const scopes = [
     ["user", t("skills.plugins.scopeUser")],
-    ...projects.map((project) => [`p/${project.dir}`, tilde(project.project, home)] as const),
+    ...projects.map(
+      (project) => [`p/${project.dir}`, tilde(project.project, home)] as const
+    ),
   ] as const
-  const count = byMarket.reduce((total, [, marketPlugins]) => total + marketPlugins.length, 0)
+  const count = byMarket.reduce(
+    (total, [, marketPlugins]) => total + marketPlugins.length,
+    0
+  )
 
   return (
     <section className="space-y-2">
@@ -358,14 +394,27 @@ export function PluginsCatalog({
       </div>
       {selectedIds.size > 0 && (
         <div className="sticky top-0 z-10 flex items-center justify-between gap-2 rounded-md border bg-background px-3 py-1.5 text-sm">
-          <span>{t("skills.plugins.selected", { count: selectedIds.size })}</span>
+          <span>
+            {t("skills.plugins.selected", { count: selectedIds.size })}
+          </span>
           <div className="flex gap-2">
-            <Button size="xs" variant="ghost" disabled={busy !== ""} onClick={() => setSelectedIds(new Set())}>
+            <Button
+              size="xs"
+              variant="ghost"
+              disabled={busy !== ""}
+              onClick={() => setSelectedIds(new Set())}
+            >
               {t("skills.plugins.clearSelection")}
             </Button>
-            <Button size="xs" disabled={busy !== ""} onClick={() => installIds([...selectedIds])}>
+            <Button
+              size="xs"
+              disabled={busy !== ""}
+              onClick={() => installIds([...selectedIds])}
+            >
               {busy !== "" ? <Fan className="animate-spin" /> : <Download />}{" "}
-              {t("skills.plugins.installSelection", { count: selectedIds.size })}
+              {t("skills.plugins.installSelection", {
+                count: selectedIds.size,
+              })}
             </Button>
           </div>
         </div>
@@ -398,7 +447,9 @@ export function PluginsCatalog({
                     <Checkbox
                       checked={selectedIds.has(plugin.id)}
                       onCheckedChange={() => toggleSelected(plugin.id)}
-                      aria-label={t("skills.plugins.select", { name: plugin.name })}
+                      aria-label={t("skills.plugins.select", {
+                        name: plugin.name,
+                      })}
                     />
                     <div className="min-w-0 flex-1">
                       <div className="truncate font-medium">{plugin.name}</div>
@@ -482,77 +533,95 @@ export function Marketplaces({ onChange }: { onChange: () => void }) {
       </h4>
       <div className="space-y-2">
         <form
-            className="flex gap-2"
-            onSubmit={(event) => {
-              event.preventDefault()
-              if (isValidSource) market(ADD_MARKET_KEY, "add", trimmedSource)
-            }}
+          className="flex gap-2"
+          onSubmit={(event) => {
+            event.preventDefault()
+            if (isValidSource) market(ADD_MARKET_KEY, "add", trimmedSource)
+          }}
+        >
+          <Input
+            value={src}
+            onChange={(event) => setSrc(event.target.value)}
+            placeholder={t("skills.plugins.marketAdd")}
+            aria-label={t("skills.plugins.marketAdd")}
+          />
+          <Button
+            type="submit"
+            variant="outline"
+            disabled={busy === ADD_MARKET_KEY || !isValidSource}
           >
-            <Input
-              value={src}
-              onChange={(event) => setSrc(event.target.value)}
-              placeholder={t("skills.plugins.marketAdd")}
-              aria-label={t("skills.plugins.marketAdd")}
-            />
-            <Button
-              type="submit"
-              variant="outline"
-              disabled={busy === ADD_MARKET_KEY || !isValidSource}
+            {busy === ADD_MARKET_KEY ? (
+              <Fan className="animate-spin" />
+            ) : (
+              <Plus />
+            )}{" "}
+            {t("skills.plugins.marketAddBtn")}
+          </Button>
+        </form>
+        <div className="flex justify-end">
+          <Button
+            size="xs"
+            variant="ghost"
+            disabled={busy === UPDATE_ALL_MARKETS_KEY}
+            onClick={() => market(UPDATE_ALL_MARKETS_KEY, "update")}
+          >
+            {busy === UPDATE_ALL_MARKETS_KEY ? (
+              <Fan className="animate-spin" />
+            ) : (
+              <RefreshCw />
+            )}{" "}
+            {t("skills.plugins.marketUpdateAll")}
+          </Button>
+        </div>
+        <ul className="divide-y rounded-md border">
+          {markets.map((marketplace) => (
+            <li
+              key={marketplace.name}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm"
             >
-              {busy === ADD_MARKET_KEY ? <Fan className="animate-spin" /> : <Plus />}{" "}
-              {t("skills.plugins.marketAddBtn")}
-            </Button>
-          </form>
-          <div className="flex justify-end">
-            <Button
-              size="xs"
-              variant="ghost"
-              disabled={busy === UPDATE_ALL_MARKETS_KEY}
-              onClick={() => market(UPDATE_ALL_MARKETS_KEY, "update")}
-            >
-              {busy === UPDATE_ALL_MARKETS_KEY ? (
-                <Fan className="animate-spin" />
-              ) : (
-                <RefreshCw />
-              )}{" "}
-              {t("skills.plugins.marketUpdateAll")}
-            </Button>
-          </div>
-          <ul className="divide-y rounded-md border">
-            {markets.map((marketplace) => (
-              <li
-                key={marketplace.name}
-                className="flex items-center gap-2 px-3 py-1.5 text-sm"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="truncate font-medium">{marketplace.name}</div>
-                  <div className="truncate text-xs text-muted-foreground">
-                    {marketplace.repo ?? marketplace.url ?? marketplace.source}
-                  </div>
+              <div className="min-w-0 flex-1">
+                <div className="truncate font-medium">{marketplace.name}</div>
+                <div className="truncate text-xs text-muted-foreground">
+                  {marketplace.repo ?? marketplace.url ?? marketplace.source}
                 </div>
-                <Button
-                  size="icon-xs"
-                  variant="ghost"
-                  disabled={busy === MARKET_KEY_PREFIX + marketplace.name}
-                  title={t("skills.plugins.marketUpdate")}
-                  aria-label={t("skills.plugins.marketUpdate")}
-                  onClick={() => market(MARKET_KEY_PREFIX + marketplace.name, "update", "", marketplace.name)}
-                >
-                  <RefreshCw />
-                </Button>
-                <Button
-                  size="icon-xs"
-                  variant="ghost"
-                  disabled={busy === MARKET_KEY_PREFIX + marketplace.name}
-                  title={t("skills.plugins.marketRemove")}
-                  aria-label={t("skills.plugins.marketRemove")}
-                  onClick={() => market(MARKET_KEY_PREFIX + marketplace.name, "remove", "", marketplace.name)}
-                >
-                  <Trash2 />
-                </Button>
-              </li>
-            ))}
-          </ul>
+              </div>
+              <Button
+                size="icon-xs"
+                variant="ghost"
+                disabled={busy === MARKET_KEY_PREFIX + marketplace.name}
+                title={t("skills.plugins.marketUpdate")}
+                aria-label={t("skills.plugins.marketUpdate")}
+                onClick={() =>
+                  market(
+                    MARKET_KEY_PREFIX + marketplace.name,
+                    "update",
+                    "",
+                    marketplace.name
+                  )
+                }
+              >
+                <RefreshCw />
+              </Button>
+              <Button
+                size="icon-xs"
+                variant="ghost"
+                disabled={busy === MARKET_KEY_PREFIX + marketplace.name}
+                title={t("skills.plugins.marketRemove")}
+                aria-label={t("skills.plugins.marketRemove")}
+                onClick={() =>
+                  market(
+                    MARKET_KEY_PREFIX + marketplace.name,
+                    "remove",
+                    "",
+                    marketplace.name
+                  )
+                }
+              >
+                <Trash2 />
+              </Button>
+            </li>
+          ))}
+        </ul>
       </div>
     </section>
   )

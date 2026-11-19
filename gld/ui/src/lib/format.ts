@@ -28,11 +28,15 @@ export function ago(sec: number): string {
   let chosenUnit = UNITS[0]
   for (const candidateUnit of UNITS) {
     const [, chosenUnitSeconds] = chosenUnit
-    const roundedSeconds = Math.round(absoluteDelta / chosenUnitSeconds) * chosenUnitSeconds
+    const roundedSeconds =
+      Math.round(absoluteDelta / chosenUnitSeconds) * chosenUnitSeconds
     if (roundedSeconds >= candidateUnit[1]) chosenUnit = candidateUnit
   }
   const [unitName, unitSeconds] = chosenUnit
-  return new Intl.RelativeTimeFormat(loc(), { numeric: "auto" }).format(Math.round(deltaSeconds / unitSeconds), unitName)
+  return new Intl.RelativeTimeFormat(loc(), { numeric: "auto" }).format(
+    Math.round(deltaSeconds / unitSeconds),
+    unitName
+  )
 }
 
 const toDate = (timestamp: string | number) => {
@@ -40,13 +44,23 @@ const toDate = (timestamp: string | number) => {
   return new Date(timestamp)
 }
 
-export const full = (timestamp: string | number) => toDate(timestamp).toLocaleString(loc(), { dateStyle: "long", timeStyle: "short" })
+export const full = (timestamp: string | number) =>
+  toDate(timestamp).toLocaleString(loc(), {
+    dateStyle: "long",
+    timeStyle: "short",
+  })
 
-export const brief = (timestamp: string | number) => toDate(timestamp).toLocaleString(loc(), { dateStyle: "medium", timeStyle: "short" })
+export const brief = (timestamp: string | number) =>
+  toDate(timestamp).toLocaleString(loc(), {
+    dateStyle: "medium",
+    timeStyle: "short",
+  })
 
 export const size = (kb: number) => {
   if (kb < KB_PER_MB) return `${kb} ${i18n.t("format.kb")}`
-  const megabytes = (kb / KB_PER_MB).toLocaleString(loc(), { maximumFractionDigits: 1 })
+  const megabytes = (kb / KB_PER_MB).toLocaleString(loc(), {
+    maximumFractionDigits: 1,
+  })
   return `${megabytes} ${i18n.t("format.mb")}`
 }
 
@@ -63,27 +77,38 @@ export function bucket(sec: number): string {
   todayStart.setHours(0, 0, 0, 0)
   const todayStartSeconds = todayStart.getTime() / 1000
   if (sec >= todayStartSeconds) return i18n.t("shell.format.today")
-  if (sec >= todayStartSeconds - SECONDS_PER_DAY) return i18n.t("shell.format.yesterday")
-  if (sec >= todayStartSeconds - 6 * SECONDS_PER_DAY) return i18n.t("shell.format.thisWeek")
-  if (sec >= todayStartSeconds - 29 * SECONDS_PER_DAY) return i18n.t("shell.format.thisMonth")
+  if (sec >= todayStartSeconds - SECONDS_PER_DAY)
+    return i18n.t("shell.format.yesterday")
+  if (sec >= todayStartSeconds - 6 * SECONDS_PER_DAY)
+    return i18n.t("shell.format.thisWeek")
+  if (sec >= todayStartSeconds - 29 * SECONDS_PER_DAY)
+    return i18n.t("shell.format.thisMonth")
   return i18n.t("shell.format.older")
 }
 
 // Tokens traités par la session : entrée neuve + sortie + cache écrit (le cache lu, relu à chaque tour, est compté à part).
-export const tokTotal = (tokens: { in: number; out: number; cw: number }) => tokens.in + tokens.out + tokens.cw
+export const tokTotal = (tokens: { in: number; out: number; cw: number }) =>
+  tokens.in + tokens.out + tokens.cw
 
 export const compact = (value: number) => {
   if (value < ONE_THOUSAND) return String(value)
-  const formatOneDecimal = (amount: number) => amount.toLocaleString(loc(), { maximumFractionDigits: 1 })
-  if (value < COMPACT_THOUSANDS_LIMIT) return `${formatOneDecimal(value / ONE_THOUSAND)} k`
+  const formatOneDecimal = (amount: number) =>
+    amount.toLocaleString(loc(), { maximumFractionDigits: 1 })
+  if (value < COMPACT_THOUSANDS_LIMIT)
+    return `${formatOneDecimal(value / ONE_THOUSAND)} k`
   return `${formatOneDecimal(value / ONE_MILLION)} M`
 }
 
 // Un document écrit puis cité n'apparaît qu'une fois : à sa dernière mention.
-export const dedupeDocs = <T extends { r: string; t: string }>(messages: T[]): T[] => {
+export const dedupeDocs = <T extends { r: string; t: string }>(
+  messages: T[]
+): T[] => {
   const lastIndexByDocument = new Map<string, number>()
   messages.forEach((message, messageIndex) => {
     if (message.r === "doc") lastIndexByDocument.set(message.t, messageIndex)
   })
-  return messages.filter((message, messageIndex) => message.r !== "doc" || lastIndexByDocument.get(message.t) === messageIndex)
+  return messages.filter(
+    (message, messageIndex) =>
+      message.r !== "doc" || lastIndexByDocument.get(message.t) === messageIndex
+  )
 }

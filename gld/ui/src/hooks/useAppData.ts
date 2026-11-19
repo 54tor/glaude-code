@@ -24,11 +24,16 @@ export function markClosing(sessionIds: string[]) {
 function withoutClosing(freshData: Data): Data {
   const nowMs = Date.now()
   for (const [sessionId, deadline] of closingUntil) {
-    if (deadline <= nowMs || !freshData.live.includes(sessionId)) closingUntil.delete(sessionId)
+    if (deadline <= nowMs || !freshData.live.includes(sessionId))
+      closingUntil.delete(sessionId)
   }
   if (closingUntil.size === 0) return freshData
   const isOpen = (sessionId: string) => !closingUntil.has(sessionId)
-  return { ...freshData, live: freshData.live.filter(isOpen), waiting: freshData.waiting.filter(isOpen) }
+  return {
+    ...freshData,
+    live: freshData.live.filter(isOpen),
+    waiting: freshData.waiting.filter(isOpen),
+  }
 }
 
 // Sessions et snippets du serveur, relus toutes les 15 s tant que l'onglet est visible et au retour sur l'onglet, et dès qu'un
@@ -46,7 +51,10 @@ export function useAppData() {
   const reload = useCallback(async () => {
     const requestNumber = ++latestRequest.current
     try {
-      const [freshData, freshSnippets] = await Promise.all([api.data(), api.snippets()])
+      const [freshData, freshSnippets] = await Promise.all([
+        api.data(),
+        api.snippets(),
+      ])
       if (requestNumber < latestApplied.current) return // une relecture plus récente est déjà appliquée : celle-ci est périmée
       latestApplied.current = requestNumber
       setData(withoutClosing(freshData))
@@ -56,27 +64,38 @@ export function useAppData() {
       setDenied(false)
       toast.dismiss(SERVER_DOWN_TOAST_ID)
     } catch (loadError) {
-      const sessionsReadDenied = loadError instanceof ApiError && loadError.status === 403 && getAuth().state === "ok"
+      const sessionsReadDenied =
+        loadError instanceof ApiError &&
+        loadError.status === 403 &&
+        getAuth().state === "ok"
       if (sessionsReadDenied) {
         setDenied(true)
         setError(i18n.t("auth.denied.sessions"))
         throw loadError
       }
-      const message = loadError instanceof Error ? loadError.message : String(loadError)
+      const message =
+        loadError instanceof Error ? loadError.message : String(loadError)
       setError(message)
-      toast.error(i18n.t("common.serverUnreachable", { error: message }), { id: SERVER_DOWN_TOAST_ID, duration: Infinity })
+      toast.error(i18n.t("common.serverUnreachable", { error: message }), {
+        id: SERVER_DOWN_TOAST_ID,
+        duration: Infinity,
+      })
       throw loadError
     }
   }, [])
   useEffect(() => {
-    void Promise.resolve().then(reload).catch(() => {}) // premier chargement, hors du corps synchrone de l'effet
-    const reloadIfVisible = () => document.visibilityState === "visible" && reload().catch(() => {})
+    void Promise.resolve()
+      .then(reload)
+      .catch(() => {}) // premier chargement, hors du corps synchrone de l'effet
+    const reloadIfVisible = () =>
+      document.visibilityState === "visible" && reload().catch(() => {})
     const refreshTimer = setInterval(reloadIfVisible, REFRESH)
     // Une session écrite ailleurs (un terminal) : le tampon des transcripts change, on relit tout de suite.
     const stampWatcher = setInterval(async () => {
       if (document.visibilityState !== "visible") return
       const { stamp } = await api.sessionsStamp().catch(() => ({ stamp: 0 }))
-      const transcriptsChanged = stamp && lastStamp.current && stamp !== lastStamp.current
+      const transcriptsChanged =
+        stamp && lastStamp.current && stamp !== lastStamp.current
       if (transcriptsChanged) reload().catch(() => {})
       if (stamp) lastStamp.current = stamp
     }, STAMP_CHECK_INTERVAL_MS)

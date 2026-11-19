@@ -9,7 +9,8 @@ let state: Record<string, WarmState> = {}
 const subscribers = new Set<() => void>()
 let refreshTimer: ReturnType<typeof setInterval> | undefined
 
-const notifySubscribers = () => subscribers.forEach((subscriber) => subscriber())
+const notifySubscribers = () =>
+  subscribers.forEach((subscriber) => subscriber())
 
 export const refreshWarm = () =>
   api.keepWarm().then(
@@ -25,7 +26,8 @@ export function resetWarm() {
   state = {}
   notifySubscribers()
 }
-const refreshIfVisible = () => document.visibilityState === "visible" && refreshWarm()
+const refreshIfVisible = () =>
+  document.visibilityState === "visible" && refreshWarm()
 
 function subscribe(subscriber: () => void) {
   subscribers.add(subscriber)
@@ -43,4 +45,5 @@ function subscribe(subscriber: () => void) {
   }
 }
 
-export const useKeepWarm = (): Record<string, WarmState> => useSyncExternalStore(subscribe, () => state)
+export const useKeepWarm = (): Record<string, WarmState> =>
+  useSyncExternalStore(subscribe, () => state)

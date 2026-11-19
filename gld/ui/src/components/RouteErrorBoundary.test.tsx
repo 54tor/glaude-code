@@ -21,7 +21,9 @@ const page = (localKey: string) => (
 const reload = vi.fn()
 
 beforeEach(() => {
-  boom = new TypeError("Failed to fetch dynamically imported module: /assets/ide.js")
+  boom = new TypeError(
+    "Failed to fetch dynamically imported module: /assets/ide.js"
+  )
   reload.mockReset()
   vi.stubGlobal("location", { ...window.location, reload })
   vi.spyOn(console, "error").mockImplementation(() => {})
@@ -32,9 +34,17 @@ describe("RouteErrorBoundary", () => {
   it("une route qui lève : message, raison et bouton, le reste de l'application reste affiché", () => {
     render(page("a"))
     expect(screen.getByText("barre latérale")).toBeTruthy()
-    expect(screen.getByRole("button", { name: "Recharger la page" })).toBeTruthy()
-    expect(screen.getByText(/Failed to fetch dynamically imported module/)).toBeTruthy()
-    expect(console.error).toHaveBeenCalledWith(expect.anything(), boom, expect.anything())
+    expect(
+      screen.getByRole("button", { name: "Recharger la page" })
+    ).toBeTruthy()
+    expect(
+      screen.getByText(/Failed to fetch dynamically imported module/)
+    ).toBeTruthy()
+    expect(console.error).toHaveBeenCalledWith(
+      expect.anything(),
+      boom,
+      expect.anything()
+    )
   })
 
   it("le bouton recharge la page", () => {
@@ -58,7 +68,9 @@ describe("RouteErrorBoundary", () => {
 
   it("Réessayer efface l'erreur sans recharger la page : une erreur passagère dans la même route n'est pas un piège", () => {
     render(page("a"))
-    expect(screen.getByRole("button", { name: "Recharger la page" })).toBeTruthy()
+    expect(
+      screen.getByRole("button", { name: "Recharger la page" })
+    ).toBeTruthy()
     boom = null
     fireEvent.click(screen.getByRole("button", { name: "Réessayer" }))
     expect(screen.getByText("route ok")).toBeTruthy()
@@ -66,7 +78,13 @@ describe("RouteErrorBoundary", () => {
   })
 
   it("un vrai lazy() rejeté sous Suspense est attrapé : message du chunk et les deux boutons", async () => {
-    const Lost = lazy(() => Promise.reject(new TypeError("Failed to fetch dynamically imported module: /assets/IdeView.js")))
+    const Lost = lazy(() =>
+      Promise.reject(
+        new TypeError(
+          "Failed to fetch dynamically imported module: /assets/IdeView.js"
+        )
+      )
+    )
     render(
       <RouteErrorBoundary>
         <Suspense fallback={<p>chargement</p>}>
@@ -77,13 +95,19 @@ describe("RouteErrorBoundary", () => {
     expect(await screen.findByRole("alert")).toBeTruthy()
     expect(screen.getByText(/IdeView\.js/)).toBeTruthy()
     expect(screen.getByRole("button", { name: "Réessayer" })).toBeTruthy()
-    expect(screen.getByRole("button", { name: "Recharger la page" })).toBeTruthy()
+    expect(
+      screen.getByRole("button", { name: "Recharger la page" })
+    ).toBeTruthy()
   })
 
   it("retryLazy : après un import rejeté, Réessayer relance l'import et la route s'affiche", async () => {
     const load = vi
       .fn<() => Promise<{ default: () => React.JSX.Element }>>()
-      .mockRejectedValueOnce(new TypeError("Failed to fetch dynamically imported module: /assets/IdeView.js"))
+      .mockRejectedValueOnce(
+        new TypeError(
+          "Failed to fetch dynamically imported module: /assets/IdeView.js"
+        )
+      )
       .mockResolvedValue({ default: () => <p>route chargée</p> })
     const Route = retryLazy(load)
     render(

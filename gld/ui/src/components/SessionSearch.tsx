@@ -4,9 +4,25 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
 // Recherche d'une vue de sessions : par nom, ou (mode avancé) aussi dans le texte des conversations.
-export function SessionSearch({ q: query, setQ, adv, setAdv, searching, memory }: { q: string; setQ: (localValue: string) => void; adv: boolean; setAdv: (flag: boolean) => void; searching: boolean; memory?: boolean }) {
+export function SessionSearch({
+  q: query,
+  setQ,
+  adv,
+  setAdv,
+  searching,
+  memory,
+}: {
+  q: string
+  setQ: (localValue: string) => void
+  adv: boolean
+  setAdv: (flag: boolean) => void
+  searching: boolean
+  memory?: boolean
+}) {
   const { t } = useTranslation()
-  const clearAndBlurOnEscape = (keyboardEvent: React.KeyboardEvent<HTMLInputElement>) => {
+  const clearAndBlurOnEscape = (
+    keyboardEvent: React.KeyboardEvent<HTMLInputElement>
+  ) => {
     if (keyboardEvent.key !== "Escape") return
     setQ("")
     keyboardEvent.currentTarget.blur()
@@ -18,23 +34,46 @@ export function SessionSearch({ q: query, setQ, adv, setAdv, searching, memory }
         value={query}
         onChange={(changeEvent) => setQ(changeEvent.target.value)}
         onKeyDown={clearAndBlurOnEscape}
-        placeholder={memory ? t("shell.search.placeholderMemory") : adv ? t("shell.search.placeholderContent") : t("shell.search.placeholder")}
+        placeholder={
+          memory
+            ? t("shell.search.placeholderMemory")
+            : adv
+              ? t("shell.search.placeholderContent")
+              : t("shell.search.placeholder")
+        }
         aria-label={t("shell.search.label")}
         className="h-7 bg-background pr-12 pl-8 shadow-none md:pr-28 pointer-coarse:h-11 pointer-coarse:pr-24 pointer-coarse:pl-10"
       />
       <div className="absolute top-1/2 right-1 flex -translate-y-1/2 items-center gap-1">
         {searching ? (
-          <Fan className="size-4 animate-spin text-muted-foreground" aria-label={t("shell.sidebar.searching")} />
+          <Fan
+            className="size-4 animate-spin text-muted-foreground"
+            aria-label={t("shell.sidebar.searching")}
+          />
         ) : (
           query && (
-            <button className="text-muted-foreground hover:text-foreground pointer-coarse:p-2" onClick={() => setQ("")} aria-label={t("shell.sidebar.clearSearch")}>
+            <button
+              className="text-muted-foreground hover:text-foreground pointer-coarse:p-2"
+              onClick={() => setQ("")}
+              aria-label={t("shell.sidebar.clearSearch")}
+            >
               <X className="size-4" />
             </button>
           )
         )}
-        {!memory && <Button size="xs" className="pointer-coarse:h-9 pointer-coarse:px-2.5" variant={adv ? "secondary" : "ghost"} aria-pressed={adv} onClick={() => setAdv(!adv)} title={t("shell.search.contentHint")}>
-          <FileText /> <span className="max-md:sr-only">{t("shell.search.content")}</span>
-        </Button>}
+        {!memory && (
+          <Button
+            size="xs"
+            className="pointer-coarse:h-9 pointer-coarse:px-2.5"
+            variant={adv ? "secondary" : "ghost"}
+            aria-pressed={adv}
+            onClick={() => setAdv(!adv)}
+            title={t("shell.search.contentHint")}
+          >
+            <FileText />{" "}
+            <span className="max-md:sr-only">{t("shell.search.content")}</span>
+          </Button>
+        )}
       </div>
     </div>
   )

@@ -19,7 +19,8 @@ const setState = (nextState: State) => {
 }
 
 const stateAfterError = (error: unknown): State => {
-  const sharingUnavailable = error instanceof ApiError && (error.status === 403 || error.status === 404)
+  const sharingUnavailable =
+    error instanceof ApiError && (error.status === 403 || error.status === 404)
   if (sharingUnavailable) return { shares: [], error: false }
   return { shares: state.shares, error: true }
 }
@@ -29,8 +30,13 @@ let latestRequest = 0
 const load = () => {
   const requestNumber = ++latestRequest
   return api.shares().then(
-    (response) => void (requestNumber === latestRequest && setState({ shares: response.shares ?? [], error: false })),
-    (error) => void (requestNumber === latestRequest && setState(stateAfterError(error)))
+    (response) =>
+      void (
+        requestNumber === latestRequest &&
+        setState({ shares: response.shares ?? [], error: false })
+      ),
+    (error) =>
+      void (requestNumber === latestRequest && setState(stateAfterError(error)))
   )
 }
 const onVisible = () => document.visibilityState === "visible" && void load()
@@ -42,7 +48,10 @@ const armPollTimer = () => {
     return
   }
   const interval = fastUsers ? FAST_POLL_INTERVAL_MS : SLOW_POLL_INTERVAL_MS
-  pollTimer = setInterval(() => document.visibilityState === "visible" && void load(), interval)
+  pollTimer = setInterval(
+    () => document.visibilityState === "visible" && void load(),
+    interval
+  )
 }
 
 const subscribe = (subscriber: () => void) => {
@@ -73,7 +82,8 @@ export function useShares(fast = false) {
     return () => {
       activeUsers--
       if (fast) fastUsers--
-      if (!activeUsers) document.removeEventListener("visibilitychange", onVisible)
+      if (!activeUsers)
+        document.removeEventListener("visibilitychange", onVisible)
       armPollTimer()
     }
   }, [fast])

@@ -50,14 +50,21 @@ afterEach(() => {
 describe("useWatch : reconnexion", () => {
   it("fermeture définitive : nouvel essai à 5 s, 15 s, puis 30 s", () => {
     const { result } = renderHook(() => useWatch("/p", [""], () => {}))
-    expect(result.current).toMatchObject({ connected: false, state: "connecting" })
+    expect(result.current).toMatchObject({
+      connected: false,
+      state: "connecting",
+    })
     tick(300)
     expect(live()).toHaveLength(1)
     live()[0].open()
     expect(result.current).toMatchObject({ connected: true, state: "open" })
     for (const size of [5, 15, 30, 30]) {
       live()[0].die()
-      expect(result.current).toMatchObject({ connected: false, state: "waiting", retryIn: size })
+      expect(result.current).toMatchObject({
+        connected: false,
+        state: "waiting",
+        retryIn: size,
+      })
       expect(live()).toHaveLength(0)
       tick(size * 1000 - 1)
       expect(live()).toHaveLength(0)
@@ -93,7 +100,10 @@ describe("useWatch : reconnexion", () => {
     tick(300)
     live()[0].open()
     live()[0].blip()
-    expect(result.current).toMatchObject({ connected: false, state: "browserRetry" })
+    expect(result.current).toMatchObject({
+      connected: false,
+      state: "browserRetry",
+    })
     tick(60000)
     expect(FakeES.all).toHaveLength(1)
   })
@@ -110,7 +120,10 @@ describe("useWatch : reconnexion", () => {
   })
 
   it("changement des dossiers pendant une attente : un seul flux, rouvert sur la nouvelle liste", () => {
-    const { rerender } = renderHook(({ dirs }) => useWatch("/p", dirs, () => {}), { initialProps: { dirs: [""] } })
+    const { rerender } = renderHook(
+      ({ dirs }) => useWatch("/p", dirs, () => {}),
+      { initialProps: { dirs: [""] } }
+    )
     tick(300)
     live()[0].die()
     rerender({ dirs: ["", "src"] })

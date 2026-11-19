@@ -5,7 +5,13 @@ import { useDoubleTapContextMenu } from "./useDoubleTapContextMenu"
 
 function pointer(pointerType: string, x = 10, y = 10) {
   const target = document.createElement("div")
-  return { pointerType, clientX: x, clientY: y, target, stopPropagation: vi.fn() } as never as React.PointerEvent<HTMLElement> & { target: HTMLElement }
+  return {
+    pointerType,
+    clientX: x,
+    clientY: y,
+    target,
+    stopPropagation: vi.fn(),
+  } as never as React.PointerEvent<HTMLElement> & { target: HTMLElement }
 }
 
 describe("useDoubleTapContextMenu", () => {
@@ -29,7 +35,10 @@ describe("useDoubleTapContextMenu", () => {
     result.current.onPointerDownCapture(pointer("touch"))
     const evenement = { stopPropagation: vi.fn() } as never
     result.current.onContextMenuCapture(evenement)
-    expect((evenement as { stopPropagation: ReturnType<typeof vi.fn> }).stopPropagation).toHaveBeenCalledTimes(1)
+    expect(
+      (evenement as { stopPropagation: ReturnType<typeof vi.fn> })
+        .stopPropagation
+    ).toHaveBeenCalledTimes(1)
   })
 
   it("laisse passer le clic droit souris", () => {
@@ -37,6 +46,9 @@ describe("useDoubleTapContextMenu", () => {
     result.current.onPointerDownCapture(pointer("mouse"))
     const evenement = { stopPropagation: vi.fn() } as never
     result.current.onContextMenuCapture(evenement)
-    expect((evenement as { stopPropagation: ReturnType<typeof vi.fn> }).stopPropagation).not.toHaveBeenCalled()
+    expect(
+      (evenement as { stopPropagation: ReturnType<typeof vi.fn> })
+        .stopPropagation
+    ).not.toHaveBeenCalled()
   })
 })

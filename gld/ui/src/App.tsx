@@ -21,7 +21,15 @@ import { useUpdateNotice } from "@/hooks/useUpdateNotice"
 import { BanAlert } from "@/components/BanAlert"
 import { applyFont } from "@/lib/fonts"
 import { type Choice } from "@/lib/models"
-import { asked, buildView, byDate, groupKey, HOT, isAuto, WEEK } from "@/lib/sessionsView"
+import {
+  asked,
+  buildView,
+  byDate,
+  groupKey,
+  HOT,
+  isAuto,
+  WEEK,
+} from "@/lib/sessionsView"
 import { RouteErrorBoundary } from "@/components/RouteErrorBoundary"
 import { retryLazy } from "@/lib/retryLazy"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -46,21 +54,80 @@ import { boot, useAuth } from "@/lib/auth"
 import { importLocalQueues } from "@/hooks/importQueues"
 
 // Les grandes vues se chargent à la demande : le premier chargement ne porte que la liste des sessions.
-const Conversation = lazy(() => import("@/components/Conversation").then((componentModule) => ({ default: componentModule.Conversation })))
-const Snippets = retryLazy(() => import("@/components/Snippets").then((componentModule) => ({ default: componentModule.Snippets })))
-const Extensions = retryLazy(() => import("@/components/Extensions").then((componentModule) => ({ default: componentModule.Extensions })))
-const TeamRun = retryLazy(() => import("@/components/teams/TeamRun").then((componentModule) => ({ default: componentModule.TeamRun })))
-const TeamsPage = retryLazy(() => import("@/components/teams/TeamsPage").then((componentModule) => ({ default: componentModule.TeamsPage })))
-const Config = retryLazy(() => import("@/components/Config").then((componentModule) => ({ default: componentModule.Config })))
-const Skills = retryLazy(() => import("@/components/Skills").then((componentModule) => ({ default: componentModule.Skills })))
-const Memory = retryLazy(() => import("@/components/Memory").then((componentModule) => ({ default: componentModule.Memory })))
-const IdeView = retryLazy(() => import("@/components/ide/IdeView").then((componentModule) => ({ default: componentModule.IdeView })))
-const Tabs = retryLazy(() => import("@/components/Tabs").then((componentModule) => ({ default: componentModule.Tabs })))
+const Conversation = lazy(() =>
+  import("@/components/Conversation").then((componentModule) => ({
+    default: componentModule.Conversation,
+  }))
+)
+const Snippets = retryLazy(() =>
+  import("@/components/Snippets").then((componentModule) => ({
+    default: componentModule.Snippets,
+  }))
+)
+const Extensions = retryLazy(() =>
+  import("@/components/Extensions").then((componentModule) => ({
+    default: componentModule.Extensions,
+  }))
+)
+const TeamRun = retryLazy(() =>
+  import("@/components/teams/TeamRun").then((componentModule) => ({
+    default: componentModule.TeamRun,
+  }))
+)
+const TeamsPage = retryLazy(() =>
+  import("@/components/teams/TeamsPage").then((componentModule) => ({
+    default: componentModule.TeamsPage,
+  }))
+)
+const Config = retryLazy(() =>
+  import("@/components/Config").then((componentModule) => ({
+    default: componentModule.Config,
+  }))
+)
+const Skills = retryLazy(() =>
+  import("@/components/Skills").then((componentModule) => ({
+    default: componentModule.Skills,
+  }))
+)
+const Memory = retryLazy(() =>
+  import("@/components/Memory").then((componentModule) => ({
+    default: componentModule.Memory,
+  }))
+)
+const IdeView = retryLazy(() =>
+  import("@/components/ide/IdeView").then((componentModule) => ({
+    default: componentModule.IdeView,
+  }))
+)
+const Tabs = retryLazy(() =>
+  import("@/components/Tabs").then((componentModule) => ({
+    default: componentModule.Tabs,
+  }))
+)
 
 const MIN_CONTENT_SEARCH_LENGTH = 2
-const ROUTES_WITHOUT_CONTENT_SEARCH: Route["kind"][] = ["snippets", "memory", "tabs", "config", "skills"]
-const ROUTES_WITH_SEARCH_BOX: Route["kind"][] = ["recent", "all", "active", "auto", "project", "group", "dir", "memory"]
-const ROUTES_WITH_SPLIT_LAYOUT: Route["kind"][] = ["skills", "memory", "snippets"]
+const ROUTES_WITHOUT_CONTENT_SEARCH: Route["kind"][] = [
+  "snippets",
+  "memory",
+  "tabs",
+  "config",
+  "skills",
+]
+const ROUTES_WITH_SEARCH_BOX: Route["kind"][] = [
+  "recent",
+  "all",
+  "active",
+  "auto",
+  "project",
+  "group",
+  "dir",
+  "memory",
+]
+const ROUTES_WITH_SPLIT_LAYOUT: Route["kind"][] = [
+  "skills",
+  "memory",
+  "snippets",
+]
 
 // Mode multi-utilisateur : l'application ne se monte qu'une session ouverte. Une session perdue en cours d'usage la laisse
 // montée sous l'écran de connexion, pour retrouver vues et brouillons après reconnexion du même compte ; la clé owner la
@@ -92,7 +159,10 @@ function Shell() {
   const { data, setData, snips, now, reload, error, denied } = useAppData()
   const { t } = useTranslation() // re-rend toute l'application quand la langue change
   const serverLang = data?.lang
-  useEffect(() => setLang(resolveFront(serverLang, navigator.language)), [serverLang])
+  useEffect(
+    () => setLang(resolveFront(serverLang, navigator.language)),
+    [serverLang]
+  )
   const [picked, setPicked] = useState(() => new Set<string>())
   const [args, setArgs] = useLocal("ccArgs", "")
   const [hideGrouped, setHideGrouped] = useLocal("ccHideGrouped", "") // vue d'un dossier : masquer les sessions déjà groupées
@@ -149,17 +219,23 @@ function Shell() {
 
   const trimmedQuery = searchQuery.trim()
   const hitMap = useSearchHits(advancedSearch ? trimmedQuery : "")
-  const isContentQuery = advancedSearch && trimmedQuery.length >= MIN_CONTENT_SEARCH_LENGTH
+  const isContentQuery =
+    advancedSearch && trimmedQuery.length >= MIN_CONTENT_SEARCH_LENGTH
   const isAwaitingHits = isContentQuery && !hitMap
-  const isSearchingContent = isAwaitingHits && !ROUTES_WITHOUT_CONTENT_SEARCH.includes(route.kind)
+  const isSearchingContent =
+    isAwaitingHits && !ROUTES_WITHOUT_CONTENT_SEARCH.includes(route.kind)
 
-  const view = useMemo(() => buildView(data, trimmedQuery, hitMap, advancedSearch), [data, trimmedQuery, hitMap, advancedSearch])
+  const view = useMemo(
+    () => buildView(data, trimmedQuery, hitMap, advancedSearch),
+    [data, trimmedQuery, hitMap, advancedSearch]
+  )
 
   // Toutes les sessions, même filtrées : le lecteur reste ouvert quand la recherche change.
   const allRowsById = useMemo(() => {
     const rowsById = new Map<string, Row>()
     for (const group of data?.groups ?? []) {
-      for (const session of group.sessions) rowsById.set(session.id, { s: session, g: group })
+      for (const session of group.sessions)
+        rowsById.set(session.id, { s: session, g: group })
     }
     return rowsById
   }, [data])
@@ -167,12 +243,19 @@ function Shell() {
   const home = data?.home ?? ""
   // La barre latérale ne suit pas la recherche : elle montre toujours toutes les sessions, la recherche ne filtre que la vue affichée.
   const unfilteredView = useMemo(() => buildView(data, "", null), [data])
-  const filteredTree = useMemo(() => buildTree(view.entries, home), [view.entries, home])
+  const filteredTree = useMemo(
+    () => buildTree(view.entries, home),
+    [view.entries, home]
+  )
   // « Sessions locales » : seulement les dossiers qui ne sont dans aucun projet (ils ont leur place sous « Projets »).
   const projects = data?.projects
   const localTree = useMemo(() => {
-    const dirsInProjects = new Set(projects?.flatMap((projectItem) => projectItem.dirs))
-    const entriesOutsideProjects = unfilteredView.entries.filter((entry) => !dirsInProjects.has(entry.g.project))
+    const dirsInProjects = new Set(
+      projects?.flatMap((projectItem) => projectItem.dirs)
+    )
+    const entriesOutsideProjects = unfilteredView.entries.filter(
+      (entry) => !dirsInProjects.has(entry.g.project)
+    )
     return buildTree(entriesOutsideProjects, home)
   }, [projects, unfilteredView.entries, home])
   const liveIds = useMemo(() => new Set(data?.live), [data])
@@ -186,42 +269,75 @@ function Shell() {
 
   const virtualGroupKey = (virtualGroup: VGroup) => groupKey(virtualGroup, home)
   // Listes dérivées mémoïsées : un rendu sans nouvelles données (sélection, menu, saisie) ne les recalcule pas.
-  const recentRows = useMemo(() => view.rows.filter((row) => now - row.s.mtime < WEEK), [view.rows, now])
+  const recentRows = useMemo(
+    () => view.rows.filter((row) => now - row.s.mtime < WEEK),
+    [view.rows, now]
+  )
   const hotRows = useMemo(() => {
     const isHotSession = (session: Row["s"]) => {
       const isLiveOrWarm = liveIds.has(session.id) || now - session.mtime < HOT
       return isLiveOrWarm && !isAuto(session)
     }
     const allGroups = data?.groups ?? []
-    const rowsOfHotSessions = allGroups.flatMap((group) => group.sessions.filter(isHotSession).map((session) => ({ s: session, g: group })))
+    const rowsOfHotSessions = allGroups.flatMap((group) =>
+      group.sessions
+        .filter(isHotSession)
+        .map((session) => ({ s: session, g: group }))
+    )
     return rowsOfHotSessions.sort(byDate)
   }, [data, now, liveIds])
   // Ouvertes d'abord, puis au cache chaud (récentes d'abord) ; la recherche s'applique comme ailleurs.
   const activeRows = useMemo(() => {
-    const isLiveOrWarm = (row: Row) => liveIds.has(row.s.id) || now - row.s.mtime < HOT
+    const isLiveOrWarm = (row: Row) =>
+      liveIds.has(row.s.id) || now - row.s.mtime < HOT
     const liveFirstThenMostRecentlyAsked = (firstRow: Row, secondRow: Row) => {
-      const liveDifference = +liveIds.has(secondRow.s.id) - +liveIds.has(firstRow.s.id)
+      const liveDifference =
+        +liveIds.has(secondRow.s.id) - +liveIds.has(firstRow.s.id)
       return liveDifference || asked(secondRow.s) - asked(firstRow.s)
     }
     return view.rows.filter(isLiveOrWarm).sort(liveFirstThenMostRecentlyAsked)
   }, [view.rows, liveIds, now])
-  const selectedRows = [...picked].map((sessionId) => view.byId.get(sessionId)).filter((row): row is Row => !!row)
+  const selectedRows = [...picked]
+    .map((sessionId) => view.byId.get(sessionId))
+    .filter((row): row is Row => !!row)
 
-  const selectedDirNode = route.kind === "dir" ? find(filteredTree, route.key) : null
+  const selectedDirNode =
+    route.kind === "dir" ? find(filteredTree, route.key) : null
   // Sessions du dossier affiché qui appartiennent déjà à au moins un de ses groupes.
-  const groupsOfSelectedDir = selectedDirNode?.g ? virtualGroups.filter((virtualGroup) => virtualGroup.project === selectedDirNode.g!.project) : []
-  const groupedSessionIds = new Set(groupsOfSelectedDir.flatMap((virtualGroup) => virtualGroup.ids))
-  const groupedSessionCount = selectedDirNode?.ss.filter((session) => groupedSessionIds.has(session.id)).length ?? 0
+  const groupsOfSelectedDir = selectedDirNode?.g
+    ? virtualGroups.filter(
+        (virtualGroup) => virtualGroup.project === selectedDirNode.g!.project
+      )
+    : []
+  const groupedSessionIds = new Set(
+    groupsOfSelectedDir.flatMap((virtualGroup) => virtualGroup.ids)
+  )
+  const groupedSessionCount =
+    selectedDirNode?.ss.filter((session) => groupedSessionIds.has(session.id))
+      .length ?? 0
   const currentVirtualGroup =
-    route.kind === "group" ? virtualGroups.find((virtualGroup) => virtualGroup.name === route.name && virtualGroupKey(virtualGroup) === route.key) : undefined
-  const currentProject = route.kind === "project" ? (data?.projects ?? []).find((projectItem) => projectItem.name === route.name) : undefined
+    route.kind === "group"
+      ? virtualGroups.find(
+          (virtualGroup) =>
+            virtualGroup.name === route.name &&
+            virtualGroupKey(virtualGroup) === route.key
+        )
+      : undefined
+  const currentProject =
+    route.kind === "project"
+      ? (data?.projects ?? []).find(
+          (projectItem) => projectItem.name === route.name
+        )
+      : undefined
 
   const computeVisibleRows = (): Row[] => {
     switch (route.kind) {
       case "recent":
         return recentRows
       case "project":
-        return view.rows.filter((row) => currentProject?.dirs.includes(row.g.project)).sort(byDate)
+        return view.rows
+          .filter((row) => currentProject?.dirs.includes(row.g.project))
+          .sort(byDate)
       case "group":
         return (currentVirtualGroup?.ids ?? [])
           .map((sessionId) => view.byId.get(sessionId))
@@ -229,8 +345,11 @@ function Shell() {
           .sort(byDate)
       case "dir": {
         const shouldHideGrouped = !!hideGrouped && !trimmedQuery
-        const isShown = (session: Row["s"]) => !(shouldHideGrouped && groupedSessionIds.has(session.id))
-        return (selectedDirNode?.ss ?? []).filter(isShown).map((session) => ({ s: session, g: selectedDirNode!.g! }))
+        const isShown = (session: Row["s"]) =>
+          !(shouldHideGrouped && groupedSessionIds.has(session.id))
+        return (selectedDirNode?.ss ?? [])
+          .filter(isShown)
+          .map((session) => ({ s: session, g: selectedDirNode!.g! }))
       }
       case "all":
         return view.rows
@@ -244,7 +363,9 @@ function Shell() {
   }
   const visibleRows = computeVisibleRows()
   // Sessions des sous-dossiers : affichées à part, sous la liste du dossier sélectionné.
-  const subfolderRows = selectedDirNode ? [...selectedDirNode.kids.values()].flatMap(under).sort(byDate) : []
+  const subfolderRows = selectedDirNode
+    ? [...selectedDirNode.kids.values()].flatMap(under).sort(byDate)
+    : []
 
   const openSession = (session: { id: string }) =>
     setSearchParams((nextParams) => {
@@ -261,8 +382,11 @@ function Shell() {
     .map((sessionId) => allRowsById.get(sessionId))
     .filter((row): row is Row => !!row)
     .map((row) => row.s)
-  useCacheWarning(liveSessions, now, (sessionId) => openSession({ id: sessionId }))
-  const stepWaiting = (direction: 1 | -1) => stepIn(waitingRows, (row) => row.s.id === readingSessionId, direction)
+  useCacheWarning(liveSessions, now, (sessionId) =>
+    openSession({ id: sessionId })
+  )
+  const stepWaiting = (direction: 1 | -1) =>
+    stepIn(waitingRows, (row) => row.s.id === readingSessionId, direction)
   const startCarousel = () => {
     if (!waitingRows.length) return void toast.info(t("shell.app.noneWaiting"))
     setCarousel(true)
@@ -278,7 +402,8 @@ function Shell() {
     toast.info(t("shell.app.noMoreWaiting"))
   }
   // La session affichée par le carrousel a été supprimée (ou a disparu) : on passe à la suivante, ou on sort du mode.
-  const isReadingSessionGone = !!data && !!readingSessionId && !allRowsById.has(readingSessionId)
+  const isReadingSessionGone =
+    !!data && !!readingSessionId && !allRowsById.has(readingSessionId)
   useEffect(() => {
     if (!carousel || !isReadingSessionGone) return
     const advanceTimeoutId = setTimeout(() => advanceCarousel(1), 0)
@@ -296,45 +421,56 @@ function Shell() {
     )
   }
 
-  const { actions, groupActs, groupRows, targets, newSession, purgeAuto } = useAppActions({
-    data,
-    setData,
-    reload,
-    home,
-    q: searchQuery,
-    go: goToRoute,
-    read: openSession,
-    now,
-    live: liveIds,
-    waiting: waitingIds,
-    hitMap,
-    vgroups: virtualGroups,
-    favs: favoriteIds,
-    vg: currentVirtualGroup,
+  const { actions, groupActs, groupRows, targets, newSession, purgeAuto } =
+    useAppActions({
+      data,
+      setData,
+      reload,
+      home,
+      q: searchQuery,
+      go: goToRoute,
+      read: openSession,
+      now,
+      live: liveIds,
+      waiting: waitingIds,
+      hitMap,
+      vgroups: virtualGroups,
+      favs: favoriteIds,
+      vg: currentVirtualGroup,
+      picked,
+      setPicked,
+      selected: selectedRows,
+      everyId: allRowsById,
+      view,
+      args,
+      choice,
+      snippets: snips?.files ?? [],
+      setAsk,
+      setPrompt,
+      setCompose,
+      setInfo,
+      setShare,
+      setPicker,
+      onSessionsClosed: (closedSessionIds) => {
+        if (readingSessionId && closedSessionIds.has(readingSessionId))
+          closeReader()
+      },
+    })
+  useShortcuts({
+    search: searchInputRef,
     picked,
-    setPicked,
-    selected: selectedRows,
-    everyId: allRowsById,
-    view,
-    args,
-    choice,
-    snippets: snips?.files ?? [],
-    setAsk,
-    setPrompt,
-    setCompose,
-    setInfo,
-    setShare,
-    setPicker,
-    onSessionsClosed: (closedSessionIds) => {
-      if (readingSessionId && closedSessionIds.has(readingSessionId)) closeReader()
-    },
+    clearPicked: () => setPicked(new Set()),
+    byId: view.byId,
+    actions,
   })
-  useShortcuts({ search: searchInputRef, picked, clearPicked: () => setPicked(new Set()), byId: view.byId, actions })
   const [palette, setPalette] = useState(false)
   useEffect(() => {
     const togglePaletteOnShortcut = (keyboardEvent: KeyboardEvent) => {
       const hasCommandModifier = keyboardEvent.ctrlKey || keyboardEvent.metaKey
-      const isPaletteShortcut = hasCommandModifier && !keyboardEvent.altKey && keyboardEvent.key.toLowerCase() === "k"
+      const isPaletteShortcut =
+        hasCommandModifier &&
+        !keyboardEvent.altKey &&
+        keyboardEvent.key.toLowerCase() === "k"
       if (!isPaletteShortcut) return
       keyboardEvent.preventDefault()
       setPalette((isOpen) => !isOpen)
@@ -344,13 +480,21 @@ function Shell() {
   }, [])
 
   const currentGroup: Group | null = selectedDirNode?.g ?? null
-  const ownSessions = currentGroup ? selectedDirNode!.ss.map((session) => ({ dir: session.dir, id: session.id })) : []
+  const ownSessions = currentGroup
+    ? selectedDirNode!.ss.map((session) => ({
+        dir: session.dir,
+        id: session.id,
+      }))
+    : []
   // Le lecteur garde la dernière version connue de la session affichée : si une relecture de la liste ne la contient pas un instant
   // (écriture en cours, erreur passagère), la conversation ne se vide pas ni ne se ferme. Une vraie disparition (suppression) est
   // traitée à part (`isReadingSessionGone`).
-  const foundReaderRow = readingSessionId ? (allRowsById.get(readingSessionId) ?? null) : null
+  const foundReaderRow = readingSessionId
+    ? (allRowsById.get(readingSessionId) ?? null)
+    : null
   const [keptReaderRow, setKeptReaderRow] = useState<Row | null>(null)
-  if (foundReaderRow && foundReaderRow !== keptReaderRow) setKeptReaderRow(foundReaderRow)
+  if (foundReaderRow && foundReaderRow !== keptReaderRow)
+    setKeptReaderRow(foundReaderRow)
   const resolveReaderRow = (): Row | null => {
     if (!readingSessionId) return null
     if (foundReaderRow) return foundReaderRow
@@ -359,20 +503,32 @@ function Shell() {
   }
   const readerRow = resolveReaderRow()
   const favRows = useMemo(
-    () => [...favoriteIds].map((sessionId) => allRowsById.get(sessionId)).filter((row): row is Row => !!row),
+    () =>
+      [...favoriteIds]
+        .map((sessionId) => allRowsById.get(sessionId))
+        .filter((row): row is Row => !!row),
     [favoriteIds, allRowsById]
   )
   const favGroups = virtualGroups
     .filter((virtualGroup) => virtualGroup.fav)
-    .sort((firstGroup, secondGroup) => firstGroup.name.localeCompare(secondGroup.name))
-    .map((virtualGroup) => ({ vg: virtualGroup, key: virtualGroupKey(virtualGroup) }))
+    .sort((firstGroup, secondGroup) =>
+      firstGroup.name.localeCompare(secondGroup.name)
+    )
+    .map((virtualGroup) => ({
+      vg: virtualGroup,
+      key: virtualGroupKey(virtualGroup),
+    }))
 
   // Récentes : regroupées par projet, chaque projet pouvant être repris d'un coup.
   const isRecent = route.kind === "recent"
   const recentRowsByProject = useMemo(() => {
     const rowsByProject = new Map<string, Row[]>()
     if (!isRecent) return rowsByProject
-    for (const row of recentRows) rowsByProject.set(row.g.project, [...(rowsByProject.get(row.g.project) ?? []), row])
+    for (const row of recentRows)
+      rowsByProject.set(row.g.project, [
+        ...(rowsByProject.get(row.g.project) ?? []),
+        row,
+      ])
     return rowsByProject
   }, [isRecent, recentRows])
 
@@ -396,23 +552,32 @@ function Shell() {
     projectConfig: t("shell.app.title.projectConfig"),
     dir: selectedDirNode?.name ?? t("shell.app.title.dir"),
   }[route.kind]
-  const formatSessionCount = (count: number) => t("shell.count.sessions", { count })
+  const formatSessionCount = (count: number) =>
+    t("shell.count.sessions", { count })
   const computePageSubtitle = (): string => {
     switch (route.kind) {
       case "recent":
         return t("shell.app.sub.recent", {
           sessions: formatSessionCount(recentRows.length),
-          projects: t("shell.count.projects", { count: recentRowsByProject.size }),
+          projects: t("shell.count.projects", {
+            count: recentRowsByProject.size,
+          }),
         })
       case "project":
         return t("shell.app.sub.project", {
-          dirs: t("shell.count.dirs", { count: currentProject?.dirs.length ?? 0 }),
+          dirs: t("shell.count.dirs", {
+            count: currentProject?.dirs.length ?? 0,
+          }),
           sessions: formatSessionCount(visibleRows.length),
         })
       case "home":
       case "active": {
-        const openCount = activeRows.filter((row) => liveIds.has(row.s.id)).length
-        const warmCount = activeRows.filter((row) => !liveIds.has(row.s.id)).length
+        const openCount = activeRows.filter((row) =>
+          liveIds.has(row.s.id)
+        ).length
+        const warmCount = activeRows.filter(
+          (row) => !liveIds.has(row.s.id)
+        ).length
         return t("shell.app.sub.active", {
           open: t("shell.count.open", { count: openCount }),
           warm: t("shell.count.warm", { count: warmCount }),
@@ -433,7 +598,9 @@ function Shell() {
       case "workspace":
         return tilde(route.dir, home)
       case "projectConfig": {
-        const configuredGroup = data?.groups.find((group) => group.sessions[0]?.dir === route.dir)
+        const configuredGroup = data?.groups.find(
+          (group) => group.sessions[0]?.dir === route.dir
+        )
         return tilde(configuredGroup?.project ?? route.dir, home)
       }
       case "tabs":
@@ -442,11 +609,20 @@ function Shell() {
       case "team":
         return ""
       case "group": {
-        const groupDir = currentVirtualGroup ? tilde(currentVirtualGroup.project, home) : "?"
-        return t("shell.app.sub.group", { dir: groupDir, sessions: formatSessionCount(visibleRows.length) })
+        const groupDir = currentVirtualGroup
+          ? tilde(currentVirtualGroup.project, home)
+          : "?"
+        return t("shell.app.sub.group", {
+          dir: groupDir,
+          sessions: formatSessionCount(visibleRows.length),
+        })
       }
       default:
-        if (currentGroup) return t("shell.app.sub.dir", { dir: tilde(currentGroup.project, home), sessions: formatSessionCount(visibleRows.length) })
+        if (currentGroup)
+          return t("shell.app.sub.dir", {
+            dir: tilde(currentGroup.project, home),
+            sessions: formatSessionCount(visibleRows.length),
+          })
         return formatSessionCount(visibleRows.length)
     }
   }
@@ -456,7 +632,16 @@ function Shell() {
     const isDesktopWidth = matchMedia(MD).matches
     if (direction === "right" && !isDesktopWidth) setNavOpen(true)
   }
-  const uiSettings = { args, setArgs, choice, setChoice, font, setFont, fontSize, setFontSize }
+  const uiSettings = {
+    args,
+    setArgs,
+    choice,
+    setChoice,
+    font,
+    setFont,
+    fontSize,
+    setFontSize,
+  }
 
   const renderMainContent = () => {
     switch (route.kind) {
@@ -478,20 +663,59 @@ function Shell() {
       case "tabs":
         return <Tabs args={args} onAsk={setAsk} onPrompt={setPrompt} />
       case "skills":
-        return <Skills sel={route.key} home={home} q={trimmedQuery} onPick={(key) => goToRoute({ kind: "skills", key })} onAsk={setAsk} />
+        return (
+          <Skills
+            sel={route.key}
+            home={home}
+            q={trimmedQuery}
+            onPick={(key) => goToRoute({ kind: "skills", key })}
+            onAsk={setAsk}
+          />
+        )
       case "projectConfig":
-        return <Config key={route.dir} dir={route.dir} home={home} tab="" onTab={() => goToRoute({ kind: "config", tab: "permissions" })} ui={uiSettings} />
+        return (
+          <Config
+            key={route.dir}
+            dir={route.dir}
+            home={home}
+            tab=""
+            onTab={() => goToRoute({ kind: "config", tab: "permissions" })}
+            ui={uiSettings}
+          />
+        )
       case "teams":
         return <TeamsPage home={home} />
       case "team":
         return <TeamRun key={route.name} name={route.name} />
       case "extensions":
-        return <Extensions home={home} tab={route.tab} onTab={(tab) => goToRoute({ kind: "extensions", tab })} onAsk={setAsk} />
+        return (
+          <Extensions
+            home={home}
+            tab={route.tab}
+            onTab={(tab) => goToRoute({ kind: "extensions", tab })}
+            onAsk={setAsk}
+          />
+        )
       case "config":
-        return <Config home={home} tab={route.tab} onTab={(tab) => goToRoute({ kind: "config", tab })} ui={uiSettings} />
+        return (
+          <Config
+            home={home}
+            tab={route.tab}
+            onTab={(tab) => goToRoute({ kind: "config", tab })}
+            ui={uiSettings}
+          />
+        )
       case "memory":
         return (
-          <Memory sel={route.key} home={home} q={trimmedQuery} onPick={(key) => goToRoute({ kind: "memory", key })} onAsk={setAsk} onCompose={setCompose} args={args} />
+          <Memory
+            sel={route.key}
+            home={home}
+            q={trimmedQuery}
+            onPick={(key) => goToRoute({ kind: "memory", key })}
+            onAsk={setAsk}
+            onCompose={setCompose}
+            args={args}
+          />
         )
       case "snippets":
         if (!snips) return <Skeleton className="m-6 h-32" />
@@ -506,9 +730,18 @@ function Shell() {
             onPick={(key) => goToRoute({ kind: "snippets", path: key })}
             onLaunch={(snippet, text) => {
               // Le dossier du projet de la commande d'abord, sinon le plus récent.
-              const isSnippetProject = (target: { project: string }) => Number(target.project === snippet.project)
-              const orderedTargets = targets().sort((firstTarget, secondTarget) => isSnippetProject(secondTarget) - isSnippetProject(firstTarget))
-              newSession(t("shell.app.snippetSession"), snippet.command, orderedTargets, body(text) + "\n\n")
+              const isSnippetProject = (target: { project: string }) =>
+                Number(target.project === snippet.project)
+              const orderedTargets = targets().sort(
+                (firstTarget, secondTarget) =>
+                  isSnippetProject(secondTarget) - isSnippetProject(firstTarget)
+              )
+              newSession(
+                t("shell.app.snippetSession"),
+                snippet.command,
+                orderedTargets,
+                body(text) + "\n\n"
+              )
             }}
             onChanged={reload}
             onAsk={setAsk}
@@ -536,7 +769,11 @@ function Shell() {
             actions={actions}
             go={goToRoute}
             clearSearch={() => setSearchQuery("")}
-            grouped={{ n: groupedSessionCount, hide: !!hideGrouped, setHide: (shouldHide) => setHideGrouped(shouldHide ? "1" : "") }}
+            grouped={{
+              n: groupedSessionCount,
+              hide: !!hideGrouped,
+              setHide: (shouldHide) => setHideGrouped(shouldHide ? "1" : ""),
+            }}
             error={error}
             denied={denied}
             retry={() => void reload().catch(() => {})}
@@ -547,14 +784,28 @@ function Shell() {
   }
 
   const carouselControls = carousel
-    ? { n: waitingRows.length, next: () => advanceCarousel(1), prev: () => advanceCarousel(-1), stop: () => setCarousel(false) }
+    ? {
+        n: waitingRows.length,
+        next: () => advanceCarousel(1),
+        prev: () => advanceCarousel(-1),
+        stop: () => setCarousel(false),
+      }
     : undefined
-  const openReaderFolder = readerRow ? () => goToRoute({ kind: "dir", key: segs(readerRow.g.project, home).join("/") }) : undefined
+  const openReaderFolder = readerRow
+    ? () =>
+        goToRoute({
+          kind: "dir",
+          key: segs(readerRow.g.project, home).join("/"),
+        })
+    : undefined
 
   return (
     <ActionsCtx.Provider value={actions}>
       <div className="safe-t safe-x flex h-[var(--app-h,100dvh)] flex-col md:flex-row">
-        <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:bg-background focus:px-3 focus:py-2 focus:text-sm focus:ring-3 focus:ring-ring/80">
+        <a
+          href="#main"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:bg-background focus:px-3 focus:py-2 focus:text-sm focus:ring-3 focus:ring-ring/80"
+        >
           {t("shell.header.skipToContent")}
         </a>
         <Sidebar
@@ -568,7 +819,12 @@ function Shell() {
             setNavOpen(false)
             goToRoute(targetRoute)
           }}
-          counts={{ all: unfilteredView.rows.length, active: unfilteredView.rows.filter((row) => liveIds.has(row.s.id) || now - row.s.mtime < HOT).length }}
+          counts={{
+            all: unfilteredView.rows.length,
+            active: unfilteredView.rows.filter(
+              (row) => liveIds.has(row.s.id) || now - row.s.mtime < HOT
+            ).length,
+          }}
           reload={reload}
           favRows={favRows}
           favGroups={favGroups}
@@ -581,15 +837,28 @@ function Shell() {
           }}
           tree={localTree}
           hot={hotRows}
-          carousel={{ n: waitingRows.length, on: carousel, start: startCarousel }}
+          carousel={{
+            n: waitingRows.length,
+            on: carousel,
+            start: startCarousel,
+          }}
           now={now}
           ttl={HOT}
           snippets={snips ? snips.files.length : null}
-          auto={{ n: view.autoItems.length, purge: purgeAuto, on: route.kind === "auto" }}
+          auto={{
+            n: view.autoItems.length,
+            purge: purgeAuto,
+            on: route.kind === "auto",
+          }}
           args={args}
         />
 
-        <main id="main" tabIndex={-1} className="relative flex min-h-0 min-w-0 flex-1 flex-col outline-none" {...swipeHandlers(openNavOnRightSwipe, true)}>
+        <main
+          id="main"
+          tabIndex={-1}
+          className="relative flex min-h-0 min-w-0 flex-1 flex-col outline-none"
+          {...swipeHandlers(openNavOnRightSwipe, true)}
+        >
           <PageHeader
             onMenu={() => setNavOpen(true)}
             title={pageTitle}
@@ -606,19 +875,37 @@ function Shell() {
             split={ROUTES_WITH_SPLIT_LAYOUT.includes(route.kind)}
             searchBox={
               ROUTES_WITH_SEARCH_BOX.includes(route.kind) ? (
-                <SessionSearch q={searchQuery} setQ={setSearchQuery} adv={advancedSearch} setAdv={setAdvancedSearch} searching={isSearchingContent} memory={route.kind === "memory"} />
+                <SessionSearch
+                  q={searchQuery}
+                  setQ={setSearchQuery}
+                  adv={advancedSearch}
+                  setAdv={setAdvancedSearch}
+                  searching={isSearchingContent}
+                  memory={route.kind === "memory"}
+                />
               ) : undefined
             }
           />
 
           <RouteErrorBoundary key={route.kind}>
-            <Suspense fallback={<Skeleton className="m-6 h-32" />}>{renderMainContent()}</Suspense>
+            <Suspense fallback={<Skeleton className="m-6 h-32" />}>
+              {renderMainContent()}
+            </Suspense>
           </RouteErrorBoundary>
 
           {selectedRows.length > 0 && (
             <SessionSelectionBar
               selected={selectedRows}
-              onSelectAll={() => setPicked(new Set([...picked, ...[...visibleRows, ...subfolderRows].map((row) => row.s.id)]))}
+              onSelectAll={() =>
+                setPicked(
+                  new Set([
+                    ...picked,
+                    ...[...visibleRows, ...subfolderRows].map(
+                      (row) => row.s.id
+                    ),
+                  ])
+                )
+              }
               onClear={() => setPicked(new Set())}
             />
           )}
@@ -626,7 +913,14 @@ function Shell() {
       </div>
 
       <Suspense fallback={null}>
-        <Conversation row={readerRow} onClose={closeReader} onFolder={openReaderFolder} args={args} choice={choice} carousel={carouselControls} />
+        <Conversation
+          row={readerRow}
+          onClose={closeReader}
+          onFolder={openReaderFolder}
+          args={args}
+          choice={choice}
+          carousel={carouselControls}
+        />
       </Suspense>
       <DirPicker pick={picker} home={home} />
       <Confirm ask={ask} onClose={() => setAsk(null)} />
@@ -635,8 +929,23 @@ function Shell() {
       <Prompt ask={prompt} onClose={() => setPrompt(null)} />
       <Compose ask={compose} onClose={() => setCompose(null)} />
       <SessionInfo row={info} onClose={() => setInfo(null)} />
-      {share && <ShareDialog key={share.s.id} id={share.s.id} dir={share.s.dir} title={share.s.title} onClose={() => setShare(null)} />}
-      <Palette open={palette} onOpenChange={setPalette} rows={[...allRowsById.values()]} home={home} go={goToRoute} read={openSession} />
+      {share && (
+        <ShareDialog
+          key={share.s.id}
+          id={share.s.id}
+          dir={share.s.dir}
+          title={share.s.title}
+          onClose={() => setShare(null)}
+        />
+      )}
+      <Palette
+        open={palette}
+        onOpenChange={setPalette}
+        rows={[...allRowsById.values()]}
+        home={home}
+        go={goToRoute}
+        read={openSession}
+      />
     </ActionsCtx.Provider>
   )
 }

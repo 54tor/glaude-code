@@ -19,9 +19,14 @@ export function segs(project: string, home: string): string[] {
   }
   if (samePath(projectPath, homePath)) return ["~"]
 
-  const isUnderHome = samePath(projectPath.slice(0, homePath.length), homePath) && projectPath[homePath.length] === "/"
+  const isUnderHome =
+    samePath(projectPath.slice(0, homePath.length), homePath) &&
+    projectPath[homePath.length] === "/"
   if (isUnderHome) {
-    const relativeSegments = projectPath.slice(homePath.length + 1).split("/").filter(Boolean)
+    const relativeSegments = projectPath
+      .slice(homePath.length + 1)
+      .split("/")
+      .filter(Boolean)
     return ["~", ...relativeSegments]
   }
 

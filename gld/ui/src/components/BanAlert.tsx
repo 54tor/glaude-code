@@ -3,7 +3,15 @@ import { ShieldAlert } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import { api } from "@/lib/api"
 import { ApiError } from "@/lib/http"
-import { AlertDialog, AlertDialogAction, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 type Ban = { at: number; ip: string }
 
@@ -35,11 +43,17 @@ export function BanAlert() {
         const isFirstPoll = cursorAfter < 0
         cursorAfter = alerts.cursor
         if (isFirstPoll) return
-        if (alerts.bans.length) setBans((previousBans) => [...previousBans, ...alerts.bans])
-        if (alerts.pairings.length) setPairings((previousPairings) => [...previousPairings, ...alerts.pairings])
+        if (alerts.bans.length)
+          setBans((previousBans) => [...previousBans, ...alerts.bans])
+        if (alerts.pairings.length)
+          setPairings((previousPairings) => [
+            ...previousPairings,
+            ...alerts.pairings,
+          ])
       } catch (error) {
         // 404 : mode sans comptes, la route n'existe pas ; sinon serveur injoignable, on réessaie au prochain passage.
-        const isRouteMissing = error instanceof ApiError && error.status === HTTP_NOT_FOUND
+        const isRouteMissing =
+          error instanceof ApiError && error.status === HTTP_NOT_FOUND
         if (isRouteMissing) isMounted = false
       }
     }
@@ -60,7 +74,8 @@ export function BanAlert() {
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle className="flex items-center gap-2">
-            <ShieldAlert className="size-5 text-destructive" aria-hidden /> {t("shell.securityAlerts.title")}
+            <ShieldAlert className="size-5 text-destructive" aria-hidden />{" "}
+            {t("shell.securityAlerts.title")}
           </AlertDialogTitle>
           <AlertDialogDescription>
             {bans.length > 0 && <div>{t("shell.ban.body")}</div>}
@@ -69,15 +84,29 @@ export function BanAlert() {
         </AlertDialogHeader>
         <ul className="max-h-48 space-y-1 overflow-y-auto text-sm">
           {bans.map((ban, banIndex) => (
-            <li key={`ban-${banIndex}`} className="flex justify-between gap-3 rounded-md border px-3 py-1.5">
-              {ban.ip ? <code>{ban.ip}</code> : <span>{t("shell.ban.hidden")}</span>}
-              <span className="text-muted-foreground tabular-nums">{formatAlertTime(ban.at)}</span>
+            <li
+              key={`ban-${banIndex}`}
+              className="flex justify-between gap-3 rounded-md border px-3 py-1.5"
+            >
+              {ban.ip ? (
+                <code>{ban.ip}</code>
+              ) : (
+                <span>{t("shell.ban.hidden")}</span>
+              )}
+              <span className="text-muted-foreground tabular-nums">
+                {formatAlertTime(ban.at)}
+              </span>
             </li>
           ))}
           {pairings.map((pairing, pairingIndex) => (
-            <li key={`pair-${pairingIndex}`} className="flex justify-between gap-3 rounded-md border px-3 py-1.5">
+            <li
+              key={`pair-${pairingIndex}`}
+              className="flex justify-between gap-3 rounded-md border px-3 py-1.5"
+            >
               <span>{t("shell.pairAlert.item", { ip: pairing.ip })}</span>
-              <span className="text-muted-foreground tabular-nums">{formatAlertTime(pairing.at)}</span>
+              <span className="text-muted-foreground tabular-nums">
+                {formatAlertTime(pairing.at)}
+              </span>
             </li>
           ))}
         </ul>

@@ -2,7 +2,9 @@ import fc from "fast-check"
 import { describe, expect, it } from "vitest"
 import { href, parse, type Route } from "./route"
 
-const seg = fc.string({ minLength: 1 }).filter((text) => text !== "." && text !== "..")
+const seg = fc
+  .string({ minLength: 1 })
+  .filter((text) => text !== "." && text !== "..")
 const key = fc
   .array(seg, { minLength: 1, maxLength: 4 })
   .map((texts) => texts.join("/"))
@@ -18,8 +20,14 @@ const route: fc.Arbitrary<Route> = fc.oneof(
     key,
   }),
   fc.record({ kind: fc.constant("project" as const), name: fc.string() }),
-  fc.record({ kind: fc.constant("workspace" as const), dir: fc.string({ minLength: 1 }) }),
-  fc.record({ kind: fc.constant("projectConfig" as const), dir: fc.string({ minLength: 1 }) }),
+  fc.record({
+    kind: fc.constant("workspace" as const),
+    dir: fc.string({ minLength: 1 }),
+  }),
+  fc.record({
+    kind: fc.constant("projectConfig" as const),
+    dir: fc.string({ minLength: 1 }),
+  }),
   fc.record({ kind: fc.constant("dir" as const), key }),
   fc.record({ kind: fc.constant("config" as const), tab: fc.string() }),
   fc.record({
@@ -58,8 +66,13 @@ describe("route", () => {
     }
   })
   it("espace de travail : aller-retour et encodage invalide", () => {
-    expect(href({ kind: "workspace", dir: "/home/moi/p" })).toBe("/espace/%2Fhome%2Fmoi%2Fp")
-    expect(parse("/espace/%2Fhome%2Fmoi%2Fp")).toEqual({ kind: "workspace", dir: "/home/moi/p" })
+    expect(href({ kind: "workspace", dir: "/home/moi/p" })).toBe(
+      "/espace/%2Fhome%2Fmoi%2Fp"
+    )
+    expect(parse("/espace/%2Fhome%2Fmoi%2Fp")).toEqual({
+      kind: "workspace",
+      dir: "/home/moi/p",
+    })
     expect(parse("/espace/%E0%A4%A")).toEqual({ kind: "recent" })
   })
   it("ne lève jamais d'exception", () => {

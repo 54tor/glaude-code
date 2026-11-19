@@ -19,8 +19,11 @@ const fileLabel = (
 ) => {
   if (id === "u") return "~/.claude/settings.json"
   const projectDir = id.slice(2)
-  const projectPath = projects.find((project) => project.dir === projectDir)?.project ?? projectDir
-  const labelKey = id[0] === "p" ? "config.health.fileProject" : "config.health.fileLocal"
+  const projectPath =
+    projects.find((project) => project.dir === projectDir)?.project ??
+    projectDir
+  const labelKey =
+    id[0] === "p" ? "config.health.fileProject" : "config.health.fileLocal"
   return t(labelKey, { dir: tilde(projectPath, home) })
 }
 
@@ -52,8 +55,10 @@ export function HealthTab({
           <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" />
           <span className="min-w-0">
             <span className="block text-xs font-medium text-muted-foreground">
-              {KIND.has(issue.kind) ? t(`config.issueKind.${issue.kind}`) : issue.kind} ·{" "}
-              {fileLabel(t, issue.file, home, projects)}
+              {KIND.has(issue.kind)
+                ? t(`config.issueKind.${issue.kind}`)
+                : issue.kind}{" "}
+              · {fileLabel(t, issue.file, home, projects)}
             </span>
             <span className="break-words">{issue.msg}</span>
           </span>
@@ -84,7 +89,9 @@ export function PrecedenceTab({
   const [rows, setRows] = useState<EffRow[] | null>(null)
   useEffect(() => {
     let isMounted = true
-    api.configEffective(dir).then((response) => isMounted && setRows(response.rows))
+    api
+      .configEffective(dir)
+      .then((response) => isMounted && setRows(response.rows))
     return () => {
       isMounted = false
     }
@@ -93,7 +100,9 @@ export function PrecedenceTab({
   const shown = (rows ?? []).filter((effectiveRow) => {
     if (!lowerQuery) return true
     if (effectiveRow.path.toLowerCase().includes(lowerQuery)) return true
-    return Object.values(effectiveRow.values).some((levelValue) => levelValue.toLowerCase().includes(lowerQuery))
+    return Object.values(effectiveRow.values).some((levelValue) =>
+      levelValue.toLowerCase().includes(lowerQuery)
+    )
   })
   return (
     <div className="space-y-3">
@@ -104,7 +113,9 @@ export function PrecedenceTab({
           onChange={setDir}
           options={[
             ["", t("config.precedence.userOnly")],
-            ...projects.map((project) => [project.dir, tilde(project.project, home)] as const),
+            ...projects.map(
+              (project) => [project.dir, tilde(project.project, home)] as const
+            ),
           ]}
           label={t("config.precedence.project")}
           className="max-w-80 min-w-0"
@@ -167,7 +178,9 @@ export function PrecedenceTab({
                   {(["u", "p", "l"] as const).map((level) => {
                     const levelValue = effectiveRow.values[level]
                     const isDefined = levelValue !== undefined
-                    const isEffective = isDefined && (effectiveRow.merged || effectiveRow.winner === level)
+                    const isEffective =
+                      isDefined &&
+                      (effectiveRow.merged || effectiveRow.winner === level)
                     return (
                       <td
                         key={level}
@@ -179,7 +192,13 @@ export function PrecedenceTab({
                           isEffective ? "font-medium" : "text-muted-foreground"
                         )}
                       >
-                        <span className={cn("line-clamp-3", !isEffective && "line-through decoration-muted-foreground/40")}>
+                        <span
+                          className={cn(
+                            "line-clamp-3",
+                            !isEffective &&
+                              "line-through decoration-muted-foreground/40"
+                          )}
+                        >
                           {levelValue ?? ""}
                         </span>
                       </td>

@@ -7,9 +7,28 @@ import { resetShares } from "@/hooks/useShares"
 import { ActionsCtx, type Row } from "./actions"
 import { ShareItem, type Kit } from "./SessionMenu"
 
-const M = { Item: ({ children }: { children: ReactNode }) => <button>{children}</button> } as unknown as Kit
+const M = {
+  Item: ({ children }: { children: ReactNode }) => <button>{children}</button>,
+} as unknown as Kit
 const row = { s: { id: "s1" } } as Row
-const share = (id: string, count: number): ShareInfo => ({ id, dir: "/d", title: "", handle: "h", open: true, invites: Array.from({ length: count }, (_, index) => ({ id: `i${index}`, seq: index, name: "", label: "x", mode: "rw", state: "pending", lastSeen: 0, redeemed: false, queue: [] })) })
+const share = (id: string, count: number): ShareInfo => ({
+  id,
+  dir: "/d",
+  title: "",
+  handle: "h",
+  open: true,
+  invites: Array.from({ length: count }, (_, index) => ({
+    id: `i${index}`,
+    seq: index,
+    name: "",
+    label: "x",
+    mode: "rw",
+    state: "pending",
+    lastSeen: 0,
+    redeemed: false,
+    queue: [],
+  })),
+})
 
 const mount = async (shares: ShareInfo[]) => {
   const spy = vi.spyOn(api, "shares").mockResolvedValue({ shares })
@@ -33,8 +52,11 @@ describe("ShareItem", () => {
     await mount([share("s1", 1)])
     expect(screen.getByRole("button").textContent).toMatch(/Partage…|Sharing…/)
   })
-  it.each([[[]], [[share("s1", 0)]], [[share("s2", 2)]]])("sinon : Partager…", async (shares) => {
-    await mount(shares)
-    expect(screen.getByRole("button").textContent).toMatch(/Partager…|Share…/)
-  })
+  it.each([[[]], [[share("s1", 0)]], [[share("s2", 2)]]])(
+    "sinon : Partager…",
+    async (shares) => {
+      await mount(shares)
+      expect(screen.getByRole("button").textContent).toMatch(/Partager…|Share…/)
+    }
+  )
 })

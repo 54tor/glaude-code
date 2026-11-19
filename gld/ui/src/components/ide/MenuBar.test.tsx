@@ -1,5 +1,13 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { setLang } from "@/i18n"
 import type { Right } from "@/lib/auth"
@@ -8,9 +16,29 @@ import { commands, type CmdCtx, type EditorHandle } from "./commands"
 import type { Tab } from "./ideState"
 import { DEFAULT_PREFS } from "./useViewPrefs"
 
-const tab = (path: string, tab: Partial<Tab> = {}): Tab => ({ path, content: "x", saved: "x", etag: "e", readOnly: false, ...tab })
-const handle = (): EditorHandle => ({ undo: vi.fn(), redo: vi.fn(), find: vi.fn(), replace: vi.fn(), gotoLine: vi.fn(), palette: vi.fn(), focus: vi.fn(), zoom: vi.fn(), subscribe: () => () => {} })
-const ctx = (cmdCtx: Partial<CmdCtx> = {}, rights: Right[] = ["fs_read", "fs_write", "exec"]): CmdCtx => {
+const tab = (path: string, tab: Partial<Tab> = {}): Tab => ({
+  path,
+  content: "x",
+  saved: "x",
+  etag: "e",
+  readOnly: false,
+  ...tab,
+})
+const handle = (): EditorHandle => ({
+  undo: vi.fn(),
+  redo: vi.fn(),
+  find: vi.fn(),
+  replace: vi.fn(),
+  gotoLine: vi.fn(),
+  palette: vi.fn(),
+  focus: vi.fn(),
+  zoom: vi.fn(),
+  subscribe: () => () => {},
+})
+const ctx = (
+  cmdCtx: Partial<CmdCtx> = {},
+  rights: Right[] = ["fs_read", "fs_write", "exec"]
+): CmdCtx => {
   const localTab = tab("a.txt", { content: "y" })
   return {
     can: (raw) => rights.includes(raw),
@@ -30,19 +58,32 @@ const ctx = (cmdCtx: Partial<CmdCtx> = {}, rights: Right[] = ["fs_read", "fs_wri
     ...cmdCtx,
   }
 }
-const alt = (key: string, target: Element = document.body) => fireEvent.keyDown(target, { key, altKey: true })
+const alt = (key: string, target: Element = document.body) =>
+  fireEvent.keyDown(target, { key, altKey: true })
 const menu = () => screen.findByRole("menu")
-const entries = (element: HTMLElement, name?: string) => [...within(element).queryAllByRole("menuitem", { name }), ...within(element).queryAllByRole("menuitemcheckbox", { name })]
+const entries = (element: HTMLElement, name?: string) => [
+  ...within(element).queryAllByRole("menuitem", { name }),
+  ...within(element).queryAllByRole("menuitemcheckbox", { name }),
+]
 const item = async (name: string) => {
   const [el] = entries(await menu(), name)
   if (!el) throw new Error(`entrée absente : ${name}`)
   return el
 }
-const reasonOf = (el: HTMLElement) => document.getElementById(el.getAttribute("aria-describedby") ?? "")?.textContent
+const reasonOf = (el: HTMLElement) =>
+  document.getElementById(el.getAttribute("aria-describedby") ?? "")
+    ?.textContent
 
 beforeEach(() => {
   setLang("fr")
-  vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} })
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  )
 })
 afterEach(() => {
   cleanup()
@@ -57,7 +98,8 @@ describe("MenuBar", () => {
     for (const localKey of ["f", "e", "r", "a", "l"]) {
       act(() => void alt(localKey))
       const element = await menu()
-      for (const el of entries(element)) seen.push(el.dataset.cmd ?? "(sans commande)")
+      for (const el of entries(element))
+        seen.push(el.dataset.cmd ?? "(sans commande)")
       fireEvent.keyDown(element, { key: "Escape" })
       await waitFor(() => expect(screen.queryByRole("menu")).toBeNull())
     }
@@ -66,8 +108,14 @@ describe("MenuBar", () => {
 
   it("menus dans l'ordre, raccourcis affichés", async () => {
     render(<MenuBar ctx={ctx()} />)
-    const bar = screen.getByRole("menubar", { name: "Menu de l'espace de travail" })
-    expect(within(bar).getAllByRole("menuitem").map((element) => element.textContent)).toEqual(["Fichier", "Édition", "Rechercher", "Affichage", "Aller à"])
+    const bar = screen.getByRole("menubar", {
+      name: "Menu de l'espace de travail",
+    })
+    expect(
+      within(bar)
+        .getAllByRole("menuitem")
+        .map((element) => element.textContent)
+    ).toEqual(["Fichier", "Édition", "Rechercher", "Affichage", "Aller à"])
     alt("f")
     const save = await item("Enregistrer")
     expect(save.textContent).toContain("Ctrl+S")
@@ -76,7 +124,9 @@ describe("MenuBar", () => {
 
   it("navigation au clavier : flèches entre les menus puis dans les entrées", async () => {
     render(<MenuBar ctx={ctx()} />)
-    const [file, edit] = within(screen.getByRole("menubar")).getAllByRole("menuitem")
+    const [file, edit] = within(screen.getByRole("menubar")).getAllByRole(
+      "menuitem"
+    )
     act(() => file.focus())
     fireEvent.keyDown(file, { key: "ArrowRight" })
     await waitFor(() => expect(document.activeElement).toBe(edit))
@@ -100,7 +150,9 @@ describe("MenuBar", () => {
     )
     expect(alt("f", screen.getByTestId("mon"))).toBe(true)
     expect(alt("f", screen.getByLabelText("xterm"))).toBe(true)
-    expect(fireEvent.keyDown(screen.getByTestId("mon"), { key: "F1" })).toBe(true)
+    expect(fireEvent.keyDown(screen.getByTestId("mon"), { key: "F1" })).toBe(
+      true
+    )
     expect(screen.queryByRole("menu")).toBeNull()
     expect(alt("f")).toBe(false)
   })
@@ -114,7 +166,9 @@ describe("MenuBar", () => {
     expect(reasonOf(save)).toBe("Fichier en lecture seule")
     fireEvent.click(save)
     expect(cmdCtx.save).not.toHaveBeenCalled()
-    expect((await item("Ouverture rapide")).getAttribute("aria-disabled")).toBeNull()
+    expect(
+      (await item("Ouverture rapide")).getAttribute("aria-disabled")
+    ).toBeNull()
   })
 
   it("raccourcis traduits : Maj en français, Shift en anglais, nom ARIA canonique", async () => {
@@ -148,7 +202,9 @@ describe("MenuBar", () => {
   })
 
   it("bascules cochées selon les préférences ; une entrée active lance sa commande", async () => {
-    const cmdCtx = ctx({ prefs: { ...DEFAULT_PREFS, wordWrap: true, set: vi.fn() } })
+    const cmdCtx = ctx({
+      prefs: { ...DEFAULT_PREFS, wordWrap: true, set: vi.fn() },
+    })
     render(<MenuBar ctx={cmdCtx} />)
     alt("a")
     const wrap = await item("Retour à la ligne automatique")
@@ -179,13 +235,21 @@ describe("MenuBar : focus après une commande", () => {
       </>
     )
     const edEl = screen.getByLabelText("ed")
-    vi.mocked(editorHandle.focus).mockImplementation(() => (order.push("focus"), edEl.focus()))
-    vi.mocked(editorHandle.find).mockImplementation(() => (order.push("find"), screen.getByLabelText("find-widget").focus()))
-    vi.mocked(editorHandle.undo).mockImplementation(() => void order.push("undo"))
+    vi.mocked(editorHandle.focus).mockImplementation(
+      () => (order.push("focus"), edEl.focus())
+    )
+    vi.mocked(editorHandle.find).mockImplementation(
+      () => (order.push("find"), screen.getByLabelText("find-widget").focus())
+    )
+    vi.mocked(editorHandle.undo).mockImplementation(
+      () => void order.push("undo")
+    )
     return { c: localCmdCtx, h: editorHandle, order, edEl }
   }
-  const trigger = (name: string) => within(screen.getByRole("menubar")).getByRole("menuitem", { name })
-  const closed = () => waitFor(() => expect(screen.queryByRole("menu")).toBeNull())
+  const trigger = (name: string) =>
+    within(screen.getByRole("menubar")).getByRole("menuitem", { name })
+  const closed = () =>
+    waitFor(() => expect(screen.queryByRole("menu")).toBeNull())
 
   it("Rechercher : l'éditeur reçoit le focus avant la commande, le widget de Monaco le garde", async () => {
     const { h: editorHandle, order } = setup()
@@ -227,7 +291,9 @@ describe("MenuBar : focus après une commande", () => {
       alt("f")
       fireEvent.click(await item(name))
       await closed()
-      await waitFor(() => expect(document.activeElement).toBe(trigger("Fichier")))
+      await waitFor(() =>
+        expect(document.activeElement).toBe(trigger("Fichier"))
+      )
     }
     expect(cmdCtx.closeTab).toHaveBeenCalledTimes(1)
     expect(cmdCtx.closeAll).toHaveBeenCalledTimes(1)

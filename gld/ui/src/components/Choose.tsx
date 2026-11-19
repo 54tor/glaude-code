@@ -1,4 +1,10 @@
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 // Radix interdit la valeur "" pour une option : on la remplace par celle-ci le temps de l'affichage.
 const EMPTY = "__défaut__"
@@ -22,7 +28,13 @@ export function Choose({
   className?: string
 }) {
   return (
-    <Select value={value || EMPTY} onValueChange={(selectedValue) => onChange(selectedValue === EMPTY ? "" : selectedValue)} disabled={disabled}>
+    <Select
+      value={value || EMPTY}
+      onValueChange={(selectedValue) =>
+        onChange(selectedValue === EMPTY ? "" : selectedValue)
+      }
+      disabled={disabled}
+    >
       <SelectTrigger size={size} className={className} aria-label={label}>
         <SelectValue />
       </SelectTrigger>

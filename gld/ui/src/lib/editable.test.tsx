@@ -19,7 +19,11 @@ const monaco = () => {
   return ed
 }
 const press = (el: Element, key: string) => {
-  const ev = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true })
+  const ev = new KeyboardEvent("keydown", {
+    key,
+    bubbles: true,
+    cancelable: true,
+  })
   el.dispatchEvent(ev)
   return ev.defaultPrevented
 }
@@ -27,7 +31,12 @@ const press = (el: Element, key: string) => {
 beforeEach(() => {
   localStorage.clear()
   document.documentElement.className = ""
-  vi.stubGlobal("matchMedia", (query: string) => ({ matches: false, media: query, addEventListener() {}, removeEventListener() {} }))
+  vi.stubGlobal("matchMedia", (query: string) => ({
+    matches: false,
+    media: query,
+    addEventListener() {},
+    removeEventListener() {},
+  }))
 })
 afterEach(() => {
   cleanup()
@@ -40,13 +49,24 @@ describe("frappe dans Monaco", () => {
     const main = document.createElement("main")
     main.innerHTML = `<div data-row data-id="a" tabindex="0"></div><div data-row data-id="b" tabindex="0"></div>`
     document.body.append(main)
-    const search = createRef<HTMLInputElement>() as { current: HTMLInputElement | null }
+    const search = createRef<HTMLInputElement>() as {
+      current: HTMLInputElement | null
+    }
     search.current = document.createElement("input")
     document.body.append(search.current)
-    renderHook(() => useShortcuts({ search, picked: new Set(), clearPicked: () => {}, byId: new Map(), actions: {} as Actions }))
+    renderHook(() =>
+      useShortcuts({
+        search,
+        picked: new Set(),
+        clearPicked: () => {},
+        byId: new Map(),
+        actions: {} as Actions,
+      })
+    )
     const ed = monaco()
     ed.focus()
-    for (const key of ["j", "k", "ArrowDown", "ArrowUp", "/"]) expect(press(ed, key), key).toBe(false)
+    for (const key of ["j", "k", "ArrowDown", "ArrowUp", "/"])
+      expect(press(ed, key), key).toBe(false)
     expect(document.activeElement).toBe(ed)
     // Témoin : hors éditeur, le raccourci agit bien.
     expect(press(document.body, "/")).toBe(true)
@@ -54,7 +74,11 @@ describe("frappe dans Monaco", () => {
   })
 
   it("d ne bascule pas le thème", () => {
-    render(<ThemeProvider defaultTheme="light"><span /></ThemeProvider>)
+    render(
+      <ThemeProvider defaultTheme="light">
+        <span />
+      </ThemeProvider>
+    )
     const before = document.documentElement.className
     press(monaco(), "d")
     expect(document.documentElement.className).toBe(before)

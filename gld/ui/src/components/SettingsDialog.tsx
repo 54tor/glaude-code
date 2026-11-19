@@ -124,15 +124,26 @@ const section = (title: string, hint: string, body: React.ReactNode) => (
 )
 
 // Options de l'interface passées à claude (arguments, modèle et effort par défaut) : en tête de l'onglet Réglages.
-export function ClaudeOptions({ args, setArgs, choice, setChoice }: Pick<UiSettings, "args" | "setArgs" | "choice" | "setChoice">) {
+export function ClaudeOptions({
+  args,
+  setArgs,
+  choice,
+  setChoice,
+}: Pick<UiSettings, "args" | "setArgs" | "choice" | "setChoice">) {
   const { t } = useTranslation()
   const [rules, setRules] = useState<boolean | null>(null)
   useEffect(() => {
-    api.builtinRules().then((rulesResponse) => setRules(rulesResponse.enabled), () => {})
+    api.builtinRules().then(
+      (rulesResponse) => setRules(rulesResponse.enabled),
+      () => {}
+    )
   }, [])
   const [hooks, setHooks] = useState<boolean | null>(null)
   useEffect(() => {
-    api.sessionHooks().then((hooksResponse) => setHooks(hooksResponse.enabled), () => {})
+    api.sessionHooks().then(
+      (hooksResponse) => setHooks(hooksResponse.enabled),
+      () => {}
+    )
   }, [])
   const pickHooks = async (isEnabled: boolean) => {
     try {
@@ -174,12 +185,22 @@ export function ClaudeOptions({ args, setArgs, choice, setChoice }: Pick<UiSetti
       {section(
         t("config.dialog.gldRulesTitle"),
         t("config.dialog.gldRulesHint"),
-        <Switch checked={rules ?? false} disabled={rules === null} onCheckedChange={pickRules} aria-label={t("config.dialog.gldRulesTitle")} />
+        <Switch
+          checked={rules ?? false}
+          disabled={rules === null}
+          onCheckedChange={pickRules}
+          aria-label={t("config.dialog.gldRulesTitle")}
+        />
       )}
       {section(
         t("config.dialog.sessionHooksTitle"),
         t("config.dialog.sessionHooksHint"),
-        <Switch checked={hooks ?? false} disabled={hooks === null} onCheckedChange={pickHooks} aria-label={t("config.dialog.sessionHooksTitle")} />
+        <Switch
+          checked={hooks ?? false}
+          disabled={hooks === null}
+          onCheckedChange={pickHooks}
+          aria-label={t("config.dialog.sessionHooksTitle")}
+        />
       )}
     </section>
   )
@@ -193,7 +214,12 @@ export function SettingsPanel(fonts: Fonts) {
   const pickLang = async (lang: Lang, claude: string) => {
     setLang(lang)
     try {
-      await api.configEdit({ file: "u", op: "set", path: ["language"], value: claude })
+      await api.configEdit({
+        file: "u",
+        op: "set",
+        path: ["language"],
+        value: claude,
+      })
     } catch (error) {
       toast.error(errMsg(error))
     }
@@ -209,7 +235,9 @@ export function SettingsPanel(fonts: Fonts) {
             <div key={displayedKey} className="contents">
               <dt>
                 <kbd className="rounded-sm border bg-muted px-1.5 py-0.5 font-mono text-xs">
-                  {displayedKey.startsWith("cap.") ? t(`config.dialog.${displayedKey}`) : displayedKey}
+                  {displayedKey.startsWith("cap.")
+                    ? t(`config.dialog.${displayedKey}`)
+                    : displayedKey}
                 </kbd>
               </dt>
               <dd className="text-muted-foreground">
@@ -229,9 +257,14 @@ export function SettingsPanel(fonts: Fonts) {
           <Choose
             value={i18n.language}
             onChange={(selectedLang) =>
-              pickLang(selectedLang as Lang, LANGS.find((language) => language.v === selectedLang)!.claude)
+              pickLang(
+                selectedLang as Lang,
+                LANGS.find((language) => language.v === selectedLang)!.claude
+              )
             }
-            options={LANGS.map((language) => [language.v, language.label] as const)}
+            options={LANGS.map(
+              (language) => [language.v, language.label] as const
+            )}
             label={t("config.dialog.language")}
             size="default"
             className="w-full max-w-sm"
@@ -268,7 +301,9 @@ export function SettingsPanel(fonts: Fonts) {
           >
             {Object.entries(PALETTES).map(([id, paletteOption]) => {
               const darkColors = paletteOption.dark
-              const swatchColors = darkColors ? [darkColors.bg, darkColors.primary, darkColors.fg] : FALLBACK_SWATCH_COLORS
+              const swatchColors = darkColors
+                ? [darkColors.bg, darkColors.primary, darkColors.fg]
+                : FALLBACK_SWATCH_COLORS
               return (
                 <button
                   key={id}

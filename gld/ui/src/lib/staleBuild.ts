@@ -3,12 +3,20 @@ import { useEffect, useState } from "react"
 const ENTRY_SCRIPT_PATTERN = /\/assets\/app-[\w-]+\.js/
 const CHECK_INTERVAL_MS = 5 * 60 * 1000
 
-const runningEntryScript = () => document.querySelector<HTMLScriptElement>('script[type="module"][src*="/assets/app-"]')?.getAttribute("src") ?? ""
+const runningEntryScript = () =>
+  document
+    .querySelector<HTMLScriptElement>(
+      'script[type="module"][src*="/assets/app-"]'
+    )
+    ?.getAttribute("src") ?? ""
 
 // Le serveur sert la page d'entrée sans cache : si son script principal n'est plus celui qui tourne ici, une version plus récente est déployée.
 async function deployedEntryScript(): Promise<string> {
   try {
-    const response = await fetch("/", { cache: "no-store", credentials: "same-origin" })
+    const response = await fetch("/", {
+      cache: "no-store",
+      credentials: "same-origin",
+    })
     if (!response.ok) return ""
     return (await response.text()).match(ENTRY_SCRIPT_PATTERN)?.[0] ?? ""
   } catch {

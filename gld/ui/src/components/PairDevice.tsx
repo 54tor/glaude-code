@@ -9,14 +9,26 @@ import { errMsg } from "@/lib/apiError"
 import { ago } from "@/lib/format"
 import { Button } from "@/components/ui/button"
 import { Tip } from "@/components/ui/tooltip"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
 
 // Connecter un appareil : code à usage unique (pair.go), en chiffres à saisir sur « Connecter cet appareil » et en QR. Mode jeton : liste et révocation des appareils jumelés ;
 // mode comptes : les sessions du profil en tiennent lieu.
 // Adresse de bouclage : un autre appareil ne l'atteint pas. Une IP du réseau local, elle, marche telle quelle.
 export const loopback = (url: string) => {
   const hostname = new URL(url, location.href).hostname
-  return hostname === "localhost" || hostname.endsWith(".localhost") || hostname.startsWith("127.") || hostname === "[::1]"
+  return (
+    hostname === "localhost" ||
+    hostname.endsWith(".localhost") ||
+    hostname.startsWith("127.") ||
+    hostname === "[::1]"
+  )
 }
 
 const DEFAULT_CODE_TTL_SECONDS = 120
@@ -31,7 +43,9 @@ export function TunnelHint({ origin }: { origin: string }) {
       <p>{t("shell.tunnel.loopback")}</p>
       <p className="text-muted-foreground">{t("shell.tunnel.lan")}</p>
       <p className="text-muted-foreground">{t("shell.tunnel.cloudflared")}</p>
-      <pre className="overflow-x-auto rounded-md border bg-muted px-2 py-1 font-mono text-xs select-all">cloudflared tunnel --url {origin}</pre>
+      <pre className="overflow-x-auto rounded-md border bg-muted px-2 py-1 font-mono text-xs select-all">
+        cloudflared tunnel --url {origin}
+      </pre>
       <p className="text-warning">{t("shell.tunnel.warning")}</p>
     </div>
   )
@@ -41,7 +55,11 @@ export function PairButton() {
   const { t } = useTranslation()
   const auth = useAuth()
   const [open, setOpen] = useState(false)
-  const [code, setCode] = useState<{ code: string; url: string; until: number } | null>(null)
+  const [code, setCode] = useState<{
+    code: string
+    url: string
+    until: number
+  } | null>(null)
   const [now, setNow] = useState(() => Date.now())
   const [devices, setDevices] = useState<Device[] | null>(null)
   const isTokenMode = auth.state === "open"
@@ -52,18 +70,29 @@ export function PairButton() {
       const ttlSeconds = pairing.ttl ?? DEFAULT_CODE_TTL_SECONDS
       const issuedAt = Date.now()
       setNow(issuedAt)
-      setCode({ code: pairing.code, url: pairing.url, until: issuedAt + ttlSeconds * MILLISECONDS_PER_SECOND })
+      setCode({
+        code: pairing.code,
+        url: pairing.url,
+        until: issuedAt + ttlSeconds * MILLISECONDS_PER_SECOND,
+      })
     } catch (pairError) {
       toast.error(errMsg(pairError) || t("shell.pair.failed"))
     }
   }, [t])
   const list = useCallback(() => {
-    if (isTokenMode) api.devices().then((response) => setDevices(response.devices ?? []), () => setDevices([]))
+    if (isTokenMode)
+      api.devices().then(
+        (response) => setDevices(response.devices ?? []),
+        () => setDevices([])
+      )
   }, [isTokenMode])
 
   useEffect(() => {
     if (!open) return
-    const clockInterval = setInterval(() => setNow(Date.now()), MILLISECONDS_PER_SECOND)
+    const clockInterval = setInterval(
+      () => setNow(Date.now()),
+      MILLISECONDS_PER_SECOND
+    )
     return () => clearInterval(clockInterval)
   }, [open])
   const show = (isOpen: boolean) => {
@@ -83,13 +112,20 @@ export function PairButton() {
   }
 
   if (auth.state !== "open" && auth.state !== "ok") return null
-  const left = code ? Math.max(0, Math.ceil((code.until - now) / MILLISECONDS_PER_SECOND)) : 0
+  const left = code
+    ? Math.max(0, Math.ceil((code.until - now) / MILLISECONDS_PER_SECOND))
+    : 0
   const hasValidCode = code && left > 0
   return (
     <Dialog open={open} onOpenChange={show}>
       <Tip label={t("shell.pair.title")}>
         <DialogTrigger asChild>
-          <Button variant="ghost" size="icon" className="size-9 text-muted-foreground" aria-label={t("shell.pair.title")}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-9 text-muted-foreground"
+            aria-label={t("shell.pair.title")}
+          >
             <Smartphone className="size-6" />
           </Button>
         </DialogTrigger>
@@ -97,15 +133,20 @@ export function PairButton() {
       <DialogContent className="max-h-[90vh] gap-5 overflow-y-auto sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-xl">
-            <Smartphone className="size-5 text-primary" aria-hidden /> {t("shell.pair.title")}
+            <Smartphone className="size-5 text-primary" aria-hidden />{" "}
+            {t("shell.pair.title")}
           </DialogTitle>
           <DialogDescription>{t("shell.pair.intro")}</DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-col items-center gap-3">
           {hasValidCode && (
-            <p className="font-mono text-4xl font-semibold tracking-widest tabular-nums select-all" aria-label={t("shell.pair.code")}>
-              {code.code.slice(0, CODE_GROUP_LENGTH)} {code.code.slice(CODE_GROUP_LENGTH)}
+            <p
+              className="font-mono text-4xl font-semibold tracking-widest tabular-nums select-all"
+              aria-label={t("shell.pair.code")}
+            >
+              {code.code.slice(0, CODE_GROUP_LENGTH)}{" "}
+              {code.code.slice(CODE_GROUP_LENGTH)}
             </p>
           )}
           {hasValidCode && loopback(code.url) ? (
@@ -113,16 +154,27 @@ export function PairButton() {
           ) : (
             <div className="grid size-56 place-items-center rounded-lg bg-white p-3">
               {hasValidCode ? (
-                <QRCode value={code.url} size={QR_SIZE} level="M" title={t("shell.pair.qr")} />
+                <QRCode
+                  value={code.url}
+                  size={QR_SIZE}
+                  level="M"
+                  title={t("shell.pair.qr")}
+                />
               ) : (
-                <Button variant="outline" size="sm" onClick={() => void fresh()}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void fresh()}
+                >
                   <RefreshCw /> {t("shell.pair.renew")}
                 </Button>
               )}
             </div>
           )}
           <p className="text-sm text-muted-foreground" aria-live="polite">
-            {hasValidCode ? t("shell.pair.expires", { s: left }) : t("shell.pair.expired")}
+            {hasValidCode
+              ? t("shell.pair.expires", { s: left })
+              : t("shell.pair.expired")}
           </p>
         </div>
 
@@ -134,17 +186,33 @@ export function PairButton() {
         {isTokenMode ? (
           <section className="space-y-2" aria-label={t("shell.pair.devices")}>
             <h3 className="text-sm font-semibold">{t("shell.pair.devices")}</h3>
-            {devices?.length === 0 && <p className="text-sm text-muted-foreground">{t("shell.pair.none")}</p>}
+            {devices?.length === 0 && (
+              <p className="text-sm text-muted-foreground">
+                {t("shell.pair.none")}
+              </p>
+            )}
             <ul className="divide-y rounded-lg border empty:hidden">
               {devices?.map((device) => (
-                <li key={device.id} className="flex items-center gap-3 px-3 py-2 text-sm">
+                <li
+                  key={device.id}
+                  className="flex items-center gap-3 px-3 py-2 text-sm"
+                >
                   <span className="min-w-0 flex-1">
                     <span className="block truncate" title={device.name}>
                       {device.name || t("shell.pair.unknown")}
                     </span>
-                    <span className="block text-xs text-muted-foreground">{t("shell.pair.seen", { ip: device.ip, ago: ago(device.seen) })}</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {t("shell.pair.seen", {
+                        ip: device.ip,
+                        ago: ago(device.seen),
+                      })}
+                    </span>
                   </span>
-                  <Button variant="outline" size="sm" onClick={() => void revoke(device)}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void revoke(device)}
+                  >
                     {t("shell.pair.revoke")}
                   </Button>
                 </li>
@@ -152,7 +220,9 @@ export function PairButton() {
             </ul>
           </section>
         ) : (
-          <p className="text-sm text-muted-foreground">{t("shell.pair.accountNote")}</p>
+          <p className="text-sm text-muted-foreground">
+            {t("shell.pair.accountNote")}
+          </p>
         )}
       </DialogContent>
     </Dialog>

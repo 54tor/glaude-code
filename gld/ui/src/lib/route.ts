@@ -22,11 +22,14 @@ export type Route =
 
 export const TEAM_NAME = /^session-[0-9a-f]{8}$/
 
-const decodePath = (path: string) => path.split("/").map(decodeURIComponent).join("/")
-const encodePath = (path: string) => path.split("/").map(encodeURIComponent).join("/")
+const decodePath = (path: string) =>
+  path.split("/").map(decodeURIComponent).join("/")
+const encodePath = (path: string) =>
+  path.split("/").map(encodeURIComponent).join("/")
 
 export function parse(pathname: string): Route {
-  const isSectionOrBelow = (section: string) => pathname === section || pathname.startsWith(section + "/")
+  const isSectionOrBelow = (section: string) =>
+    pathname === section || pathname.startsWith(section + "/")
   // Suite du chemin après « section/ » ; "" pour la section seule.
   const afterSection = (section: string) => pathname.slice(section.length + 1)
   try {
@@ -37,14 +40,36 @@ export function parse(pathname: string): Route {
     if (pathname.startsWith("/groupe/")) {
       const groupPath = afterSection("/groupe")
       const nameEnd = groupPath.indexOf("/")
-      if (nameEnd > 0) return { kind: "group", name: decodeURIComponent(groupPath.slice(0, nameEnd)), key: decodePath(groupPath.slice(nameEnd + 1)) }
+      if (nameEnd > 0)
+        return {
+          kind: "group",
+          name: decodeURIComponent(groupPath.slice(0, nameEnd)),
+          key: decodePath(groupPath.slice(nameEnd + 1)),
+        }
     }
-    if (pathname.startsWith("/projet/")) return { kind: "project", name: decodeURIComponent(afterSection("/projet")) }
-    if (pathname.startsWith("/dossier/")) return { kind: "dir", key: decodePath(afterSection("/dossier")) }
-    if (pathname.startsWith("/espace/")) return { kind: "workspace", dir: decodeURIComponent(afterSection("/espace")) }
-    if (pathname.startsWith("/reglages/")) return { kind: "projectConfig", dir: decodeURIComponent(afterSection("/reglages")) }
+    if (pathname.startsWith("/projet/"))
+      return {
+        kind: "project",
+        name: decodeURIComponent(afterSection("/projet")),
+      }
+    if (pathname.startsWith("/dossier/"))
+      return { kind: "dir", key: decodePath(afterSection("/dossier")) }
+    if (pathname.startsWith("/espace/"))
+      return {
+        kind: "workspace",
+        dir: decodeURIComponent(afterSection("/espace")),
+      }
+    if (pathname.startsWith("/reglages/"))
+      return {
+        kind: "projectConfig",
+        dir: decodeURIComponent(afterSection("/reglages")),
+      }
     if (pathname === "/onglets") return { kind: "tabs" }
-    if (isSectionOrBelow("/configuration")) return { kind: "config", tab: decodeURIComponent(afterSection("/configuration")) }
+    if (isSectionOrBelow("/configuration"))
+      return {
+        kind: "config",
+        tab: decodeURIComponent(afterSection("/configuration")),
+      }
     if (pathname === "/equipes") return { kind: "teams" }
     if (pathname.startsWith("/equipes/")) {
       const teamName = afterSection("/equipes")
@@ -52,13 +77,18 @@ export function parse(pathname: string): Route {
     }
     if (isSectionOrBelow("/extensions")) {
       const extensionsTab = decodeURIComponent(afterSection("/extensions"))
-      return extensionsTab ? { kind: "extensions", tab: extensionsTab } : { kind: "extensions" }
+      return extensionsTab
+        ? { kind: "extensions", tab: extensionsTab }
+        : { kind: "extensions" }
     }
     if (pathname === "/plugins") return { kind: "extensions" } // ancienne page, fusionnée dans Extensions
     if (pathname === "/sauvegarde") return { kind: "config", tab: "export" }
-    if (isSectionOrBelow("/skills")) return { kind: "skills", key: decodePath(afterSection("/skills")) }
-    if (isSectionOrBelow("/memoire")) return { kind: "memory", key: decodePath(afterSection("/memoire")) }
-    if (isSectionOrBelow("/snippets")) return { kind: "snippets", path: decodePath(afterSection("/snippets")) }
+    if (isSectionOrBelow("/skills"))
+      return { kind: "skills", key: decodePath(afterSection("/skills")) }
+    if (isSectionOrBelow("/memoire"))
+      return { kind: "memory", key: decodePath(afterSection("/memoire")) }
+    if (isSectionOrBelow("/snippets"))
+      return { kind: "snippets", path: decodePath(afterSection("/snippets")) }
   } catch {
     /* encodage invalide : retour à l'accueil */
   }
@@ -74,7 +104,12 @@ export function href(route: Route): string {
     case "auto":
       return "/revues"
     case "group":
-      return "/groupe/" + encodeURIComponent(route.name) + "/" + encodePath(route.key)
+      return (
+        "/groupe/" +
+        encodeURIComponent(route.name) +
+        "/" +
+        encodePath(route.key)
+      )
     case "project":
       return "/projet/" + encodeURIComponent(route.name)
     case "dir":
@@ -92,9 +127,17 @@ export function href(route: Route): string {
     case "team":
       return "/equipes/" + route.name
     case "extensions":
-      return "/extensions" + (route.tab && route.tab !== "plugins" ? "/" + encodeURIComponent(route.tab) : "")
+      return (
+        "/extensions" +
+        (route.tab && route.tab !== "plugins"
+          ? "/" + encodeURIComponent(route.tab)
+          : "")
+      )
     case "config":
-      return "/configuration" + (route.tab ? "/" + encodeURIComponent(route.tab) : "")
+      return (
+        "/configuration" +
+        (route.tab ? "/" + encodeURIComponent(route.tab) : "")
+      )
     case "skills":
       return "/skills" + (route.key ? "/" + encodePath(route.key) : "")
     case "memory":

@@ -7,7 +7,9 @@ type CatalogModule = { default: object }
 // Un fichier par domaine (fr/<domaine>.json, en/<domaine>.json), dont la clé de premier niveau porte le nom du fichier :
 // common, format, shell, conversation, memory, config, skills, auth, ide.
 const mergeCatalogModules = (catalogModules: Record<string, CatalogModule>) => {
-  const catalogContents = Object.values(catalogModules).map((catalogModule) => catalogModule.default)
+  const catalogContents = Object.values(catalogModules).map(
+    (catalogModule) => catalogModule.default
+  )
   return Object.assign({}, ...catalogContents)
 }
 // Le français (langue de repli) est dans l'entrée ; l'anglais est un chunk chargé à la demande, pour ne pas alourdir le premier chargement.
@@ -21,12 +23,24 @@ const TRANSLATION_NAMESPACE = "translation"
 const FALLBACK_LANG: Lang = "fr"
 
 export async function loadLang(lang: Lang): Promise<void> {
-  const isAlreadyAvailable = lang === "fr" || i18next.hasResourceBundle(lang, TRANSLATION_NAMESPACE)
+  const isAlreadyAvailable =
+    lang === "fr" || i18next.hasResourceBundle(lang, TRANSLATION_NAMESPACE)
   if (isAlreadyAvailable) return
   const catalogLoaders = Object.values(catalogFiles[lang])
-  const loadedModules = await Promise.all(catalogLoaders.map((loadCatalog) => loadCatalog()))
-  const modulesByIndex = Object.fromEntries(loadedModules.map((loadedModule, moduleIndex) => [moduleIndex, loadedModule]))
-  i18next.addResourceBundle(lang, TRANSLATION_NAMESPACE, mergeCatalogModules(modulesByIndex))
+  const loadedModules = await Promise.all(
+    catalogLoaders.map((loadCatalog) => loadCatalog())
+  )
+  const modulesByIndex = Object.fromEntries(
+    loadedModules.map((loadedModule, moduleIndex) => [
+      moduleIndex,
+      loadedModule,
+    ])
+  )
+  i18next.addResourceBundle(
+    lang,
+    TRANSLATION_NAMESPACE,
+    mergeCatalogModules(modulesByIndex)
+  )
 }
 
 const langFromLocale = (locale: string): Lang | "" => {
@@ -43,7 +57,8 @@ export function resolveFront(server: string | undefined, nav: string): Lang {
   return langFromLocale(nav) || FALLBACK_LANG
 }
 
-const browserLanguage = () => (typeof navigator === "undefined" ? "" : navigator.language)
+const browserLanguage = () =>
+  typeof navigator === "undefined" ? "" : navigator.language
 
 void i18next.use(initReactI18next).init({
   resources: { fr: { translation: frenchTranslations } },

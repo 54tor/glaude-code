@@ -6,7 +6,14 @@ import { api, type MemFile } from "@/lib/api"
 import { errMsg } from "@/lib/apiError"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Choose } from "./Choose"
 import { SnippetMenu } from "./SnippetMenu"
 import { spliceAtCaret } from "@/lib/utils"
@@ -15,7 +22,10 @@ const MAX_INSTRUCTION_LENGTH = 8000
 const COST_DECIMALS = 4
 
 // Ce qu'on fait rédiger : réécrire un fichier existant, ou créer une entrée (dossier de transcripts, ou "global" pour rules/).
-export type WriteTarget = ({ kind: "rewrite"; key: string; name: string } | { kind: "new"; scope: string; label: string }) & {
+export type WriteTarget = (
+  | { kind: "rewrite"; key: string; name: string }
+  | { kind: "new"; scope: string; label: string }
+) & {
   instruction?: string // consigne proposée (ex. conversion en CLAUDE.md)
   refs?: string[] // références proposées à la place de la sélection
 }
@@ -36,7 +46,13 @@ export function MemoryWriter({
     <Dialog open={!!target} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <DialogContent className="sm:max-w-2xl">
         {target && (
-          <Form key={target.kind === "rewrite" ? target.key : target.scope} target={target} refs={refs} onClose={onClose} onDraft={onDraft} />
+          <Form
+            key={target.kind === "rewrite" ? target.key : target.scope}
+            target={target}
+            refs={refs}
+            onClose={onClose}
+            onDraft={onDraft}
+          />
         )}
       </DialogContent>
     </Dialog>
@@ -63,11 +79,20 @@ function Form({
   ] as const
   const [instruction, setInstruction] = useState(target.instruction ?? "")
   const [model, setModel] = useState("haiku")
-  const [on, setOn] = useState(() => new Set(target.refs ?? refs.map((reference) => reference.key)))
+  const [on, setOn] = useState(
+    () => new Set(target.refs ?? refs.map((reference) => reference.key))
+  )
   const [busy, setBusy] = useState(false)
   const area = useRef<HTMLTextAreaElement>(null)
   const insertSnippet = (text: string) => {
-    setInstruction((currentInstruction) => spliceAtCaret(area.current, currentInstruction, text, MAX_INSTRUCTION_LENGTH))
+    setInstruction((currentInstruction) =>
+      spliceAtCaret(
+        area.current,
+        currentInstruction,
+        text,
+        MAX_INSTRUCTION_LENGTH
+      )
+    )
     requestAnimationFrame(() => area.current?.focus())
   }
   const toggleRef = (refKey: string) =>
@@ -83,7 +108,12 @@ function Form({
     setBusy(true)
     let draft
     try {
-      draft = await api.memoryDraft({ model, instruction, key: target.kind === "rewrite" ? target.key : "", refs: [...on] })
+      draft = await api.memoryDraft({
+        model,
+        instruction,
+        key: target.kind === "rewrite" ? target.key : "",
+        refs: [...on],
+      })
     } catch (draftError) {
       setBusy(false)
       toast.error(errMsg(draftError))
@@ -94,8 +124,12 @@ function Form({
       toast.error(draft.message)
       return
     }
-    const costDescription = draft.cost ? t("memory.writer.cost", { cost: draft.cost.toFixed(COST_DECIMALS) }) : undefined
-    toast.success(t("memory.writer.draftReady"), { description: costDescription })
+    const costDescription = draft.cost
+      ? t("memory.writer.cost", { cost: draft.cost.toFixed(COST_DECIMALS) })
+      : undefined
+    toast.success(t("memory.writer.draftReady"), {
+      description: costDescription,
+    })
     onClose()
     onDraft(target, draft.text)
   }
@@ -103,7 +137,11 @@ function Form({
   return (
     <div className="grid min-w-0 gap-4">
       <DialogHeader>
-        <DialogTitle>{target.kind === "rewrite" ? t("memory.writer.rewrite", { name: target.name }) : t("memory.writer.newEntry", { label: target.label })}</DialogTitle>
+        <DialogTitle>
+          {target.kind === "rewrite"
+            ? t("memory.writer.rewrite", { name: target.name })
+            : t("memory.writer.newEntry", { label: target.label })}
+        </DialogTitle>
         <DialogDescription>{t("memory.writer.description")}</DialogDescription>
       </DialogHeader>
       <textarea
@@ -111,12 +149,17 @@ function Form({
         value={instruction}
         onChange={(event) => setInstruction(event.target.value)}
         onKeyDown={(event) => {
-          const isSubmitShortcut = (event.ctrlKey || event.metaKey) && event.key === "Enter"
+          const isSubmitShortcut =
+            (event.ctrlKey || event.metaKey) && event.key === "Enter"
           if (!isSubmitShortcut) return
           event.preventDefault()
           run()
         }}
-        placeholder={target.kind === "rewrite" ? t("memory.writer.placeholderRewrite") : t("memory.writer.placeholderNew")}
+        placeholder={
+          target.kind === "rewrite"
+            ? t("memory.writer.placeholderRewrite")
+            : t("memory.writer.placeholderNew")
+        }
         autoFocus
         rows={4}
         maxLength={MAX_INSTRUCTION_LENGTH}
@@ -129,12 +172,17 @@ function Form({
       </div>
       {refs.length > 0 && (
         <div className="space-y-1.5">
-          <p className="text-xs font-medium text-muted-foreground">{t("memory.writer.refs")}</p>
+          <p className="text-xs font-medium text-muted-foreground">
+            {t("memory.writer.refs")}
+          </p>
           <ul className="max-h-40 space-y-1 overflow-y-auto">
             {refs.map((reference) => (
               <li key={reference.key}>
                 <label className="flex cursor-pointer items-center gap-2 text-sm">
-                  <Checkbox checked={on.has(reference.key)} onCheckedChange={() => toggleRef(reference.key)} />
+                  <Checkbox
+                    checked={on.has(reference.key)}
+                    onCheckedChange={() => toggleRef(reference.key)}
+                  />
                   <span className="truncate" title={reference.path}>
                     {reference.name}
                   </span>
@@ -145,13 +193,24 @@ function Form({
         </div>
       )}
       <DialogFooter className="flex-wrap items-center gap-2 sm:justify-between">
-        <Choose value={model} onChange={setModel} options={models} label={t("memory.writer.modelAria")} size="default" />
+        <Choose
+          value={model}
+          onChange={setModel}
+          options={models}
+          label={t("memory.writer.modelAria")}
+          size="default"
+        />
         <div className="flex gap-2">
           <Button variant="outline" onClick={onClose} disabled={busy}>
             {t("memory.writer.cancel")}
           </Button>
-          <Button onClick={run} disabled={!instruction.trim() || busy} title={t("memory.writer.shortcut")}>
-            {busy ? <Fan className="animate-spin" /> : <Sparkles />} {t("memory.writer.write")}
+          <Button
+            onClick={run}
+            disabled={!instruction.trim() || busy}
+            title={t("memory.writer.shortcut")}
+          >
+            {busy ? <Fan className="animate-spin" /> : <Sparkles />}{" "}
+            {t("memory.writer.write")}
           </Button>
         </div>
       </DialogFooter>

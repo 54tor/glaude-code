@@ -1,9 +1,19 @@
-import { Menu, MessageSquarePlus, MoreHorizontal, TriangleAlert, RefreshCcwDot } from "lucide-react"
+import {
+  Menu,
+  MessageSquarePlus,
+  MoreHorizontal,
+  TriangleAlert,
+  RefreshCcwDot,
+} from "lucide-react"
 import { useTranslation } from "react-i18next"
 import type { Group, Item, VGroup } from "@/lib/api"
 import type { Route } from "@/lib/route"
 import { Button } from "@/components/ui/button"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import type { Actions, GroupActions } from "./actions"
 import { AccountButton } from "./AccountDialog"
 import { UserMenu } from "./auth/Profile"
@@ -11,7 +21,14 @@ import { useCan } from "@/lib/auth"
 import { DD, GroupItems } from "./SessionMenu"
 import { cn } from "@/lib/utils"
 
-const SEARCHABLE_ROUTE_KINDS: Route["kind"][] = ["recent", "all", "active", "project", "group", "dir"]
+const SEARCHABLE_ROUTE_KINDS: Route["kind"][] = [
+  "recent",
+  "all",
+  "active",
+  "project",
+  "group",
+  "dir",
+]
 
 // En-tête de la page : titre, sous-titre, actions du dossier ou du groupe affiché, et avertissement d'un dossier disparu.
 export function PageHeader({
@@ -51,16 +68,28 @@ export function PageHeader({
   // Même axe que le contenu de la vue : le titre ne reste pas collé à gauche quand la liste est centrée sur grand écran.
   const isSearchableRoute = SEARCHABLE_ROUTE_KINDS.includes(route.kind)
   const canActInFolder = group && !group.missing && exec
-  const box = cn("flex flex-wrap items-center gap-x-3 px-3 md:px-6", !split && "mx-auto w-full max-w-page")
+  const box = cn(
+    "flex flex-wrap items-center gap-x-3 px-3 md:px-6",
+    !split && "mx-auto w-full max-w-page"
+  )
   return (
     <>
       <header className="border-b bg-background">
         <div className={cn(box, "gap-y-2 pt-[13px] pb-3 md:py-4")}>
-          <Button variant="ghost" size="icon-sm" className="md:hidden" onClick={onMenu} aria-label={t("shell.header.openMenu")} data-menu-trigger>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="md:hidden"
+            onClick={onMenu}
+            aria-label={t("shell.header.openMenu")}
+            data-menu-trigger
+          >
             <Menu />
           </Button>
           <div className="min-w-0 flex-1">
-            <h1 className="truncate text-xl font-semibold tracking-tight">{title}</h1>
+            <h1 className="truncate text-xl font-semibold tracking-tight">
+              {title}
+            </h1>
             <p className="truncate text-sm text-muted-foreground">
               {sub}
               {qt && isSearchableRoute && t("shell.header.search", { q: qt })}
@@ -73,21 +102,39 @@ export function PageHeader({
           </div>
           {searchBox}
           {canActInFolder && (
-            <Button size="sm" onClick={() => actions.newSession(group.project)} title={t("shell.header.newInDirHint")}>
+            <Button
+              size="sm"
+              onClick={() => actions.newSession(group.project)}
+              title={t("shell.header.newInDirHint")}
+            >
               <MessageSquarePlus /> {t("shell.header.newSession")}
             </Button>
           )}
           {canActInFolder && (
-            <Button variant="outline" size="sm" onClick={() => actions.open({ dir: firstDir! })} title={t("shell.header.resumeRecentHint")}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => actions.open({ dir: firstDir! })}
+              title={t("shell.header.resumeRecentHint")}
+            >
               <RefreshCcwDot /> {t("shell.tree.resumeRecent")}
             </Button>
           )}
           {viewGroup && rowCount > 0 && exec && (
             <>
-              <Button size="sm" onClick={() => groupActs.prompt(viewGroup)} title={t("shell.header.newWithRefsHint")}>
+              <Button
+                size="sm"
+                onClick={() => groupActs.prompt(viewGroup)}
+                title={t("shell.header.newWithRefsHint")}
+              >
                 <MessageSquarePlus /> {t("shell.header.newSession")}
               </Button>
-              <Button variant="outline" size="sm" onClick={() => groupActs.open(viewGroup)} title={t("shell.header.resumeAllHint")}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => groupActs.open(viewGroup)}
+                title={t("shell.header.resumeAllHint")}
+              >
                 <RefreshCcwDot /> {t("shell.header.resumeAll")}
               </Button>
             </>
@@ -95,7 +142,11 @@ export function PageHeader({
           {viewGroup && exec && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon-sm" aria-label={t("shell.header.groupActions")}>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={t("shell.header.groupActions")}
+                >
                   <MoreHorizontal />
                 </Button>
               </DropdownMenuTrigger>
@@ -112,7 +163,11 @@ export function PageHeader({
           <div className={cn(box, "gap-3 py-3")}>
             <TriangleAlert className="size-4 shrink-0 text-warning" />
             <p className="flex-1">{t("shell.header.missing")}</p>
-            <Button size="sm" variant="outline" onClick={() => actions.moveGroup(group, own)}>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => actions.moveGroup(group, own)}
+            >
               {t("shell.header.reassignShort")}
             </Button>
           </div>

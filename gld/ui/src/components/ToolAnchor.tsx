@@ -8,7 +8,15 @@ import { Message } from "./Message"
 export type ToolGroup = { count: number; from: number; until: number }
 
 // Outils masqués : les appels consécutifs d'une réponse tiennent sur une ligne repliée ; un clic relit et déplie ces messages.
-export function ToolAnchor({ dir, id, g: toolGroup }: { dir: string; id: string; g: ToolGroup }) {
+export function ToolAnchor({
+  dir,
+  id,
+  g: toolGroup,
+}: {
+  dir: string
+  id: string
+  g: ToolGroup
+}) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [got, setGot] = useState<{ key: string; msgs: Msg[] } | null>(null)
@@ -16,7 +24,10 @@ export function ToolAnchor({ dir, id, g: toolGroup }: { dir: string; id: string;
   useEffect(() => {
     if (!open) return
     let isMounted = true
-    api.convTools({ dir, id }, toolGroup.from, toolGroup.until).then((toolsResponse) => isMounted && setGot({ key, msgs: toolsResponse.msgs }), () => {})
+    api.convTools({ dir, id }, toolGroup.from, toolGroup.until).then(
+      (toolsResponse) => isMounted && setGot({ key, msgs: toolsResponse.msgs }),
+      () => {}
+    )
     return () => {
       isMounted = false
     }
@@ -32,11 +43,27 @@ export function ToolAnchor({ dir, id, g: toolGroup }: { dir: string; id: string;
       >
         <Wrench className="size-3.5 shrink-0" aria-hidden />
         {t("conversation.view.toolAnchor", { count: toolGroup.count })}
-        <ChevronRight className={cn("size-3.5 shrink-0 transition-transform", open && "rotate-90")} aria-hidden />
+        <ChevronRight
+          className={cn(
+            "size-3.5 shrink-0 transition-transform",
+            open && "rotate-90"
+          )}
+          aria-hidden
+        />
       </button>
       {open && (
         <div className="mt-1 space-y-1">
-          {msgs === null ? <p className="pl-3 text-xs text-muted-foreground">…</p> : msgs.map((message, messageIndex) => <Message key={`${message.o}.${message.n ?? 0}.${messageIndex}`} m={message} conv={{ dir, id }} />)}
+          {msgs === null ? (
+            <p className="pl-3 text-xs text-muted-foreground">…</p>
+          ) : (
+            msgs.map((message, messageIndex) => (
+              <Message
+                key={`${message.o}.${message.n ?? 0}.${messageIndex}`}
+                m={message}
+                conv={{ dir, id }}
+              />
+            ))
+          )}
         </div>
       )}
     </div>
@@ -45,7 +72,8 @@ export function ToolAnchor({ dir, id, g: toolGroup }: { dir: string; id: string;
 
 // Regroupe les ancres vides consécutives (appels d'outils masqués) ; until : décalage du message suivant, 0 en fin de conversation.
 export function groupTools(msgs: Msg[]): (Msg | ToolGroup)[] {
-  const isHiddenToolCall = (message: Msg | undefined) => message !== undefined && message.r === "tool" && message.t === ""
+  const isHiddenToolCall = (message: Msg | undefined) =>
+    message !== undefined && message.r === "tool" && message.t === ""
   const groupedMessages: (Msg | ToolGroup)[] = []
   for (let messageIndex = 0; messageIndex < msgs.length; messageIndex++) {
     const message = msgs[messageIndex]
@@ -55,7 +83,11 @@ export function groupTools(msgs: Msg[]): (Msg | ToolGroup)[] {
     }
     let lastHiddenIndex = messageIndex
     while (isHiddenToolCall(msgs[lastHiddenIndex + 1])) lastHiddenIndex++
-    groupedMessages.push({ count: lastHiddenIndex - messageIndex + 1, from: message.o ?? 0, until: msgs[lastHiddenIndex + 1]?.o ?? 0 })
+    groupedMessages.push({
+      count: lastHiddenIndex - messageIndex + 1,
+      from: message.o ?? 0,
+      until: msgs[lastHiddenIndex + 1]?.o ?? 0,
+    })
     messageIndex = lastHiddenIndex
   }
   return groupedMessages

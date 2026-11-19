@@ -1,5 +1,12 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { setLang } from "@/i18n"
 import { api } from "@/lib/api"
@@ -7,7 +14,11 @@ import FullTerminal from "./FullTerminal"
 
 const x = vi.hoisted(() => ({ focus: vi.fn() }))
 vi.mock("@xterm/xterm/css/xterm.css", () => ({}))
-vi.mock("@xterm/addon-fit", () => ({ FitAddon: class { fit() {} } }))
+vi.mock("@xterm/addon-fit", () => ({
+  FitAddon: class {
+    fit() {}
+  },
+}))
 vi.mock("@xterm/xterm", () => ({
   Terminal: class {
     cols = 80
@@ -42,8 +53,18 @@ beforeEach(() => {
   setLang("fr")
   x.focus.mockReset()
   vi.stubGlobal("WebSocket", FakeWS)
-  vi.stubGlobal("ResizeObserver", class { observe() {} disconnect() {} })
-  vi.spyOn(api, "termOpen").mockResolvedValue({ token: "tk", cols: 80, rows: 24 })
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe() {}
+      disconnect() {}
+    }
+  )
+  vi.spyOn(api, "termOpen").mockResolvedValue({
+    token: "tk",
+    cols: 80,
+    rows: 24,
+  })
 })
 afterEach(() => (cleanup(), vi.unstubAllGlobals(), vi.restoreAllMocks()))
 
@@ -69,7 +90,9 @@ describe("FullTerminal", () => {
     const ws = await opened()
     expect(ws.sent).toEqual([])
     expect(x.focus).not.toHaveBeenCalled()
-    fireEvent.click(await screen.findByRole("button", { name: /Lecture seule/ }))
+    fireEvent.click(
+      await screen.findByRole("button", { name: /Lecture seule/ })
+    )
     expect(ws.sent).toContain(JSON.stringify({ write: true }))
     expect(ws.sent.some((text) => text.includes("resize"))).toBe(true)
     expect(x.focus).toHaveBeenCalled()

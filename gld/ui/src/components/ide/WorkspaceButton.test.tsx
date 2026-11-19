@@ -15,7 +15,11 @@ describe("WorkspaceButton", () => {
   it("visible en mode ouvert et avec fs_read, avec le lien vers l'espace", () => {
     setAuth({ state: "open" })
     render(<WorkspaceButton dir="/home/moi/p" />)
-    expect(screen.getByRole("link", { name: /Espace de travail/ }).getAttribute("href")).toBe("/espace/%2Fhome%2Fmoi%2Fp")
+    expect(
+      screen
+        .getByRole("link", { name: /Espace de travail/ })
+        .getAttribute("href")
+    ).toBe("/espace/%2Fhome%2Fmoi%2Fp")
     cleanup()
     setAuth({ state: "ok", home: "h", rights: { h: ["fs_read"] } })
     render(<WorkspaceButton dir="/p" />)

@@ -7,7 +7,12 @@ export type GitMarks = {
   more: number
   prefix: string
 }
-const emptyMarks = (): GitMarks => ({ marks: new Map(), dirs: new Set(), more: 0, prefix: "" })
+const emptyMarks = (): GitMarks => ({
+  marks: new Map(),
+  dirs: new Set(),
+  more: 0,
+  prefix: "",
+})
 
 // « XY » de git status --short → une lettre : conflit U, non suivi ?, sinon l'état de l'index puis celui de l'arbre.
 const letter = (status: string) => {
@@ -30,7 +35,11 @@ export function toMarks(all: GitChange[], more = 0, prefix = ""): GitMarks {
   result.prefix = prefix
   for (const file of files) {
     result.marks.set(file.path, letter(file.status))
-    for (let slashIndex = file.path.indexOf("/"); slashIndex > 0; slashIndex = file.path.indexOf("/", slashIndex + 1))
+    for (
+      let slashIndex = file.path.indexOf("/");
+      slashIndex > 0;
+      slashIndex = file.path.indexOf("/", slashIndex + 1)
+    )
       result.dirs.add(file.path.slice(0, slashIndex))
   }
   return result
@@ -44,7 +53,15 @@ export function useGitMarks(dir: string) {
     const requestNumber = ++latestRequest.current
     const isLatest = () => requestNumber === latestRequest.current
     api.gitChanges(dir).then(
-      (response) => isLatest() && setGitMarks(toMarks(response.files ?? [], response.more ?? 0, response.prefix ?? "")),
+      (response) =>
+        isLatest() &&
+        setGitMarks(
+          toMarks(
+            response.files ?? [],
+            response.more ?? 0,
+            response.prefix ?? ""
+          )
+        ),
       () => isLatest() && setGitMarks(emptyMarks())
     )
   }, [dir])

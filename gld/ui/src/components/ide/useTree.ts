@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { api, type FsEntry } from "@/lib/api"
 import { useLocal } from "@/hooks/useLocal"
 
-export type Listing = { entries: FsEntry[]; truncated: boolean } | "loading" | "failed"
+export type Listing =
+  { entries: FsEntry[]; truncated: boolean } | "loading" | "failed"
 
 const parseOpen = (serialized: string): string[] => {
   try {
@@ -27,9 +28,11 @@ export function useTree(dir: string) {
       const requestNumber = (latestRequestByPath.current.get(path) ?? 0) + 1
       latestRequestByPath.current.set(path, requestNumber)
       const storeListing = (listing: Listing) =>
-        latestRequestByPath.current.get(path) === requestNumber && setLists((previous) => ({ ...previous, [path]: listing }))
+        latestRequestByPath.current.get(path) === requestNumber &&
+        setLists((previous) => ({ ...previous, [path]: listing }))
       setLists((previous) => {
-        const alreadyLoaded = previous[path] && typeof previous[path] === "object"
+        const alreadyLoaded =
+          previous[path] && typeof previous[path] === "object"
         return alreadyLoaded ? previous : { ...previous, [path]: "loading" }
       })
       api.fsTree(dir, path).then(storeListing, () => storeListing("failed"))

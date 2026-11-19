@@ -9,7 +9,10 @@ const RULE_KINDS = ["allow", "ask", "deny"] as const
 const SHARED_LAYER = "p"
 const PERSONAL_LAYER = "l"
 
-type Props = { projectDir: string; onAddRule: (file: string, kind: string, rule: string) => void }
+type Props = {
+  projectDir: string
+  onAddRule: (file: string, kind: string, rule: string) => void
+}
 
 export function ProjectAddRule({ projectDir, onAddRule }: Props) {
   const { t } = useTranslation()
@@ -32,8 +35,22 @@ export function ProjectAddRule({ projectDir, onAddRule }: Props) {
         submitRule()
       }}
     >
-      <Input value={ruleText} onChange={(changeEvent) => setRuleText(changeEvent.target.value)} placeholder={t("config.projects.addRule.placeholder")} aria-label={t("config.projects.addRule.aria")} className="h-8 w-64" />
-      <Choose value={ruleKind} onChange={setRuleKind} options={RULE_KINDS.map((kind) => [kind, t(`config.perms.kind.${kind}`)] as const)} label={t("config.projects.addRule.kindAria")} size="sm" />
+      <Input
+        value={ruleText}
+        onChange={(changeEvent) => setRuleText(changeEvent.target.value)}
+        placeholder={t("config.projects.addRule.placeholder")}
+        aria-label={t("config.projects.addRule.aria")}
+        className="h-8 w-64"
+      />
+      <Choose
+        value={ruleKind}
+        onChange={setRuleKind}
+        options={RULE_KINDS.map(
+          (kind) => [kind, t(`config.perms.kind.${kind}`)] as const
+        )}
+        label={t("config.projects.addRule.kindAria")}
+        size="sm"
+      />
       <Choose
         value={layer}
         onChange={setLayer}
@@ -44,7 +61,12 @@ export function ProjectAddRule({ projectDir, onAddRule }: Props) {
         label={t("config.projects.addRule.layerAria")}
         size="sm"
       />
-      <Button type="submit" size="xs" variant="secondary" disabled={!trimmedRule}>
+      <Button
+        type="submit"
+        size="xs"
+        variant="secondary"
+        disabled={!trimmedRule}
+      >
         <Plus /> {t("config.projects.addRule.submit")}
       </Button>
     </form>

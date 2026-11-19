@@ -72,7 +72,9 @@ describe("TeamPicker", () => {
     await click(screen.getByRole("checkbox", { name: /Correctif de bug/ }))
     await screen.findByText("2 teams · 2 coéquipiers")
     expect(screen.getAllByText("Testeur", { selector: "b" })).toHaveLength(1)
-    expect(screen.getAllByText("Chef de projet", { selector: "b" })).toHaveLength(1)
+    expect(
+      screen.getAllByText("Chef de projet", { selector: "b" })
+    ).toHaveLength(1)
   })
   it("masque la description qui répète le libellé, garde les autres", async () => {
     mockCompose()
@@ -169,7 +171,9 @@ describe("TeamPicker", () => {
       />
     )
     await screen.findByText("0 team · 0 coéquipier")
-    expect(screen.queryByText("Développement backend", { selector: "b" })).toBeNull()
+    expect(
+      screen.queryByText("Développement backend", { selector: "b" })
+    ).toBeNull()
     expect(
       (screen.getByRole("button", { name: "Lancer" }) as HTMLButtonElement)
         .disabled

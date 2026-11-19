@@ -8,9 +8,21 @@ import { useEditorDraft, useLeaveGuard } from "@/hooks/useEditorDraft"
 
 // Le fichier de réglages en JSON brut : tout est modifiable (hooks, MCP du projet…), avec validation de la syntaxe, aperçu des
 // différences et sauvegarde. Les secrets sont affichés masqués ; laissés tels quels, ils sont conservés à l'enregistrement.
-export function RawTab({ file, version, proposeRaw }: { file: string; version: number; proposeRaw: (file: string, text: string) => Promise<string | null> }) {
+export function RawTab({
+  file,
+  version,
+  proposeRaw,
+}: {
+  file: string
+  version: number
+  proposeRaw: (file: string, text: string) => Promise<string | null>
+}) {
   const { t } = useTranslation()
-  const [loaded, setLoaded] = useState<{ key: string; text: string; err?: string } | null>(null)
+  const [loaded, setLoaded] = useState<{
+    key: string
+    text: string
+    err?: string
+  } | null>(null)
   const [draft, setDraft] = useEditorDraft("config-json")
   const [error, setError] = useState("")
   const key = `${file}#${version}`
@@ -18,7 +30,7 @@ export function RawTab({ file, version, proposeRaw }: { file: string; version: n
     let isMounted = true
     api.configRaw(file).then(
       (response) => isMounted && setLoaded({ key, text: response.text }),
-      (error) => isMounted && setLoaded({ key, text: "", err: errMsg(error) }),
+      (error) => isMounted && setLoaded({ key, text: "", err: errMsg(error) })
     )
     return () => {
       isMounted = false
@@ -40,7 +52,8 @@ export function RawTab({ file, version, proposeRaw }: { file: string; version: n
           setError("")
         }}
         onKeyDown={(keyEvent) => {
-          const isSaveShortcut = (keyEvent.ctrlKey || keyEvent.metaKey) && keyEvent.key === "s"
+          const isSaveShortcut =
+            (keyEvent.ctrlKey || keyEvent.metaKey) && keyEvent.key === "s"
           if (!isSaveShortcut) return
           keyEvent.preventDefault()
           if (dirty) void save()
@@ -60,13 +73,20 @@ export function RawTab({ file, version, proposeRaw }: { file: string; version: n
         <Button size="sm" onClick={save} disabled={!dirty}>
           {t("config.raw.preview")}
         </Button>
-        <Button size="sm" variant="ghost" onClick={() => {
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => {
             setDraft(null)
             setError("")
-          }} disabled={!dirty}>
+          }}
+          disabled={!dirty}
+        >
           {t("config.raw.discard")}
         </Button>
-        <span className="text-xs text-muted-foreground">{t("config.raw.hint")}</span>
+        <span className="text-xs text-muted-foreground">
+          {t("config.raw.hint")}
+        </span>
       </div>
     </div>
   )

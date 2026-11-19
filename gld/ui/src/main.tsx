@@ -14,7 +14,8 @@ import { EDGE } from "@/lib/swipe"
 import { MD } from "@/components/Sidebar"
 
 const KEYBOARD_OPEN_SCREEN_RATIO = 0.6
-const TOUCH_CONTROLS_SELECTOR = "button,a,input,textarea,select,label,[role=button]"
+const TOUCH_CONTROLS_SELECTOR =
+  "button,a,input,textarea,select,label,[role=button]"
 
 // PWA iPhone : dvh y reste parfois plus court que l'écran (bande morte en bas) ; --app-h prend alors la hauteur de l'écran.
 // Hauteur réellement visible (clavier virtuel ouvert ou non) : les fenêtres plein écran s'y calent, et on replie l'en-tête quand
@@ -25,12 +26,21 @@ if (visualViewport) {
     const rootElement = document.documentElement
     rootElement.style.setProperty("--vvh", `${visualViewport.height}px`)
     rootElement.style.setProperty("--vvt", `${visualViewport.offsetTop}px`)
-    const isKeyboardCoveringScreen = visualViewport.height < window.screen.height * KEYBOARD_OPEN_SCREEN_RATIO
-    const isInstalledPortrait = window.matchMedia("(display-mode: standalone) and (orientation: portrait)").matches
-    const appHeight = isInstalledPortrait && !isKeyboardCoveringScreen ? Math.max(visualViewport.height, window.screen.height) : visualViewport.height
+    const isKeyboardCoveringScreen =
+      visualViewport.height < window.screen.height * KEYBOARD_OPEN_SCREEN_RATIO
+    const isInstalledPortrait = window.matchMedia(
+      "(display-mode: standalone) and (orientation: portrait)"
+    ).matches
+    const appHeight =
+      isInstalledPortrait && !isKeyboardCoveringScreen
+        ? Math.max(visualViewport.height, window.screen.height)
+        : visualViewport.height
     rootElement.style.setProperty("--app-h", `${appHeight}px`)
     const isMobileWidth = !window.matchMedia(MD).matches
-    rootElement.toggleAttribute("data-kb", isKeyboardCoveringScreen && isMobileWidth)
+    rootElement.toggleAttribute(
+      "data-kb",
+      isKeyboardCoveringScreen && isMobileWidth
+    )
   }
   visualViewport.addEventListener("resize", fitToVisualViewport)
   visualViewport.addEventListener("scroll", fitToVisualViewport)
@@ -46,7 +56,9 @@ document.addEventListener(
     if (!isSingleTouch) return
     const isInLeftEdge = touchEvent.touches[0].clientX <= EDGE
     if (!isInLeftEdge) return
-    const isOnControl = (touchEvent.target as Element).closest?.(TOUCH_CONTROLS_SELECTOR)
+    const isOnControl = (touchEvent.target as Element).closest?.(
+      TOUCH_CONTROLS_SELECTOR
+    )
     if (isOnControl) return
     touchEvent.preventDefault()
   },
@@ -56,15 +68,20 @@ document.addEventListener(
 // PWA iPhone : sans entrée d'historique avant la page courante, WebKit n'a aucune page précédente à faire glisser au balayage du bord.
 // La navigation de l'application remplace donc l'entrée au lieu d'en empiler une.
 const isStandalonePwa = window.matchMedia("(display-mode: standalone)").matches
-const isAppleTouchDevice = /iPhone|iPad/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1)
+const isAppleTouchDevice =
+  /iPhone|iPad/.test(navigator.userAgent) ||
+  (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1)
 if (isStandalonePwa && isAppleTouchDevice) {
-  history.pushState = (...pushStateArguments) => history.replaceState(...pushStateArguments)
+  history.pushState = (...pushStateArguments) =>
+    history.replaceState(...pushStateArguments)
 }
 
 // Service worker : cache des ressources statiques et clic sur les notifications (contexte sécurisé : HTTPS ou localhost).
-if (import.meta.env.PROD && "serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {})
+if (import.meta.env.PROD && "serviceWorker" in navigator)
+  navigator.serviceWorker.register("/sw.js").catch(() => {})
 
-const isGuestPath = location.pathname === "/guest" || location.pathname.startsWith("/guest/")
+const isGuestPath =
+  location.pathname === "/guest" || location.pathname.startsWith("/guest/")
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
@@ -73,7 +90,11 @@ createRoot(document.getElementById("root")!).render(
         {isGuestPath ? <GuestApp /> : <App />}
         <TrustDialog />
         <StaleBuildSplash />
-        <Toaster position="bottom-right" mobileOffset={{ bottom: "calc(16px + env(safe-area-inset-bottom))" }} richColors />
+        <Toaster
+          position="bottom-right"
+          mobileOffset={{ bottom: "calc(16px + env(safe-area-inset-bottom))" }}
+          richColors
+        />
       </TooltipProvider>
     </ThemeProvider>
   </StrictMode>

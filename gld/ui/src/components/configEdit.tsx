@@ -5,35 +5,85 @@ import { i18n } from "@/i18n"
 import { api, type CfgEdit, type CfgIssue, type CfgReply } from "@/lib/api"
 import { errMsg } from "@/lib/apiError"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { DiffView, lineDiff } from "./MemoryDiff"
 
 // Après une écriture : ce que les sessions ouvertes en voient. Claude Code surveille ses fichiers de réglages et les recharge
 // seul (permissions, hooks, variables d'environnement…) : rien à pousser. Quelques clés ne sont lues qu'au démarrage d'une
 // session ou passent par une commande : on dit lesquelles, d'après les lignes qui ont changé.
-export function liveNotice(before: string, after: string, sessions: number): string {
+export function liveNotice(
+  before: string,
+  after: string,
+  sessions: number
+): string {
   const changed = lineDiff(before, after)
     .filter((diffLine) => diffLine.op !== " ")
     .map((diffLine) => diffLine.t)
     .join("\n")
   const manualSteps: string[] = []
   if (/"model"\s*:/.test(changed)) manualSteps.push(i18n.t("config.edit.model"))
-  if (/"(effortLevel|modelSettings)"\s*:/.test(changed)) manualSteps.push(i18n.t("config.edit.effort"))
-  if (/"enabledPlugins"|"pluginConfigs"|"[\w.-]+@[\w.-]+"\s*:/.test(changed)) manualSteps.push(i18n.t("config.edit.plugins"))
-  const live = sessions ? i18n.t("config.edit.live", { count: sessions }) : i18n.t("config.edit.liveNone")
+  if (/"(effortLevel|modelSettings)"\s*:/.test(changed))
+    manualSteps.push(i18n.t("config.edit.effort"))
+  if (/"enabledPlugins"|"pluginConfigs"|"[\w.-]+@[\w.-]+"\s*:/.test(changed))
+    manualSteps.push(i18n.t("config.edit.plugins"))
+  const live = sessions
+    ? i18n.t("config.edit.live", { count: sessions })
+    : i18n.t("config.edit.liveNone")
   if (!manualSteps.length) return live
-  return i18n.t("config.edit.manual", { live, todo: manualSteps.join(i18n.t("config.edit.sep")) })
+  return i18n.t("config.edit.manual", {
+    live,
+    todo: manualSteps.join(i18n.t("config.edit.sep")),
+  })
 }
 
 const SIMPLE_EDIT_TOAST_DURATION_MS = 6000
 const CONFIRMED_EDIT_TOAST_DURATION_MS = 9000
 
-type Preview = { then?: () => void; edit?: CfgEdit; raw?: { file: string; text: string }; perm?: { file: string; text: string; mode: string }; summary?: string; before: string; after: string; warnings: CfgIssue[] }
+type Preview = {
+  then?: () => void
+  edit?: CfgEdit
+  raw?: { file: string; text: string }
+  perm?: { file: string; text: string; mode: string }
+  summary?: string
+  before: string
+  after: string
+  warnings: CfgIssue[]
+}
 
 // Toute modification d'un fichier de réglages passe par ici : aperçu des différences, confirmation, puis écriture
 // (le serveur fait une sauvegarde avant). Renvoie propose() et le dialogue à afficher.
-export function useConfigEdit(onDone: () => void | Promise<unknown>, sessions = 0): { gone: (file: string, kind: string, rule: string) => boolean; added: (file: string, kind: string) => string[]; moveRule: (file: string, from: string, rule: string, to: string, text: string) => Promise<void>; propose: (cfgEdit: CfgEdit) => Promise<void>; proposeRaw: (file: string, text: string) => Promise<string | null>; proposePerms: (file: string, text: string, mode: string, then?: () => void, now?: boolean) => Promise<string | null>; dialog: ReactNode } {
+export function useConfigEdit(
+  onDone: () => void | Promise<unknown>,
+  sessions = 0
+): {
+  gone: (file: string, kind: string, rule: string) => boolean
+  added: (file: string, kind: string) => string[]
+  moveRule: (
+    file: string,
+    from: string,
+    rule: string,
+    to: string,
+    text: string
+  ) => Promise<void>
+  propose: (cfgEdit: CfgEdit) => Promise<void>
+  proposeRaw: (file: string, text: string) => Promise<string | null>
+  proposePerms: (
+    file: string,
+    text: string,
+    mode: string,
+    then?: () => void,
+    now?: boolean
+  ) => Promise<string | null>
+  dialog: ReactNode
+} {
   const { t } = useTranslation()
   const [preview, setPreview] = useState<Preview | null>(null)
   const [busy, setBusy] = useState(false)
@@ -48,21 +98,33 @@ export function useConfigEdit(onDone: () => void | Promise<unknown>, sessions = 
       else nextHidden.delete(hiddenKey)
       return nextHidden
     })
-  const ruleKey = (file: string, kind: string, rule: string) => JSON.stringify([file, kind, rule])
-  const gone = (file: string, kind: string, rule: string) => hidden.has(ruleKey(file, kind, rule))
+  const ruleKey = (file: string, kind: string, rule: string) =>
+    JSON.stringify([file, kind, rule])
+  const gone = (file: string, kind: string, rule: string) =>
+    hidden.has(ruleKey(file, kind, rule))
   // Règles ajoutées en attente d'écriture : affichées tout de suite.
   const [pending, setPending] = useState<string[]>([])
   const added = (file: string, kind: string) =>
     pending
       .map((pendingKey) => JSON.parse(pendingKey) as string[])
-      .filter(([pendingFile, pendingKind]) => pendingFile === file && pendingKind === kind)
+      .filter(
+        ([pendingFile, pendingKind]) =>
+          pendingFile === file && pendingKind === kind
+      )
       .map(([, , pendingRule]) => pendingRule)
   // Changer une règle de catégorie ou de texte : elle passe d'un coup de l'ancienne place à la nouvelle (ajout puis retrait côté
   // serveur, une seule relecture à la fin : pas de passage par un état où elle serait aux deux endroits).
-  const moveRule = async (file: string, from: string, rule: string, to: string, text: string) => {
+  const moveRule = async (
+    file: string,
+    from: string,
+    rule: string,
+    to: string,
+    text: string
+  ) => {
     const oldRuleKey = ruleKey(file, from, rule)
     const newRuleKey = ruleKey(file, to, text)
-    const withoutNewRule = (pendingKeys: string[]) => pendingKeys.filter((pendingKey) => pendingKey !== newRuleKey)
+    const withoutNewRule = (pendingKeys: string[]) =>
+      pendingKeys.filter((pendingKey) => pendingKey !== newRuleKey)
     hide(oldRuleKey, true)
     setPending((pendingKeys) => [...pendingKeys, newRuleKey])
     hide(newRuleKey, false) // une règle retirée plus tôt puis remise doit s'afficher
@@ -72,15 +134,28 @@ export function useConfigEdit(onDone: () => void | Promise<unknown>, sessions = 
     }
     let addReply: CfgReply
     try {
-      addReply = await api.configEdit({ file, op: "add", path: ["permissions", to], value: text })
+      addReply = await api.configEdit({
+        file,
+        op: "add",
+        path: ["permissions", to],
+        value: text,
+      })
     } catch (error) {
       undo()
       toast.error(errMsg(error))
       return
     }
     try {
-      const removeReply = await api.configEdit({ file, op: "remove", path: ["permissions", from], value: rule })
-      toast.success(t("config.edit.ruleEdited"), { description: liveNotice(addReply.before, removeReply.after, sessions), duration: SIMPLE_EDIT_TOAST_DURATION_MS })
+      const removeReply = await api.configEdit({
+        file,
+        op: "remove",
+        path: ["permissions", from],
+        value: rule,
+      })
+      toast.success(t("config.edit.ruleEdited"), {
+        description: liveNotice(addReply.before, removeReply.after, sessions),
+        duration: SIMPLE_EDIT_TOAST_DURATION_MS,
+      })
     } catch (error) {
       hide(oldRuleKey, false) // l'ancienne règle existe toujours
       toast.error(errMsg(error))
@@ -90,10 +165,15 @@ export function useConfigEdit(onDone: () => void | Promise<unknown>, sessions = 
     setPending(withoutNewRule)
   }
   const propose = async (edit: CfgEdit) => {
-    const isPermissionRule = edit.path[0] === "permissions" && typeof edit.value === "string"
-    const removedRuleKey = edit.op === "remove" && isPermissionRule ? ruleKey(edit.file, edit.path[1], edit.value as string) : ""
+    const isPermissionRule =
+      edit.path[0] === "permissions" && typeof edit.value === "string"
+    const removedRuleKey =
+      edit.op === "remove" && isPermissionRule
+        ? ruleKey(edit.file, edit.path[1], edit.value as string)
+        : ""
     if (removedRuleKey) hide(removedRuleKey, true)
-    if (edit.op === "add" && isPermissionRule) hide(ruleKey(edit.file, edit.path[1], edit.value as string), false)
+    if (edit.op === "add" && isPermissionRule)
+      hide(ruleKey(edit.file, edit.path[1], edit.value as string), false)
     let reply: CfgReply
     try {
       reply = await api.configEdit(edit)
@@ -105,7 +185,10 @@ export function useConfigEdit(onDone: () => void | Promise<unknown>, sessions = 
       if (removedRuleKey) hide(removedRuleKey, false)
       return void toast.info(t("config.shared.noChange"))
     }
-    toast.success(reply.out, { description: liveNotice(reply.before, reply.after, sessions), duration: SIMPLE_EDIT_TOAST_DURATION_MS })
+    toast.success(reply.out, {
+      description: liveNotice(reply.before, reply.after, sessions),
+      duration: SIMPLE_EDIT_TOAST_DURATION_MS,
+    })
     await onDone() // la règle reste masquée : les vues qui se relisent à part la montreraient encore un instant
   }
   // JSON brut : renvoie le message d'erreur (avec ligne et colonne) ou null si l'aperçu s'ouvre.
@@ -120,13 +203,24 @@ export function useConfigEdit(onDone: () => void | Promise<unknown>, sessions = 
       toast.info(t("config.shared.noChange"))
       return null
     }
-    setPreview({ raw: { file, text }, before: dryRunReply.before, after: dryRunReply.after, warnings: dryRunReply.warnings ?? [] })
+    setPreview({
+      raw: { file, text },
+      before: dryRunReply.before,
+      after: dryRunReply.after,
+      warnings: dryRunReply.warnings ?? [],
+    })
     return null
   }
   // Import de règles de permission : renvoie le message d'erreur, ou null si l'aperçu s'ouvre.
   // then : lancé après l'enregistrement réussi (abandonné si on annule), par exemple pour retirer la règle de son fichier d'origine.
   // now : l'aperçu a déjà été vu (éditeur texte) ; on écrit sans second dialogue.
-  const proposePerms = async (file: string, text: string, mode: string, then?: () => void, now?: boolean) => {
+  const proposePerms = async (
+    file: string,
+    text: string,
+    mode: string,
+    then?: () => void,
+    now?: boolean
+  ) => {
     let dryRunReply: CfgReply
     try {
       dryRunReply = await api.configPermImport({ file, text, mode, dry: true })
@@ -140,21 +234,38 @@ export function useConfigEdit(onDone: () => void | Promise<unknown>, sessions = 
     if (now) {
       let writeReply: CfgReply
       try {
-        writeReply = await api.configPermImport({ file, text, mode, dry: false })
+        writeReply = await api.configPermImport({
+          file,
+          text,
+          mode,
+          dry: false,
+        })
       } catch (error) {
         return errMsg(error)
       }
-      toast.success(writeReply.out, { description: liveNotice(writeReply.before, writeReply.after, sessions), duration: CONFIRMED_EDIT_TOAST_DURATION_MS })
+      toast.success(writeReply.out, {
+        description: liveNotice(writeReply.before, writeReply.after, sessions),
+        duration: CONFIRMED_EDIT_TOAST_DURATION_MS,
+      })
       onDone()
       then?.()
       return null
     }
-    setPreview({ then, perm: { file, text, mode }, summary: dryRunReply.out, before: dryRunReply.before, after: dryRunReply.after, warnings: dryRunReply.warnings ?? [] })
+    setPreview({
+      then,
+      perm: { file, text, mode },
+      summary: dryRunReply.out,
+      before: dryRunReply.before,
+      after: dryRunReply.after,
+      warnings: dryRunReply.warnings ?? [],
+    })
     return null
   }
   const writePreview = (previewToWrite: Preview) => {
-    if (previewToWrite.perm) return api.configPermImport({ ...previewToWrite.perm, dry: false })
-    if (previewToWrite.raw) return api.configRawEdit({ ...previewToWrite.raw, dry: false })
+    if (previewToWrite.perm)
+      return api.configPermImport({ ...previewToWrite.perm, dry: false })
+    if (previewToWrite.raw)
+      return api.configRawEdit({ ...previewToWrite.raw, dry: false })
     return api.configEdit(previewToWrite.edit!)
   }
   const apply = async () => {
@@ -162,7 +273,10 @@ export function useConfigEdit(onDone: () => void | Promise<unknown>, sessions = 
     setBusy(true)
     try {
       const reply = await writePreview(preview)
-      toast.success(reply.out, { description: liveNotice(reply.before, reply.after, sessions), duration: CONFIRMED_EDIT_TOAST_DURATION_MS })
+      toast.success(reply.out, {
+        description: liveNotice(reply.before, reply.after, sessions),
+        duration: CONFIRMED_EDIT_TOAST_DURATION_MS,
+      })
       setPreview(null)
       onDone()
       preview.then?.()
@@ -172,15 +286,22 @@ export function useConfigEdit(onDone: () => void | Promise<unknown>, sessions = 
       setBusy(false)
     }
   }
-  const previewFile = preview?.edit?.file ?? preview?.raw?.file ?? preview?.perm?.file
-  const previewFileLabel = previewFile === "u" ? "~/.claude/settings.json" : previewFile
+  const previewFile =
+    preview?.edit?.file ?? preview?.raw?.file ?? preview?.perm?.file
+  const previewFileLabel =
+    previewFile === "u" ? "~/.claude/settings.json" : previewFile
   const dialog = (
-    <Dialog open={!!preview} onOpenChange={(isOpen) => !isOpen && setPreview(null)}>
+    <Dialog
+      open={!!preview}
+      onOpenChange={(isOpen) => !isOpen && setPreview(null)}
+    >
       <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>{t("config.edit.dialogTitle")}</DialogTitle>
           <DialogDescription>
-            {previewFileLabel}{preview?.summary ? ` — ${preview.summary}` : ""} {t("config.edit.backupNote")}
+            {previewFileLabel}
+            {preview?.summary ? ` — ${preview.summary}` : ""}{" "}
+            {t("config.edit.backupNote")}
           </DialogDescription>
         </DialogHeader>
         {!!preview?.warnings.length && (
@@ -190,7 +311,11 @@ export function useConfigEdit(onDone: () => void | Promise<unknown>, sessions = 
             ))}
           </ul>
         )}
-        <ScrollArea className="max-h-96 rounded-md border">{preview && <DiffView old={preview.before} cur={preview.after} compact />}</ScrollArea>
+        <ScrollArea className="max-h-96 rounded-md border">
+          {preview && (
+            <DiffView old={preview.before} cur={preview.after} compact />
+          )}
+        </ScrollArea>
         <DialogFooter>
           <Button variant="ghost" onClick={() => setPreview(null)}>
             {t("common.cancel")}

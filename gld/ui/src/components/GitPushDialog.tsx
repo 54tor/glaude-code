@@ -4,9 +4,20 @@ import { api, type GitRemote, type RemoteUnpushed } from "@/lib/api"
 import { startGitPushes } from "@/hooks/useGitPush"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
-type Props = { dir: string; branch: string; onOpenChange: (isOpen: boolean) => void }
+type Props = {
+  dir: string
+  branch: string
+  onOpenChange: (isOpen: boolean) => void
+}
 
 // Aperçu des commits manquants sur chaque remote, puis poussée vers ceux qui sont cochés (par défaut ceux qui sont en retard).
 // Monté seulement quand il est ouvert : chaque ouverture repart d'un état vierge.
@@ -27,8 +38,16 @@ export function GitPushDialog({ dir, branch, onOpenChange }: Props) {
       (response) => {
         if (!isCurrent) return
         setUnpushed(response.remotes)
-        const behindNames = response.remotes.filter((remote) => remote.total > 0).map((remote) => remote.name)
-        setSelected(new Set(behindNames.length > 0 ? behindNames : response.remotes.map((remote) => remote.name)))
+        const behindNames = response.remotes
+          .filter((remote) => remote.total > 0)
+          .map((remote) => remote.name)
+        setSelected(
+          new Set(
+            behindNames.length > 0
+              ? behindNames
+              : response.remotes.map((remote) => remote.name)
+          )
+        )
       },
       () => isCurrent && setHasPreviewFailed(true)
     )
@@ -37,7 +56,8 @@ export function GitPushDialog({ dir, branch, onOpenChange }: Props) {
     }
   }, [dir])
 
-  const unpushedOf = (name: string) => unpushed?.find((remote) => remote.name === name)
+  const unpushedOf = (name: string) =>
+    unpushed?.find((remote) => remote.name === name)
   const toggle = (name: string, isChecked: boolean) => {
     const next = new Set(selected)
     if (isChecked) next.add(name)
@@ -45,7 +65,9 @@ export function GitPushDialog({ dir, branch, onOpenChange }: Props) {
     setSelected(next)
   }
   const pushSelected = () => {
-    const names = (remotes ?? []).map((remote) => remote.name).filter((name) => selected.has(name))
+    const names = (remotes ?? [])
+      .map((remote) => remote.name)
+      .filter((name) => selected.has(name))
     onOpenChange(false)
     startGitPushes(dir, names, branch)
   }
@@ -54,38 +76,84 @@ export function GitPushDialog({ dir, branch, onOpenChange }: Props) {
     <Dialog open onOpenChange={onOpenChange}>
       <DialogContent className="min-w-0 sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{t("conversation.gitPush.dialogTitle", { branch })}</DialogTitle>
-          <DialogDescription>{t("conversation.gitPush.dialogHint")}</DialogDescription>
+          <DialogTitle>
+            {t("conversation.gitPush.dialogTitle", { branch })}
+          </DialogTitle>
+          <DialogDescription>
+            {t("conversation.gitPush.dialogHint")}
+          </DialogDescription>
         </DialogHeader>
         <div className="flex max-h-[60vh] flex-col gap-3 overflow-y-auto">
-          {remotes === null && <p className="text-sm text-muted-foreground">{t("conversation.gitPush.reading")}</p>}
-          {remotes?.length === 0 && <p className="text-sm text-muted-foreground">{t("conversation.gitPush.none")}</p>}
-          {hasPreviewFailed && <p className="text-sm text-muted-foreground">{t("conversation.gitPush.previewFailed")}</p>}
+          {remotes === null && (
+            <p className="text-sm text-muted-foreground">
+              {t("conversation.gitPush.reading")}
+            </p>
+          )}
+          {remotes?.length === 0 && (
+            <p className="text-sm text-muted-foreground">
+              {t("conversation.gitPush.none")}
+            </p>
+          )}
+          {hasPreviewFailed && (
+            <p className="text-sm text-muted-foreground">
+              {t("conversation.gitPush.previewFailed")}
+            </p>
+          )}
           {remotes?.map((remote) => {
             const remoteUnpushed = unpushedOf(remote.name)
-            const hiddenCount = remoteUnpushed ? remoteUnpushed.total - remoteUnpushed.commits.length : 0
+            const hiddenCount = remoteUnpushed
+              ? remoteUnpushed.total - remoteUnpushed.commits.length
+              : 0
             return (
               <div key={remote.name} className="min-w-0 rounded-md border p-2">
                 <label className="flex cursor-pointer items-center gap-2">
-                  <Checkbox checked={selected.has(remote.name)} onCheckedChange={(isChecked) => toggle(remote.name, isChecked === true)} />
+                  <Checkbox
+                    checked={selected.has(remote.name)}
+                    onCheckedChange={(isChecked) =>
+                      toggle(remote.name, isChecked === true)
+                    }
+                  />
                   <span className="font-medium">{remote.name}</span>
-                  <span className="min-w-0 truncate text-xs text-muted-foreground">{remote.url}</span>
+                  <span className="min-w-0 truncate text-xs text-muted-foreground">
+                    {remote.url}
+                  </span>
                   {remoteUnpushed && (
                     <span className="ml-auto shrink-0 text-xs text-muted-foreground">
-                      {remoteUnpushed.total === 0 ? t("conversation.gitPush.upToDate") : t("conversation.gitPush.commitCount", { count: remoteUnpushed.total })}
+                      {remoteUnpushed.total === 0
+                        ? t("conversation.gitPush.upToDate")
+                        : t("conversation.gitPush.commitCount", {
+                            count: remoteUnpushed.total,
+                          })}
                     </span>
                   )}
                 </label>
-                {!unpushed && !hasPreviewFailed && <p className="mt-1 text-xs text-muted-foreground">{t("conversation.gitPush.loadingCommits")}</p>}
+                {!unpushed && !hasPreviewFailed && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {t("conversation.gitPush.loadingCommits")}
+                  </p>
+                )}
                 {remoteUnpushed && remoteUnpushed.commits.length > 0 && (
                   <ul className="mt-2 max-h-40 overflow-y-auto font-mono text-xs">
                     {remoteUnpushed.commits.map((commit) => (
                       <li key={commit.hash} className="flex gap-2">
-                        <span className="shrink-0 text-muted-foreground">{commit.hash}</span>
-                        <span className="min-w-0 truncate" title={commit.subject}>{commit.subject}</span>
+                        <span className="shrink-0 text-muted-foreground">
+                          {commit.hash}
+                        </span>
+                        <span
+                          className="min-w-0 truncate"
+                          title={commit.subject}
+                        >
+                          {commit.subject}
+                        </span>
                       </li>
                     ))}
-                    {hiddenCount > 0 && <li className="text-muted-foreground">{t("conversation.gitPush.moreCommits", { count: hiddenCount })}</li>}
+                    {hiddenCount > 0 && (
+                      <li className="text-muted-foreground">
+                        {t("conversation.gitPush.moreCommits", {
+                          count: hiddenCount,
+                        })}
+                      </li>
+                    )}
                   </ul>
                 )}
               </div>
@@ -93,8 +161,13 @@ export function GitPushDialog({ dir, branch, onOpenChange }: Props) {
           })}
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>{t("conversation.gitPush.cancel")}</Button>
-          <Button disabled={selected.size === 0 || !remotes} onClick={pushSelected}>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            {t("conversation.gitPush.cancel")}
+          </Button>
+          <Button
+            disabled={selected.size === 0 || !remotes}
+            onClick={pushSelected}
+          >
             {t("conversation.gitPush.pushSelected", { count: selected.size })}
           </Button>
         </DialogFooter>

@@ -11,13 +11,18 @@ export function useMemoryData(onTick: () => void) {
   const [list, setList] = useState<List | null>(null)
   const [trash, setTrash] = useState<Trashed[]>([])
   const [issues, setIssues] = useState<Issue[]>([])
-  const [loads, setLoads] = useState<{ hook: boolean; files: Record<string, FileLoads> }>({ hook: false, files: {} }) // chargements réels (hook InstructionsLoaded)
+  const [loads, setLoads] = useState<{
+    hook: boolean
+    files: Record<string, FileLoads>
+  }>({ hook: false, files: {} }) // chargements réels (hook InstructionsLoaded)
   const refresh = useCallback(
     () =>
       Promise.all([
         api.memory().then(setList),
         api.trash().then((trashResponse) => setTrash(trashResponse.items)),
-        api.memoryHealth().then((healthResponse) => setIssues(healthResponse.issues)),
+        api
+          .memoryHealth()
+          .then((healthResponse) => setIssues(healthResponse.issues)),
         api.memoryLoaded().then(setLoads),
       ]),
     []

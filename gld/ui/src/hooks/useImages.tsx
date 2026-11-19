@@ -10,9 +10,15 @@ import { errMsg, qs, readResponse, v1 } from "@/lib/apiError"
 
 export type Img = { path: string; url: string; name: string; image: boolean }
 
-const PREVIEWABLE_IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"]
+const PREVIEWABLE_IMAGE_TYPES = [
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+]
 
-const filesOf = (transfer: DataTransfer | null) => Array.from(transfer?.files ?? [])
+const filesOf = (transfer: DataTransfer | null) =>
+  Array.from(transfer?.files ?? [])
 
 // Sous Unix le home devient « ~ » (Claude Code le résout) : le terminal n'affiche pas l'identifiant du compte.
 const mentionOf = (image: Img) => {
@@ -28,20 +34,29 @@ export function useImages(sid?: string) {
   const objectUrls = useRef<string[]>([]) // URL d'objet à libérer en quittant
   useEffect(() => {
     const urlsToRevoke = objectUrls.current
-    return () => urlsToRevoke.forEach((objectUrl) => URL.revokeObjectURL(objectUrl))
+    return () =>
+      urlsToRevoke.forEach((objectUrl) => URL.revokeObjectURL(objectUrl))
   }, [])
 
   const uploadFile = async (file: File) => {
     const image = PREVIEWABLE_IMAGE_TYPES.includes(file.type)
-    const headers: Record<string, string> = image ? { "Content-Type": file.type } : { "X-File-Name": encodeURIComponent(file.name) }
+    const headers: Record<string, string> = image
+      ? { "Content-Type": file.type }
+      : { "X-File-Name": encodeURIComponent(file.name) }
     const uploadKind = image ? "images" : "files"
-    const response = await authFetch(v1(`/uploads/${uploadKind}${qs({ id: sid })}`), { method: "POST", headers, body: file })
+    const response = await authFetch(
+      v1(`/uploads/${uploadKind}${qs({ id: sid })}`),
+      { method: "POST", headers, body: file }
+    )
     const uploaded = await readResponse<{ path: string }>(response)
     if (!uploaded.path) return
     const url = image ? URL.createObjectURL(file) : ""
     if (url) objectUrls.current.push(url)
     const name = file.name || i18n.t("shell.images.pasted")
-    setImages((previousImages) => [...previousImages, { path: uploaded.path!, url, image, name }])
+    setImages((previousImages) => [
+      ...previousImages,
+      { path: uploaded.path!, url, image, name },
+    ])
   }
 
   const add = async (files: File[]) => {
@@ -51,7 +66,9 @@ export function useImages(sid?: string) {
       try {
         await uploadFile(file)
       } catch (uploadError) {
-        toast.error(i18n.t("shell.images.uploadFailed", { msg: errMsg(uploadError) }))
+        toast.error(
+          i18n.t("shell.images.uploadFailed", { msg: errMsg(uploadError) })
+        )
       }
     }
     setBusy(false)
@@ -74,22 +91,40 @@ export function useImages(sid?: string) {
       add(files)
     },
     pick: (files: File[]) => add(files),
-    remove: (path: string) => setImages((previousImages) => previousImages.filter((image) => image.path !== path)),
+    remove: (path: string) =>
+      setImages((previousImages) =>
+        previousImages.filter((image) => image.path !== path)
+      ),
     clear: () => setImages([]),
     // À ajouter au message : une mention « @chemin » par image.
     suffix: () => images.map(mentionOf).join("\n"),
   }
 }
 
-export function ImageChips({ images, busy, onRemove }: { images: Img[]; busy: boolean; onRemove: (path: string) => void }) {
+export function ImageChips({
+  images,
+  busy,
+  onRemove,
+}: {
+  images: Img[]
+  busy: boolean
+  onRemove: (path: string) => void
+}) {
   const { t } = useTranslation()
   if (!images.length && !busy) return null
   return (
-    <ul className="flex flex-wrap items-center gap-2" aria-label={t("shell.images.attached")}>
+    <ul
+      className="flex flex-wrap items-center gap-2"
+      aria-label={t("shell.images.attached")}
+    >
       {images.map((image) => (
         <li key={image.path} className="group relative">
           {image.image ? (
-            <img src={image.url} alt={image.name} className="h-14 w-14 rounded-md border object-cover" />
+            <img
+              src={image.url}
+              alt={image.name}
+              className="h-14 w-14 rounded-md border object-cover"
+            />
           ) : (
             <span className="flex h-14 max-w-40 items-center gap-1.5 rounded-md border px-2 text-xs">
               <FileText className="size-4 shrink-0" />
@@ -106,13 +141,25 @@ export function ImageChips({ images, busy, onRemove }: { images: Img[]; busy: bo
           </button>
         </li>
       ))}
-      {busy && <li className="text-xs text-muted-foreground">{t("shell.images.uploading")}</li>}
+      {busy && (
+        <li className="text-xs text-muted-foreground">
+          {t("shell.images.uploading")}
+        </li>
+      )}
     </ul>
   )
 }
 
 // Bouton « joindre » : sur mobile, le collage et le glisser-déposer n'existent pas.
-export function AttachButton({ onPick, disabled, className }: { onPick: (files: File[]) => void; disabled?: boolean; className?: string }) {
+export function AttachButton({
+  onPick,
+  disabled,
+  className,
+}: {
+  onPick: (files: File[]) => void
+  disabled?: boolean
+  className?: string
+}) {
   const { t } = useTranslation()
   const fileInput = useRef<HTMLInputElement>(null)
   const handleFilesChosen = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -121,14 +168,23 @@ export function AttachButton({ onPick, disabled, className }: { onPick: (files: 
   }
   return (
     <>
-      <input ref={fileInput} type="file" multiple hidden onChange={handleFilesChosen} />
+      <input
+        ref={fileInput}
+        type="file"
+        multiple
+        hidden
+        onChange={handleFilesChosen}
+      />
       <button
         type="button"
         disabled={disabled}
         onClick={() => fileInput.current?.click()}
         title={t("shell.images.attach")}
         aria-label={t("shell.images.attach")}
-        className={cn("inline-flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50", className)}
+        className={cn(
+          "inline-flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50",
+          className
+        )}
       >
         <Paperclip className="size-4" />
       </button>

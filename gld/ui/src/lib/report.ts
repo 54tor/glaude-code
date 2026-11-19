@@ -19,13 +19,21 @@ function showToast(ok: boolean, text: string, options: Show) {
   return ok
 }
 // Action de l'API /v1 : le message de la réponse (succès) ou de l'ApiError (échec) s'affiche de la même façon. Renvoie le succès.
-export type Reported = { message?: string; failed?: { item: string; error: { message: string } }[] }
-export async function reportAction(run: () => Promise<Reported | void>, options: Show = {}) {
+export type Reported = {
+  message?: string
+  failed?: { item: string; error: { message: string } }[]
+}
+export async function reportAction(
+  run: () => Promise<Reported | void>,
+  options: Show = {}
+) {
   try {
     const result = await run()
     const ok = showToast(true, result?.message ?? "", options)
     if (result?.failed?.length) {
-      const failureLines = result.failed.map((failure) => `${failure.item} : ${failure.error.message}`)
+      const failureLines = result.failed.map(
+        (failure) => `${failure.item} : ${failure.error.message}`
+      )
       showToast(false, failureLines.join("\n"), {})
     }
     return ok

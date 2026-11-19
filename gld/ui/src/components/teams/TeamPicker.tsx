@@ -36,11 +36,15 @@ export function TeamPicker({
   const [conflicts, setConflicts] = useState<string[]>([])
   const seq = useRef(0)
 
-  const agentNamesById = new Map(catalog.agents.map((agent) => [agent.ID, agent.Name]))
+  const agentNamesById = new Map(
+    catalog.agents.map((agent) => [agent.ID, agent.Name])
+  )
   const toggle = (teamId: string) =>
     setSel((selectedTeamIds) => {
       if (selectedTeamIds.includes(teamId)) {
-        return selectedTeamIds.filter((selectedTeamId) => selectedTeamId !== teamId)
+        return selectedTeamIds.filter(
+          (selectedTeamId) => selectedTeamId !== teamId
+        )
       }
       return [...selectedTeamIds, teamId]
     })
@@ -80,7 +84,9 @@ export function TeamPicker({
     } catch (launchError) {
       setErr(errMsg(launchError))
       const launchConflicts =
-        launchError instanceof LaunchError ? (launchError.run?.Conflicts ?? []) : []
+        launchError instanceof LaunchError
+          ? (launchError.run?.Conflicts ?? [])
+          : []
       setConflicts(launchConflicts)
     } finally {
       setBusy(false)
@@ -103,7 +109,8 @@ export function TeamPicker({
                   tabIndex={0}
                   onClick={() => toggle(team.ID)}
                   onKeyDown={(event) => {
-                    const isToggleKey = event.key === " " || event.key === "Enter"
+                    const isToggleKey =
+                      event.key === " " || event.key === "Enter"
                     if (!isToggleKey) return
                     event.preventDefault()
                     toggle(team.ID)
@@ -112,7 +119,9 @@ export function TeamPicker({
                 >
                   <div className="text-sm font-medium">{team.Name}</div>
                   <div className="text-xs text-muted-foreground">
-                    {team.Members.map((memberId) => agentNamesById.get(memberId) ?? memberId).join(" · ")}
+                    {team.Members.map(
+                      (memberId) => agentNamesById.get(memberId) ?? memberId
+                    ).join(" · ")}
                   </div>
                 </div>
                 {onEdit && (

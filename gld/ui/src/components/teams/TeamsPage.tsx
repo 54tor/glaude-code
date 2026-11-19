@@ -38,7 +38,9 @@ export function TeamsPage({ home }: { home: string }) {
   const [editTeam, setEditTeam] = useState<Team | null | undefined>(undefined)
   const load = useCallback(
     () =>
-      void teamsCatalog().then(setCatalog, (catalogError) => setErr(errMsg(catalogError))),
+      void teamsCatalog().then(setCatalog, (catalogError) =>
+        setErr(errMsg(catalogError))
+      ),
     []
   )
   const accessLabel = (agent: Agent) => {
@@ -54,7 +56,10 @@ export function TeamsPage({ home }: { home: string }) {
 
   const refresh = useCallback(() => {
     if (document.visibilityState !== "visible") return
-    teamsList().then((teamList) => setRunning(teamList.teams), () => {})
+    teamsList().then(
+      (teamList) => setRunning(teamList.teams),
+      () => {}
+    )
   }, [])
   useEffect(() => {
     load()
@@ -98,7 +103,10 @@ export function TeamsPage({ home }: { home: string }) {
             </div>
             <ul className="divide-y rounded-lg border text-sm">
               {catalog.agents.map((agent) => (
-                <li key={agent.ID} className="flex items-center gap-2 px-3 py-2">
+                <li
+                  key={agent.ID}
+                  className="flex items-center gap-2 px-3 py-2"
+                >
                   <span className="shrink-0 font-medium">{agent.Name}</span>
                   <span className="min-w-0 truncate text-muted-foreground">
                     {!sameLabel(agent.Name, agent.Role) && `${agent.Role} · `}
@@ -146,7 +154,10 @@ export function TeamsPage({ home }: { home: string }) {
           <h2 className="mb-2 text-sm font-semibold">{t("teams.running")}</h2>
           <ul className="divide-y rounded-lg border text-sm">
             {running.map((runningTeam) => (
-              <li key={runningTeam.Name} className="flex items-center gap-2 px-3 py-2">
+              <li
+                key={runningTeam.Name}
+                className="flex items-center gap-2 px-3 py-2"
+              >
                 {TEAM_NAME.test(runningTeam.Name) ? (
                   <Link
                     href={href({ kind: "team", name: runningTeam.Name })}
@@ -160,7 +171,9 @@ export function TeamsPage({ home }: { home: string }) {
                 <span className="text-muted-foreground">
                   {t("teams.members", { count: runningTeam.Members })}
                 </span>
-                {runningTeam.Live && <Badge variant="secondary">{t("teams.live")}</Badge>}
+                {runningTeam.Live && (
+                  <Badge variant="secondary">{t("teams.live")}</Badge>
+                )}
               </li>
             ))}
           </ul>

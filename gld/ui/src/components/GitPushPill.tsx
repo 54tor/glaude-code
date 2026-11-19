@@ -4,9 +4,18 @@ import { setGitPushTerminalOpen, type GitPushRun } from "@/hooks/useGitPush"
 
 const PILL_STACK_STEP_REM = 2.25
 
-export function GitPushPill({ run, position }: { run: GitPushRun; position: number }) {
+export function GitPushPill({
+  run,
+  position,
+}: {
+  run: GitPushRun
+  position: number
+}) {
   const { t } = useTranslation()
-  const label = t("conversation.gitPush.toastRunning", { branch: run.branch, remote: run.remote })
+  const label = t("conversation.gitPush.toastRunning", {
+    branch: run.branch,
+    remote: run.remote,
+  })
   return (
     <button
       type="button"

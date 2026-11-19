@@ -12,7 +12,11 @@ const askedDirs = new Set<string>() // dossiers dont la question est déjà affi
 export const resetTrust = () => askedDirs.clear()
 
 // Dossiers en attente de réponse, affichés par TrustDialog (modale plein écran, une question à la fois).
-export type TrustAsk = { dir: string; label: string; answer: (yes: boolean) => void }
+export type TrustAsk = {
+  dir: string
+  label: string
+  answer: (yes: boolean) => void
+}
 let pendingAsks: TrustAsk[] = []
 const subscribers = new Set<() => void>()
 const setPendingAsks = (nextAsks: TrustAsk[]) => {
@@ -28,14 +32,17 @@ export const useTrustAsk = () =>
     () => pendingAsks
   )
 
-const wait = (durationMs: number) => new Promise((resolve) => setTimeout(resolve, durationMs))
+const wait = (durationMs: number) =>
+  new Promise((resolve) => setTimeout(resolve, durationMs))
 
 // Une session lancée dans un dossier neuf attend, dans son terminal, la réponse au dialogue de confiance de Claude Code. On guette
 // ce dialogue quelques secondes et on pose la question ici ; la réponse est envoyée au terminal.
 export async function watchTrust(home: string) {
   for (let attempt = 0; attempt < TRUST_POLL_ATTEMPTS; attempt++) {
     await wait(TRUST_POLL_INTERVAL_MS)
-    const { dirs } = await api.trustPending().catch(() => ({ dirs: [] as string[] }))
+    const { dirs } = await api
+      .trustPending()
+      .catch(() => ({ dirs: [] as string[] }))
     const newDirs = dirs.filter((dir) => !askedDirs.has(dir))
     for (const dir of newDirs) {
       askedDirs.add(dir)

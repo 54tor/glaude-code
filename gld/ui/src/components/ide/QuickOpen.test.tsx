@@ -11,7 +11,16 @@ const files = ["README.md", "src/app.ts", "src/lib/api.ts"]
 const mount = (record: Partial<Parameters<typeof QuickOpen>[0]> = {}) => {
   const pick = vi.fn()
   const close = vi.fn()
-  render(<QuickOpen open files={files} state="ready" onPick={pick} onClose={close} {...record} />)
+  render(
+    <QuickOpen
+      open
+      files={files}
+      state="ready"
+      onPick={pick}
+      onClose={close}
+      {...record}
+    />
+  )
   return { pick, close }
 }
 
@@ -20,19 +29,26 @@ describe("QuickOpen", () => {
     const { pick } = mount()
     const input = screen.getByRole("combobox")
     fireEvent.change(input, { target: { value: "ts" } })
-    expect(screen.getAllByRole("option").map((element) => element.getAttribute("title"))).toEqual(["src/app.ts", "src/lib/api.ts"])
+    expect(
+      screen
+        .getAllByRole("option")
+        .map((element) => element.getAttribute("title"))
+    ).toEqual(["src/app.ts", "src/lib/api.ts"])
     fireEvent.keyDown(input, { key: "ArrowDown" })
     fireEvent.keyDown(input, { key: "ArrowDown" })
     fireEvent.keyDown(input, { key: "ArrowUp" })
     fireEvent.keyDown(input, { key: "ArrowDown" })
-    expect(screen.getAllByRole("option")[1].getAttribute("aria-selected")).toBe("true")
+    expect(screen.getAllByRole("option")[1].getAttribute("aria-selected")).toBe(
+      "true"
+    )
     fireEvent.keyDown(input, { key: "Enter" })
     expect(pick).toHaveBeenCalledWith("src/lib/api.ts")
   })
 
   it("scrollIntoView qui renvoie une Promise (Chrome) : ouverture et flèches sans erreur", () => {
     const orig = Element.prototype.scrollIntoView
-    Element.prototype.scrollIntoView = (() => Promise.resolve()) as unknown as typeof orig
+    Element.prototype.scrollIntoView = (() =>
+      Promise.resolve()) as unknown as typeof orig
     const err = vi.spyOn(console, "error").mockImplementation(() => {})
     try {
       const { pick } = mount()

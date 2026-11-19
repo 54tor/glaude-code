@@ -11,16 +11,32 @@ import { resetTrust } from "@/lib/trust"
 
 // Mode multi-utilisateur (auth_routes.go, auth_admin.go) : état de connexion partagé, appels vers /v1/auth/* et /v1/admin/*, WebAuthn.
 
-export const RIGHTS = ["mem_read", "mem_write", "config_write", "mem_sync", "usage_read", "sessions_read", "exec", "fs_read", "fs_write"] as const
+export const RIGHTS = [
+  "mem_read",
+  "mem_write",
+  "config_write",
+  "mem_sync",
+  "usage_read",
+  "sessions_read",
+  "exec",
+  "fs_read",
+  "fs_write",
+] as const
 export type Right = (typeof RIGHTS)[number]
 // exec, config_write et fs_write équivalent au compte système de gld.
 export const DANGEROUS: readonly Right[] = ["exec", "config_write", "fs_write"]
 
 export type Key = { id: number; label: string; created: number; bad: boolean }
-export type Factors = { totp: boolean; webauthn: number; recovery: number; keys?: Key[] }
+export type Factors = {
+  totp: boolean
+  webauthn: number
+  recovery: number
+  keys?: Key[]
+}
 export type HomeRef = { id: string; name: string }
 export type AuthUser = { name: string; admin: boolean }
-export type AuthState = "loading" | "open" | "anon" | "mfa" | "ok" | "unavailable"
+export type AuthState =
+  "loading" | "open" | "anon" | "mfa" | "ok" | "unavailable"
 export type Reauth = { password: string; code: string }
 export type Auth = {
   state: AuthState
@@ -37,7 +53,13 @@ export type Auth = {
   home?: string // identifiant du home servi à cette page (le choix de home recharge la page)
 }
 
-let authSnapshot: Auth = { state: "loading", csrf: "", methods: [], enroll: false, expired: false }
+let authSnapshot: Auth = {
+  state: "loading",
+  csrf: "",
+  methods: [],
+  enroll: false,
+  expired: false,
+}
 const subscribers = new Set<() => void>()
 
 export function setAuth(changes: Partial<Auth>) {
@@ -46,13 +68,10 @@ export function setAuth(changes: Partial<Auth>) {
 }
 export const getAuth = () => authSnapshot
 export function useAuth(): Auth {
-  return useSyncExternalStore(
-    (notify) => {
-      subscribers.add(notify)
-      return () => void subscribers.delete(notify)
-    },
-    getAuth
-  )
+  return useSyncExternalStore((notify) => {
+    subscribers.add(notify)
+    return () => void subscribers.delete(notify)
+  }, getAuth)
 }
 
 // Tout appel au serveur passe ici : jeton CSRF sur les requêtes modifiantes, retour à la connexion si la session tombe.
@@ -61,12 +80,17 @@ export function useAuth(): Auth {
 // avec le jeton d'un compte en cours de connexion.
 const HTTP_UNAUTHORIZED = 401
 
-export async function authFetch(url: string, init: RequestInit = {}): Promise<Response> {
+export async function authFetch(
+  url: string,
+  init: RequestInit = {}
+): Promise<Response> {
   const method = (init.method ?? "GET").toUpperCase()
   const isModifying = method !== "GET" && method !== "HEAD"
-  const hasEstablishedSession = authSnapshot.state === "ok" || authSnapshot.state === "open"
+  const hasEstablishedSession =
+    authSnapshot.state === "ok" || authSnapshot.state === "open"
   const isLoginRoute = url.startsWith("/v1/auth/")
-  if (isModifying && !hasEstablishedSession && !isLoginRoute) throw new Error(i18n.t("auth.notReady"))
+  if (isModifying && !hasEstablishedSession && !isLoginRoute)
+    throw new Error(i18n.t("auth.notReady"))
   if (authSnapshot.csrf && isModifying) {
     const headers = new Headers(init.headers)
     headers.set("X-Gld-CSRF", authSnapshot.csrf)
@@ -78,7 +102,10 @@ export async function authFetch(url: string, init: RequestInit = {}): Promise<Re
     init = { ...init, headers }
   }
   const response = await fetch(url, init)
-  const isSessionLost = response.status === HTTP_UNAUTHORIZED && authSnapshot.state === "ok" && !response.headers.has("Retry-After")
+  const isSessionLost =
+    response.status === HTTP_UNAUTHORIZED &&
+    authSnapshot.state === "ok" &&
+    !response.headers.has("Retry-After")
   if (isSessionLost) setAuth({ state: "anon", csrf: "", expired: true })
   return response
 }
@@ -101,20 +128,42 @@ export async function boot(): Promise<void> {
     }
     setAuth({ state: "unavailable" })
   }
-  let me: { user: AuthUser; mfa: boolean; csrf: string; factors: Factors; rights?: Record<string, Right[]>; homes?: HomeRef[] }
+  let me: {
+    user: AuthUser
+    mfa: boolean
+    csrf: string
+    factors: Factors
+    rights?: Record<string, Right[]>
+    homes?: HomeRef[]
+  }
   try {
     me = await readResponse<typeof me>(await fetch(v1("/auth/me")))
   } catch (bootError) {
     const status = bootError instanceof ApiError ? bootError.status : 0
     if (status === 404) return setAuth({ state: "open" })
-    if (status === HTTP_UNAUTHORIZED) return setAuth({ state: "anon", csrf: "", user: undefined })
+    if (status === HTTP_UNAUTHORIZED)
+      return setAuth({ state: "anon", csrf: "", user: undefined })
     return reportServerDown()
   }
   const factors = me.factors
-  const signedInState = { user: me.user, csrf: me.csrf, factors, methods: methodsOf(factors), enroll: !factors.totp && !factors.webauthn }
+  const signedInState = {
+    user: me.user,
+    csrf: me.csrf,
+    factors,
+    methods: methodsOf(factors),
+    enroll: !factors.totp && !factors.webauthn,
+  }
   if (!me.mfa) return setAuth({ ...signedInState, state: "mfa" })
   adopt(me.user.name)
-  setAuth({ ...signedInState, state: "ok", expired: false, owner: me.user.name, rights: me.rights ?? {}, homes: me.homes ?? [], home: await currentHome() })
+  setAuth({
+    ...signedInState,
+    state: "ok",
+    expired: false,
+    owner: me.user.name,
+    rights: me.rights ?? {},
+    homes: me.homes ?? [],
+    home: await currentHome(),
+  })
 }
 
 // /homes donne le nom du home servi ("" : le principal) ; les droits sont rangés par identifiant.
@@ -122,7 +171,11 @@ async function currentHome(): Promise<string | undefined> {
   try {
     const response = await fetch(v1("/homes"))
     if (!response.ok) return undefined
-    const homesInfo = (await response.json()) as { current: string; mainId?: string; homes: { name: string; id?: string }[] }
+    const homesInfo = (await response.json()) as {
+      current: string
+      mainId?: string
+      homes: { name: string; id?: string }[]
+    }
     if (!homesInfo.current) return homesInfo.mainId ?? "main"
     return homesInfo.homes.find((home) => home.name === homesInfo.current)?.id
   } catch {
@@ -132,10 +185,16 @@ async function currentHome(): Promise<string | undefined> {
 
 // Ce que ce navigateur garde d'un compte : brouillons (texte de conversation), et état d'affichage qui nomme ses dossiers et sa mémoire.
 const OWNER = "gld.owner"
-const USER_STORAGE_KEYS = ["gld.drafts", "gld.open", "ccMemSorts", "gld.session-view"]
+const USER_STORAGE_KEYS = [
+  "gld.drafts",
+  "gld.open",
+  "ccMemSorts",
+  "gld.session-view",
+]
 const USER_STORAGE_PREFIXES = ["gld.editor.", "gld.mem.open.", "gld.ide."]
 const userKey = (storageKey: string) =>
-  USER_STORAGE_KEYS.includes(storageKey) || USER_STORAGE_PREFIXES.some((prefix) => storageKey.startsWith(prefix))
+  USER_STORAGE_KEYS.includes(storageKey) ||
+  USER_STORAGE_PREFIXES.some((prefix) => storageKey.startsWith(prefix))
 const storedKeys = (): string[] => {
   try {
     return Object.keys(localStorage)
@@ -150,8 +209,11 @@ function adopt(name: string) {
   const previousOwner = storedOwner()
   // L'onglet compte aussi : un autre onglet a pu inscrire le nouveau compte comme propriétaire pendant que celui-ci gardait en
   // mémoire les données du précédent.
-  const tabHeldOtherAccount = authSnapshot.owner !== undefined && authSnapshot.owner !== name
-  const hasUnownedOrForeignData = previousOwner !== name && (previousOwner !== null || storedKeys().some(userKey))
+  const tabHeldOtherAccount =
+    authSnapshot.owner !== undefined && authSnapshot.owner !== name
+  const hasUnownedOrForeignData =
+    previousOwner !== name &&
+    (previousOwner !== null || storedKeys().some(userKey))
   if (tabHeldOtherAccount || hasUnownedOrForeignData) clearUserData()
   try {
     localStorage.setItem(OWNER, name)
@@ -169,7 +231,11 @@ const storedOwner = (): string | null => {
 }
 
 // Un onglet resté sur un compte n'écrit plus les brouillons quand un autre onglet a inscrit un autre propriétaire.
-guardDrafts(() => authSnapshot.state === "open" || (authSnapshot.owner !== undefined && storedOwner() === authSnapshot.owner))
+guardDrafts(
+  () =>
+    authSnapshot.state === "open" ||
+    (authSnapshot.owner !== undefined && storedOwner() === authSnapshot.owner)
+)
 
 // Autre onglet connecté sous un autre compte (ou déconnecté) : celui-ci lâche les données en mémoire sans les réécrire et revient
 // à la connexion.
@@ -178,13 +244,24 @@ if (typeof window !== "undefined")
     const isClear = storageEvent.key === null
     if (storageEvent.key !== OWNER && !isClear) return
     const newOwner = isClear ? null : storageEvent.newValue
-    if (authSnapshot.owner === undefined || newOwner === authSnapshot.owner) return
+    if (authSnapshot.owner === undefined || newOwner === authSnapshot.owner)
+      return
     clearDrafts()
     resetGit()
     resetWarm()
     resetOpen()
     resetTrust()
-    setAuth({ state: "anon", csrf: "", user: undefined, factors: undefined, expired: false, owner: undefined, rights: undefined, homes: undefined, home: undefined })
+    setAuth({
+      state: "anon",
+      csrf: "",
+      user: undefined,
+      factors: undefined,
+      expired: false,
+      owner: undefined,
+      rights: undefined,
+      homes: undefined,
+      home: undefined,
+    })
   })
 
 export function clearUserData() {
@@ -198,7 +275,8 @@ export function clearUserData() {
   }
   try {
     for (const storageKey of Object.keys(sessionStorage)) {
-      if (storageKey.startsWith("gld.ide.")) sessionStorage.removeItem(storageKey)
+      if (storageKey.startsWith("gld.ide."))
+        sessionStorage.removeItem(storageKey)
     }
   } catch {
     /* stockage indisponible */
@@ -213,7 +291,17 @@ export function signedOut() {
   } catch {
     /* stockage indisponible */
   }
-  setAuth({ state: "anon", csrf: "", user: undefined, factors: undefined, expired: false, owner: undefined, rights: undefined, homes: undefined, home: undefined })
+  setAuth({
+    state: "anon",
+    csrf: "",
+    user: undefined,
+    factors: undefined,
+    expired: false,
+    owner: undefined,
+    rights: undefined,
+    homes: undefined,
+    home: undefined,
+  })
 }
 
 export async function logout(): Promise<void> {
@@ -260,8 +348,11 @@ export function useWait(): [number, (sec: number) => void] {
 // WebAuthn sans bibliothèque : go-webauthn émet et attend le JSON standard, binaires en base64url.
 const BASE64_BLOCK_LENGTH = 4
 const dec = (encoded: string): ArrayBuffer => {
-  const paddedLength = Math.ceil(encoded.length / BASE64_BLOCK_LENGTH) * BASE64_BLOCK_LENGTH
-  const binary = atob(encoded.replace(/-/g, "+").replace(/_/g, "/").padEnd(paddedLength, "="))
+  const paddedLength =
+    Math.ceil(encoded.length / BASE64_BLOCK_LENGTH) * BASE64_BLOCK_LENGTH
+  const binary = atob(
+    encoded.replace(/-/g, "+").replace(/_/g, "/").padEnd(paddedLength, "=")
+  )
   return Uint8Array.from(binary, (character) => character.charCodeAt(0)).buffer
 }
 // Par tranches : étaler tout le tampon dans fromCharCode dépasse la pile pour une grosse attestation.
@@ -269,24 +360,40 @@ const FROM_CHAR_CODE_CHUNK = 0x8000
 const enc = (buffer: ArrayBuffer): string => {
   const bytes = new Uint8Array(buffer)
   let binary = ""
-  for (let chunkStart = 0; chunkStart < bytes.length; chunkStart += FROM_CHAR_CODE_CHUNK) {
-    binary += String.fromCharCode(...bytes.subarray(chunkStart, chunkStart + FROM_CHAR_CODE_CHUNK))
+  for (
+    let chunkStart = 0;
+    chunkStart < bytes.length;
+    chunkStart += FROM_CHAR_CODE_CHUNK
+  ) {
+    binary += String.fromCharCode(
+      ...bytes.subarray(chunkStart, chunkStart + FROM_CHAR_CODE_CHUNK)
+    )
   }
-  return btoa(binary)
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "")
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")
 }
 export const b64u = { enc, dec }
 type CredRef = { id: string; type: string; transports?: string[] }
-type PKOptions = Record<string, unknown> & { challenge: string; user?: { id: string; name: string; displayName: string }; excludeCredentials?: CredRef[]; allowCredentials?: CredRef[] }
-const decodeCredentialRefs = (credentialRefs?: CredRef[]) => credentialRefs?.map((credentialRef) => ({ ...credentialRef, id: dec(credentialRef.id) }))
+type PKOptions = Record<string, unknown> & {
+  challenge: string
+  user?: { id: string; name: string; displayName: string }
+  excludeCredentials?: CredRef[]
+  allowCredentials?: CredRef[]
+}
+const decodeCredentialRefs = (credentialRefs?: CredRef[]) =>
+  credentialRefs?.map((credentialRef) => ({
+    ...credentialRef,
+    id: dec(credentialRef.id),
+  }))
 
 // Le serveur déclare le nom d'hôte comme identifiant WebAuthn : une adresse IP n'en est jamais un, même si le navigateur la tient
 // pour sûre (127.0.0.1).
-const isIP = (hostname: string) => /^[\d.]+$/.test(hostname) || hostname.includes(":")
+const isIP = (hostname: string) =>
+  /^[\d.]+$/.test(hostname) || hostname.includes(":")
 export const waAvailable = (host = location.hostname) =>
-  typeof window !== "undefined" && window.isSecureContext && "PublicKeyCredential" in window && (host === "localhost" || !isIP(host))
+  typeof window !== "undefined" &&
+  window.isSecureContext &&
+  "PublicKeyCredential" in window &&
+  (host === "localhost" || !isIP(host))
 
 async function waCreate(options: { publicKey: PKOptions }) {
   const publicKey = options.publicKey
@@ -296,7 +403,9 @@ async function waCreate(options: { publicKey: PKOptions }) {
     user: { ...publicKey.user!, id: dec(publicKey.user!.id) },
     excludeCredentials: decodeCredentialRefs(publicKey.excludeCredentials),
   } as unknown as PublicKeyCredentialCreationOptions
-  const credential = (await navigator.credentials.create({ publicKey: creationOptions })) as PublicKeyCredential
+  const credential = (await navigator.credentials.create({
+    publicKey: creationOptions,
+  })) as PublicKeyCredential
   const attestation = credential.response as AuthenticatorAttestationResponse
   return {
     id: credential.id,
@@ -304,7 +413,11 @@ async function waCreate(options: { publicKey: PKOptions }) {
     type: credential.type,
     authenticatorAttachment: credential.authenticatorAttachment ?? undefined,
     clientExtensionResults: credential.getClientExtensionResults(),
-    response: { attestationObject: enc(attestation.attestationObject), clientDataJSON: enc(attestation.clientDataJSON), transports: attestation.getTransports?.() ?? [] },
+    response: {
+      attestationObject: enc(attestation.attestationObject),
+      clientDataJSON: enc(attestation.clientDataJSON),
+      transports: attestation.getTransports?.() ?? [],
+    },
   }
 }
 
@@ -315,7 +428,9 @@ async function waGet(options: { publicKey: PKOptions }) {
     challenge: dec(publicKey.challenge),
     allowCredentials: decodeCredentialRefs(publicKey.allowCredentials),
   } as unknown as PublicKeyCredentialRequestOptions
-  const credential = (await navigator.credentials.get({ publicKey: requestOptions })) as PublicKeyCredential
+  const credential = (await navigator.credentials.get({
+    publicKey: requestOptions,
+  })) as PublicKeyCredential
   const assertion = credential.response as AuthenticatorAssertionResponse
   return {
     id: credential.id,
@@ -334,7 +449,9 @@ async function waGet(options: { publicKey: PKOptions }) {
 // Les deux cérémonies lèvent ApiError ; un refus ou une annulation côté navigateur devient une ApiError sans statut (réseau).
 // Assertion sur la session courante : second facteur à la connexion, ou réauthentification sans code (cinq minutes).
 export async function waAssert(): Promise<{ csrf: string }> {
-  const challenge = await http.post<{ options: { publicKey: PKOptions } }>("/auth/mfa/webauthn/challenges")
+  const challenge = await http.post<{ options: { publicKey: PKOptions } }>(
+    "/auth/mfa/webauthn/challenges"
+  )
   let credential: Awaited<ReturnType<typeof waGet>>
   try {
     credential = await waGet(challenge.options)
@@ -344,13 +461,22 @@ export async function waAssert(): Promise<{ csrf: string }> {
   return http.post("/auth/mfa/webauthn/assertions", credential)
 }
 
-export async function waRegister(label: string, reauth?: Reauth): Promise<{ csrf: string; recovery?: string[] }> {
-  const registration = await http.post<{ options: { publicKey: PKOptions } }>("/auth/webauthn/registrations", reauth ?? {})
+export async function waRegister(
+  label: string,
+  reauth?: Reauth
+): Promise<{ csrf: string; recovery?: string[] }> {
+  const registration = await http.post<{ options: { publicKey: PKOptions } }>(
+    "/auth/webauthn/registrations",
+    reauth ?? {}
+  )
   let credential: Awaited<ReturnType<typeof waCreate>>
   try {
     credential = await waCreate(registration.options)
   } catch (ceremonyError) {
     throw netError(ceremonyError)
   }
-  return http.put(`/auth/webauthn/registrations/current${qs({ label })}`, credential)
+  return http.put(
+    `/auth/webauthn/registrations/current${qs({ label })}`,
+    credential
+  )
 }

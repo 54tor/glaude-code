@@ -1,5 +1,11 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { toast } from "sonner"
 import { i18n } from "@/i18n"
@@ -11,11 +17,28 @@ import { setWaitIdle } from "@/hooks/useWaitIdle"
 import { Composer } from "./Composer"
 
 const touchMock = vi.hoisted(() => vi.fn())
-vi.mock("./actions", () => ({ useActions: () => ({ background: new Set(), live: new Set(), touch: touchMock }) }))
-vi.mock("@/lib/auth", async (orig) => ({ ...(await orig<typeof import("@/lib/auth")>()), useCan: () => () => true }))
+vi.mock("./actions", () => ({
+  useActions: () => ({
+    background: new Set(),
+    live: new Set(),
+    touch: touchMock,
+  }),
+}))
+vi.mock("@/lib/auth", async (orig) => ({
+  ...(await orig<typeof import("@/lib/auth")>()),
+  useCan: () => () => true,
+}))
 
-const item = (qItem: Partial<QItem>): QItem => ({ id: "i1", text: "bonjour", author: "host", state: "queued", at: 1, ...qItem })
-const rmOk = (text: string) => ({ text }) as Awaited<ReturnType<typeof api.queueRm>>
+const item = (qItem: Partial<QItem>): QItem => ({
+  id: "i1",
+  text: "bonjour",
+  author: "host",
+  state: "queued",
+  at: 1,
+  ...qItem,
+})
+const rmOk = (text: string) =>
+  ({ text }) as Awaited<ReturnType<typeof api.queueRm>>
 
 function mount(items: QItem[], thinking = false, screenText = "") {
   vi.spyOn(api, "queue").mockResolvedValue({ items })
@@ -23,7 +46,20 @@ function mount(items: QItem[], thinking = false, screenText = "") {
   vi.spyOn(api, "slashCommands").mockResolvedValue({ commands: [] })
   vi.spyOn(api, "screen").mockResolvedValue({ text: screenText })
   const st = { open: true, thinking } as never
-  return render(<Composer dir="/d" id="s1" args="" defaultChoice={{ model: "", effort: "" } as never} live liveState={{ st, open: true }} onSent={() => {}} turn={null} setTurn={() => {}} onDone={() => {}} />)
+  return render(
+    <Composer
+      dir="/d"
+      id="s1"
+      args=""
+      defaultChoice={{ model: "", effort: "" } as never}
+      live
+      liveState={{ st, open: true }}
+      onSent={() => {}}
+      turn={null}
+      setTurn={() => {}}
+      onDone={() => {}}
+    />
+  )
 }
 
 beforeEach(() => {
@@ -65,9 +101,13 @@ describe("Composer, file serveur", () => {
   it("une erreur du serveur à l'ajout affiche un toast et garde le brouillon", async () => {
     mount([], true)
     setWaitIdle("s1", true)
-    vi.spyOn(api, "queueAdd").mockRejectedValue(new ApiError(409, "conflict", "file pleine"))
+    vi.spyOn(api, "queueAdd").mockRejectedValue(
+      new ApiError(409, "conflict", "file pleine")
+    )
     const err = vi.spyOn(toast, "error").mockImplementation(() => "")
-    const field = await screen.findByPlaceholderText(/Écrire à la session|Write to the session/i)
+    const field = await screen.findByPlaceholderText(
+      /Écrire à la session|Write to the session/i
+    )
     fireEvent.change(field, { target: { value: "salut" } })
     fireEvent.keyDown(field, { key: "Enter", ctrlKey: true })
     await waitFor(() => expect(err).toHaveBeenCalledWith("file pleine"))
@@ -77,37 +117,74 @@ describe("Composer, file serveur", () => {
   it("pendant que Claude travaille, le message part tout de suite, sans file", async () => {
     mount([], true)
     const add = vi.spyOn(api, "queueAdd")
-    const send = vi.spyOn(api, "sessionSend").mockResolvedValue(undefined as never)
-    const field = await screen.findByPlaceholderText(/Écrire à la session|Write to the session/i)
+    const send = vi
+      .spyOn(api, "sessionSend")
+      .mockResolvedValue(undefined as never)
+    const field = await screen.findByPlaceholderText(
+      /Écrire à la session|Write to the session/i
+    )
     fireEvent.change(field, { target: { value: "salut" } })
     fireEvent.keyDown(field, { key: "Enter", ctrlKey: true })
-    await waitFor(() => expect(send).toHaveBeenCalledWith("s1", "salut", expect.anything()))
+    await waitFor(() =>
+      expect(send).toHaveBeenCalledWith("s1", "salut", expect.anything())
+    )
     expect(add).not.toHaveBeenCalled()
   })
   it("« Envoyer en interrompant » envoie Échap avant le message", async () => {
     mount([], true)
     const order: string[] = []
-    vi.spyOn(api, "sessionKey").mockImplementation(async () => void order.push("escape") as never)
-    vi.spyOn(api, "sessionSend").mockImplementation(async () => void order.push("send") as never)
-    const field = await screen.findByPlaceholderText(/Écrire à la session|Write to the session/i)
+    vi.spyOn(api, "sessionKey").mockImplementation(
+      async () => void order.push("escape") as never
+    )
+    vi.spyOn(api, "sessionSend").mockImplementation(
+      async () => void order.push("send") as never
+    )
+    const field = await screen.findByPlaceholderText(
+      /Écrire à la session|Write to the session/i
+    )
     fireEvent.change(field, { target: { value: "salut" } })
-    fireEvent.pointerDown(screen.getByRole("button", { name: i18n.t("conversation.composer.sendOptions") }), { button: 0, ctrlKey: false })
-    fireEvent.click(await screen.findByRole("menuitem", { name: i18n.t("conversation.composer.sendInterrupting") }))
+    fireEvent.pointerDown(
+      screen.getByRole("button", {
+        name: i18n.t("conversation.composer.sendOptions"),
+      }),
+      { button: 0, ctrlKey: false }
+    )
+    fireEvent.click(
+      await screen.findByRole("menuitem", {
+        name: i18n.t("conversation.composer.sendInterrupting"),
+      })
+    )
     await waitFor(() => expect(order).toEqual(["escape", "send"]))
   })
 
   it("un item en cours d'envoi n'a pas de bouton retirer, et seul lui porte « part… »", async () => {
-    mount([item({ id: "a", text: "un", state: "sending" }), item({ id: "b", text: "deux" })])
+    mount([
+      item({ id: "a", text: "un", state: "sending" }),
+      item({ id: "b", text: "deux" }),
+    ])
     await screen.findByText("un")
-    expect(screen.getAllByRole("button", { name: /retirer|remove/i })).toHaveLength(1)
-    expect(screen.getAllByText(i18n.t("conversation.composer.sending"))).toHaveLength(1)
+    expect(
+      screen.getAllByRole("button", { name: /retirer|remove/i })
+    ).toHaveLength(1)
+    expect(
+      screen.getAllByText(i18n.t("conversation.composer.sending"))
+    ).toHaveLength(1)
   })
   it("deux Entrée rapprochées ne mettent le message qu'une fois en file", async () => {
     mount([], true)
     setWaitIdle("s1", true)
     let release = () => {}
-    const add = vi.spyOn(api, "queueAdd").mockImplementation(() => new Promise((callback) => (release = () => callback({ item: item({}) }))))
-    const field = await screen.findByPlaceholderText(/Écrire à la session|Write to the session/i)
+    const add = vi
+      .spyOn(api, "queueAdd")
+      .mockImplementation(
+        () =>
+          new Promise(
+            (callback) => (release = () => callback({ item: item({}) }))
+          )
+      )
+    const field = await screen.findByPlaceholderText(
+      /Écrire à la session|Write to the session/i
+    )
     fireEvent.change(field, { target: { value: "salut" } })
     fireEvent.keyDown(field, { key: "Enter", ctrlKey: true })
     fireEvent.keyDown(field, { key: "Enter", ctrlKey: true })
@@ -120,20 +197,40 @@ describe("Composer, file serveur", () => {
 const chatOk = () => new Response('{"done":true,"ok":true}\n', { status: 200 })
 function mountPlain(items: QItem[]) {
   vi.spyOn(api, "queue").mockResolvedValue({ items })
-  return render(<Composer dir="/d" id="s1" args="" defaultChoice={{ model: "", effort: "" } as never} live={false} liveState={{ st: null, open: false }} onSent={() => {}} turn={null} setTurn={() => {}} onDone={() => {}} />)
+  return render(
+    <Composer
+      dir="/d"
+      id="s1"
+      args=""
+      defaultChoice={{ model: "", effort: "" } as never}
+      live={false}
+      liveState={{ st: null, open: false }}
+      onSent={() => {}}
+      turn={null}
+      setTurn={() => {}}
+      onDone={() => {}}
+    />
+  )
 }
 
 describe("Composer claude -p, file serveur", () => {
   beforeEach(() => setAuth({ state: "open", csrf: "" }))
   afterEach(() => vi.unstubAllGlobals())
   it("écrire dans une session fermée la rouvre une fois le message délivré", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => chatOk()))
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => chatOk())
+    )
     const open = vi.spyOn(api, "open").mockResolvedValue({} as never)
     mountPlain([])
-    const field = await screen.findByPlaceholderText(/Écrire à Claude|Write to Claude/i)
+    const field = await screen.findByPlaceholderText(
+      /Écrire à Claude|Write to Claude/i
+    )
     fireEvent.change(field, { target: { value: "salut" } })
     fireEvent.keyDown(field, { key: "Enter", ctrlKey: true })
-    await waitFor(() => expect(open).toHaveBeenCalledWith({ dir: "/d", id: "s1", args: "" }))
+    await waitFor(() =>
+      expect(open).toHaveBeenCalledWith({ dir: "/d", id: "s1", args: "" })
+    )
     await waitFor(() => expect(touchMock).toHaveBeenCalledWith("s1"))
   })
   it("ne part pas tout seul après un tour : la file reste suspendue", async () => {
@@ -141,10 +238,15 @@ describe("Composer claude -p, file serveur", () => {
     vi.stubGlobal("fetch", localMock)
     const rm = vi.spyOn(api, "queueRm")
     mountPlain([item({})])
-    const field = await screen.findByPlaceholderText(/Écrire à Claude|Write to Claude/i)
+    const field = await screen.findByPlaceholderText(
+      /Écrire à Claude|Write to Claude/i
+    )
     fireEvent.change(field, { target: { value: "salut" } })
     fireEvent.keyDown(field, { key: "Enter", ctrlKey: true })
-    const chats = () => localMock.mock.calls.filter((values) => String((values as unknown[])[0]).includes("/chat")).length
+    const chats = () =>
+      localMock.mock.calls.filter((values) =>
+        String((values as unknown[])[0]).includes("/chat")
+      ).length
     await waitFor(() => expect(chats()).toBe(1))
     await new Promise((callback) => setTimeout(callback, 50))
     expect(rm).not.toHaveBeenCalled()
@@ -157,20 +259,39 @@ describe("Composer claude -p, file serveur", () => {
     mountPlain([item({})])
     await screen.findByText("bonjour")
     let seen = ""
-    vi.spyOn(api, "queueRm").mockImplementation(async () => ((seen = draftOf("s1").text), rmOk("bonjour")))
-    fireEvent.click(screen.getByRole("button", { name: i18n.t("conversation.composer.sendNext") }))
+    vi.spyOn(api, "queueRm").mockImplementation(
+      async () => ((seen = draftOf("s1").text), rmOk("bonjour"))
+    )
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: i18n.t("conversation.composer.sendNext"),
+      })
+    )
     await waitFor(() => expect(localMock).toHaveBeenCalled())
     expect(seen).toBe("avant\nbonjour")
-    expect(JSON.parse(String((localMock.mock.calls[0] as unknown as [string, RequestInit])[1].body)).prompt).toBe("bonjour")
+    expect(
+      JSON.parse(
+        String(
+          (localMock.mock.calls[0] as unknown as [string, RequestInit])[1].body
+        )
+      ).prompt
+    ).toBe("bonjour")
     await waitFor(() => expect(draftOf("s1").text).toBe("avant"))
   })
   it("un envoi qui échoue laisse le texte dans le brouillon, sans le remettre en file", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 500 })))
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("{}", { status: 500 }))
+    )
     mountPlain([item({})])
     await screen.findByText("bonjour")
     vi.spyOn(api, "queueRm").mockResolvedValue(rmOk("bonjour"))
     const add = vi.spyOn(api, "queueAdd")
-    fireEvent.click(screen.getByRole("button", { name: i18n.t("conversation.composer.sendNext") }))
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: i18n.t("conversation.composer.sendNext"),
+      })
+    )
     await waitFor(() => expect(draftOf("s1").text).toBe("bonjour"))
     await new Promise((callback) => setTimeout(callback, 50))
     expect(add).not.toHaveBeenCalled()
@@ -178,9 +299,21 @@ describe("Composer claude -p, file serveur", () => {
   it("une tête incertaine n'est pas reprise : renvoyer ou retirer seulement", async () => {
     mountPlain([item({ state: "uncertain" })])
     await screen.findByText(i18n.t("conversation.composer.sendUncertain"))
-    expect(screen.queryByRole("button", { name: i18n.t("conversation.composer.sendNext") })).toBeNull()
-    expect(screen.getByRole("button", { name: i18n.t("conversation.composer.resend") })).toBeTruthy()
-    expect(screen.getByRole("button", { name: i18n.t("conversation.composer.dequeue") })).toBeTruthy()
+    expect(
+      screen.queryByRole("button", {
+        name: i18n.t("conversation.composer.sendNext"),
+      })
+    ).toBeNull()
+    expect(
+      screen.getByRole("button", {
+        name: i18n.t("conversation.composer.resend"),
+      })
+    ).toBeTruthy()
+    expect(
+      screen.getByRole("button", {
+        name: i18n.t("conversation.composer.dequeue"),
+      })
+    ).toBeTruthy()
   })
 })
 
@@ -203,18 +336,47 @@ describe("Composer, question à cases avec saisie libre", () => {
       return undefined as never
     })
     mount([], false, ECRAN_CASES_A_COCHER)
-    vi.spyOn(api, "screen").mockImplementation(async () => ({ text: ECRAN_CASES_A_COCHER + " ".repeat(touchesEnvoyees) }))
-    fireEvent.click(await screen.findByRole("button", { name: /Type something/ }))
-    const champReponseLibre = await screen.findByRole("textbox", { name: i18n.t("conversation.composer.answerAria") })
-    fireEvent.change(champReponseLibre, { target: { value: "ma réponse commencée" } })
+    vi.spyOn(api, "screen").mockImplementation(async () => ({
+      text: ECRAN_CASES_A_COCHER + " ".repeat(touchesEnvoyees),
+    }))
+    fireEvent.click(
+      await screen.findByRole("button", { name: /Type something/ })
+    )
+    const champReponseLibre = await screen.findByRole("textbox", {
+      name: i18n.t("conversation.composer.answerAria"),
+    })
+    fireEvent.change(champReponseLibre, {
+      target: { value: "ma réponse commencée" },
+    })
 
-    await waitFor(() => expect((screen.getByRole("button", { name: /Rouge/ }) as HTMLButtonElement).disabled).toBe(false))
+    await waitFor(() =>
+      expect(
+        (screen.getByRole("button", { name: /Rouge/ }) as HTMLButtonElement)
+          .disabled
+      ).toBe(false)
+    )
     fireEvent.click(screen.getByRole("button", { name: /Rouge/ }))
 
-    await waitFor(() => expect(screen.queryByRole("textbox", { name: i18n.t("conversation.composer.answerAria") })).toBeNull())
-    await waitFor(() => expect((screen.getByRole("button", { name: /Type something/ }) as HTMLButtonElement).disabled).toBe(false))
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("textbox", {
+          name: i18n.t("conversation.composer.answerAria"),
+        })
+      ).toBeNull()
+    )
+    await waitFor(() =>
+      expect(
+        (
+          screen.getByRole("button", {
+            name: /Type something/,
+          }) as HTMLButtonElement
+        ).disabled
+      ).toBe(false)
+    )
     fireEvent.click(screen.getByRole("button", { name: /Type something/ }))
-    const champRouvert = (await screen.findByRole("textbox", { name: i18n.t("conversation.composer.answerAria") })) as HTMLTextAreaElement
+    const champRouvert = (await screen.findByRole("textbox", {
+      name: i18n.t("conversation.composer.answerAria"),
+    })) as HTMLTextAreaElement
     expect(champRouvert.value).toBe("")
   })
 })
@@ -223,9 +385,19 @@ describe("Composer, mode écran brut", () => {
   it("n'affiche pas la carte question web tant que l'écran brut est ouvert", async () => {
     mount([], false, ECRAN_CASES_A_COCHER)
     await screen.findByRole("button", { name: /Rouge/ })
-    fireEvent.click(screen.getByRole("button", { name: i18n.t("conversation.composer.rawScreen") }))
-    await waitFor(() => expect(screen.queryByRole("button", { name: /Rouge/ })).toBeNull())
-    fireEvent.click(screen.getByRole("button", { name: i18n.t("conversation.composer.rawScreen") }))
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: i18n.t("conversation.composer.rawScreen"),
+      })
+    )
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: /Rouge/ })).toBeNull()
+    )
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: i18n.t("conversation.composer.rawScreen"),
+      })
+    )
     await screen.findByRole("button", { name: /Rouge/ })
   })
 })

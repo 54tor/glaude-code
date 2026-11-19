@@ -32,7 +32,8 @@ export function npxCommand(
     const globalFlag = global ? " -g" : ""
     return `npx --yes ${SKILLS_PKG} add ${source} -s ${skill} -a claude-code -y${globalFlag}`
   }
-  if (action === "update-all") return `npx --yes ${SKILLS_PKG} update -y${global ? " -g" : " -p"}`
+  if (action === "update-all")
+    return `npx --yes ${SKILLS_PKG} update -y${global ? " -g" : " -p"}`
   const agentFlag = action === "remove" ? " -a claude-code" : ""
   const scopeFlag = global ? " -g" : " -p"
   return `npx --yes ${SKILLS_PKG} ${action} ${skill}${agentFlag} -y${scopeFlag}`
@@ -130,9 +131,12 @@ export function SkillsNpxPanel({
     const isLatestSearch = () => searchNumber === searchSequence.current
     setBusy(true)
     setError("")
-    const findResponse = await api.skillsFind(effectiveQuery.trim()).catch((findError) => {
-      if (isLatestSearch()) setError(errMsg(findError) || t("skills.npx.searchFailed"))
-    })
+    const findResponse = await api
+      .skillsFind(effectiveQuery.trim())
+      .catch((findError) => {
+        if (isLatestSearch())
+          setError(errMsg(findError) || t("skills.npx.searchFailed"))
+      })
     if (!isLatestSearch()) return
     setBusy(false)
     if (findResponse) setHits(findResponse.hits ?? [])
@@ -220,7 +224,11 @@ export function SkillsNpxPanel({
             aria-label={t("skills.npx.search")}
             maxLength={80}
           />
-          <Button type="submit" variant="outline" disabled={busy || !effectiveQuery.trim()}>
+          <Button
+            type="submit"
+            variant="outline"
+            disabled={busy || !effectiveQuery.trim()}
+          >
             {busy ? <Fan className="animate-spin" /> : <Search />}{" "}
             {t("skills.npx.searchBtn")}
           </Button>

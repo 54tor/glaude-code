@@ -21,13 +21,29 @@ const TRASH_KEY_PREFIX = "corbeille/"
 const fileNameOf = (path: string) => path.split(/[\\/]/).pop()
 
 // Corbeille dans la colonne de gauche : les versions supprimées ou remplacées.
-export function TrashList({ trash, current, onPick, onPurgeAll }: { trash: Trashed[]; current: string; onPick: (key: string) => void; onPurgeAll: () => void }) {
+export function TrashList({
+  trash,
+  current,
+  onPick,
+  onPurgeAll,
+}: {
+  trash: Trashed[]
+  current: string
+  onPick: (key: string) => void
+  onPurgeAll: () => void
+}) {
   const { t } = useTranslation()
   return (
     <section className="mt-4 border-t pt-2">
       <div className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-muted-foreground">
-        <Trash className="size-3.5" /> <span className="flex-1">{t("memory.trash.title")}</span>
-        <Button variant="ghost" size="xs" className="h-5 px-1.5 text-xs" onClick={onPurgeAll}>
+        <Trash className="size-3.5" />{" "}
+        <span className="flex-1">{t("memory.trash.title")}</span>
+        <Button
+          variant="ghost"
+          size="xs"
+          className="h-5 px-1.5 text-xs"
+          onClick={onPurgeAll}
+        >
           {t("memory.trash.empty")}
         </Button>
       </div>
@@ -39,11 +55,15 @@ export function TrashList({ trash, current, onPick, onPurgeAll }: { trash: Trash
               title={trashedFile.path}
               className={cn(
                 "flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm transition-colors",
-                trashedFile.id === current ? "bg-accent font-medium" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                trashedFile.id === current
+                  ? "bg-accent font-medium"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
               )}
             >
               <FileText className="size-3.5 shrink-0" />
-              <span className="min-w-0 flex-1 truncate">{fileNameOf(trashedFile.path)}</span>
+              <span className="min-w-0 flex-1 truncate">
+                {fileNameOf(trashedFile.path)}
+              </span>
               <span className="shrink-0 text-xs font-normal">
                 {reasonLabel(trashedFile.reason)} {ago(trashedFile.at)}
               </span>
@@ -94,17 +114,32 @@ export function TrashViewer({
   return (
     <>
       <div className="flex items-center gap-2 border-b px-6 py-2">
-        <code className="min-w-0 flex-1 truncate text-xs text-muted-foreground" title={trashed?.path}>
-          {trashed ? `${shortPath(trashed.path)} · ${reasonLabel(trashed.reason)} ${ago(trashed.at)}` : t("memory.trash.notFound")}
+        <code
+          className="min-w-0 flex-1 truncate text-xs text-muted-foreground"
+          title={trashed?.path}
+        >
+          {trashed
+            ? `${shortPath(trashed.path)} · ${reasonLabel(trashed.reason)} ${ago(trashed.at)}`
+            : t("memory.trash.notFound")}
         </code>
         {trashed && (
           <>
             {exists && (
-              <Button variant={diff ? "secondary" : "ghost"} size="sm" onClick={() => setDiff(!diff)} aria-pressed={diff}>
+              <Button
+                variant={diff ? "secondary" : "ghost"}
+                size="sm"
+                onClick={() => setDiff(!diff)}
+                aria-pressed={diff}
+              >
                 {t("memory.trash.compare")}
               </Button>
             )}
-            <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={onPurge}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-destructive hover:text-destructive"
+              onClick={onPurge}
+            >
               <Trash2 /> {t("memory.trash.purge")}
             </Button>
             <Button size="sm" onClick={onRestore}>
@@ -117,7 +152,9 @@ export function TrashViewer({
         {diff && current !== null ? (
           <DiffView old={text ?? ""} cur={current} />
         ) : (
-          <pre className="session-text mx-auto max-w-page px-6 py-6 whitespace-pre-wrap">{text ?? ""}</pre>
+          <pre className="session-text mx-auto max-w-page px-6 py-6 whitespace-pre-wrap">
+            {text ?? ""}
+          </pre>
         )}
       </ScrollArea>
     </>

@@ -4,7 +4,9 @@ import { URI } from "monaco-editor/base/common/uri"
 
 const ts = vi.hoisted(() => ({ addExtraLib: vi.fn() }))
 vi.mock("monaco-editor/editor", () => ({ Uri: URI }))
-vi.mock("monaco-editor/languages/features/typescript/register", () => ({ typescriptDefaults: ts }))
+vi.mock("monaco-editor/languages/features/typescript/register", () => ({
+  typescriptDefaults: ts,
+}))
 vi.mock("./monacoSetup", () => ({}))
 
 describe("setTsLib", () => {
@@ -13,7 +15,10 @@ describe("setTsLib", () => {
     const dispose = vi.fn()
     ts.addExtraLib.mockReturnValue({ dispose })
     setTsLib("dir with space/é#.ts", "a")
-    expect(ts.addExtraLib).toHaveBeenCalledWith("a", "file:///dir%20with%20space/%C3%A9%23.ts")
+    expect(ts.addExtraLib).toHaveBeenCalledWith(
+      "a",
+      "file:///dir%20with%20space/%C3%A9%23.ts"
+    )
     setTsLib("dir with space/é#.ts", "b")
     expect(dispose).toHaveBeenCalledTimes(1)
     clearTsLibs()

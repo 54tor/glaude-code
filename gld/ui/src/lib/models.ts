@@ -24,7 +24,11 @@ export const modelKeyOf = (modelName?: string) => {
   const matchingKeys = models()
     .map(([modelKey]) => modelKey)
     .filter((modelKey) => modelKey && lowerName.includes(modelKey))
-  return matchingKeys.sort((firstKey, secondKey) => secondKey.length - firstKey.length)[0] ?? ""
+  return (
+    matchingKeys.sort(
+      (firstKey, secondKey) => secondKey.length - firstKey.length
+    )[0] ?? ""
+  )
 }
 
 export const efforts = () =>

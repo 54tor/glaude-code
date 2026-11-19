@@ -23,13 +23,25 @@ export function useDoubleTapContextMenu() {
     const previous = lastTap.current
     const isDoubleTap =
       now - previous.time < DOUBLE_TAP_MS &&
-      Math.hypot(pointerEvent.clientX - previous.x, pointerEvent.clientY - previous.y) < DOUBLE_TAP_PX
-    lastTap.current = isDoubleTap ? { time: 0, x: 0, y: 0 } : { time: now, x: pointerEvent.clientX, y: pointerEvent.clientY }
+      Math.hypot(
+        pointerEvent.clientX - previous.x,
+        pointerEvent.clientY - previous.y
+      ) < DOUBLE_TAP_PX
+    lastTap.current = isDoubleTap
+      ? { time: 0, x: 0, y: 0 }
+      : { time: now, x: pointerEvent.clientX, y: pointerEvent.clientY }
     if (!isDoubleTap) return
     const { target, clientX, clientY } = pointerEvent
     window.setTimeout(() => {
       opening.current = true
-      target.dispatchEvent(new window.MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX, clientY }))
+      target.dispatchEvent(
+        new window.MouseEvent("contextmenu", {
+          bubbles: true,
+          cancelable: true,
+          clientX,
+          clientY,
+        })
+      )
       opening.current = false
     }, OPEN_DELAY_MS)
   }

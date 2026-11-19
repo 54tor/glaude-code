@@ -7,7 +7,14 @@ import { tilde } from "@/lib/format"
 import { freeName, parsePack, type PackEntry } from "@/lib/memoryPack"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import type { List } from "./memoryLib"
 
@@ -18,7 +25,19 @@ const DEFAULT_ACT: Act = "skip"
 
 // Import d'un paquet de mémoires : le destinataire désigne le projet cible de chaque projet du paquet,
 // coche les entrées voulues et tranche chaque conflit de nom.
-export function MemoryImport({ open, list, homeDir, onClose, onDone }: { open: boolean; list: List; homeDir: string; onClose: () => void; onDone: () => void }) {
+export function MemoryImport({
+  open,
+  list,
+  homeDir,
+  onClose,
+  onDone,
+}: {
+  open: boolean
+  list: List
+  homeDir: string
+  onClose: () => void
+  onDone: () => void
+}) {
   const { t } = useTranslation()
   const [entries, setEntries] = useState<PackEntry[] | null>(null)
   const [error, setError] = useState("")
@@ -29,10 +48,14 @@ export function MemoryImport({ open, list, homeDir, onClose, onDone }: { open: b
 
   const existingMemoryNames = (dir: string) => {
     const project = list.projects.find((candidate) => candidate.dir === dir)
-    const memoryFiles = project?.files.filter((file) => file.key.startsWith(`m/${dir}/`))
+    const memoryFiles = project?.files.filter((file) =>
+      file.key.startsWith(`m/${dir}/`)
+    )
     return new Set(memoryFiles?.map((file) => file.name))
   }
-  const clash = (entry: PackEntry) => !!dest[entry.project] && existingMemoryNames(dest[entry.project]).has(entry.name)
+  const clash = (entry: PackEntry) =>
+    !!dest[entry.project] &&
+    existingMemoryNames(dest[entry.project]).has(entry.name)
   const actFor = (entryIndex: number) => acts[entryIndex] ?? DEFAULT_ACT
   const willImport = (entry: PackEntry, entryIndex: number) => {
     if (!dest[entry.project]) return false
@@ -52,7 +75,8 @@ export function MemoryImport({ open, list, homeDir, onClose, onDone }: { open: b
   const load = async (packFile: File | undefined) => {
     if (!packFile) return
     try {
-      if (packFile.size > MAX_PACK_SIZE_BYTES) throw new Error(t("memory.pack.tooBig"))
+      if (packFile.size > MAX_PACK_SIZE_BYTES)
+        throw new Error(t("memory.pack.tooBig"))
       setEntries(parsePack(await packFile.text()))
       setError("")
     } catch (loadError) {
@@ -86,7 +110,14 @@ export function MemoryImport({ open, list, homeDir, onClose, onDone }: { open: b
       }
     }
     setBusy(false)
-    if (failures.length) toast.error(t("memory.pack.partial", { ok: importedCount, failed: failures.length, first: failures[0] }))
+    if (failures.length)
+      toast.error(
+        t("memory.pack.partial", {
+          ok: importedCount,
+          failed: failures.length,
+          first: failures[0],
+        })
+      )
     else toast.success(t("memory.pack.imported", { count: importedCount }))
     onDone()
     close()
@@ -101,7 +132,9 @@ export function MemoryImport({ open, list, homeDir, onClose, onDone }: { open: b
       return new Set(uncheckedEntries).add(entryIndex)
     })
 
-  const packProjects = [...new Set((entries ?? []).map((entry) => entry.project))]
+  const packProjects = [
+    ...new Set((entries ?? []).map((entry) => entry.project)),
+  ]
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && close()}>
       <DialogContent className="sm:max-w-2xl">
@@ -109,7 +142,13 @@ export function MemoryImport({ open, list, homeDir, onClose, onDone }: { open: b
           <DialogTitle>{t("memory.pack.dialogTitle")}</DialogTitle>
           <DialogDescription>{t("memory.pack.dialogDesc")}</DialogDescription>
         </DialogHeader>
-        <input type="file" accept=".json,application/json" onChange={(event) => load(event.target.files?.[0])} aria-label={t("memory.pack.fileAria")} className="text-sm file:mr-3 file:rounded-md file:border file:bg-muted file:px-3 file:py-1" />
+        <input
+          type="file"
+          accept=".json,application/json"
+          onChange={(event) => load(event.target.files?.[0])}
+          aria-label={t("memory.pack.fileAria")}
+          className="text-sm file:mr-3 file:rounded-md file:border file:bg-muted file:px-3 file:py-1"
+        />
         {error && <p className="text-sm text-destructive">{error}</p>}
         {entries && (
           <ScrollArea className="max-h-[50vh]">
@@ -117,8 +156,19 @@ export function MemoryImport({ open, list, homeDir, onClose, onDone }: { open: b
               {packProjects.map((packProject) => (
                 <section key={packProject}>
                   <div className="mb-1 flex flex-wrap items-center gap-2 text-sm">
-                    <span className="font-medium">{packProject || t("memory.pack.noProject")}</span>
-                    <select aria-label={t("memory.pack.destAria", { name: packProject })} value={dest[packProject] ?? ""} onChange={(event) => setDest({ ...dest, [packProject]: event.target.value })} className={SELECT_CLASS_NAME}>
+                    <span className="font-medium">
+                      {packProject || t("memory.pack.noProject")}
+                    </span>
+                    <select
+                      aria-label={t("memory.pack.destAria", {
+                        name: packProject,
+                      })}
+                      value={dest[packProject] ?? ""}
+                      onChange={(event) =>
+                        setDest({ ...dest, [packProject]: event.target.value })
+                      }
+                      className={SELECT_CLASS_NAME}
+                    >
                       <option value="">{t("memory.pack.ignore")}</option>
                       {list.targets.map((target) => (
                         <option key={target.dir} value={target.dir}>
@@ -132,14 +182,44 @@ export function MemoryImport({ open, list, homeDir, onClose, onDone }: { open: b
                       if (entry.project !== packProject) return []
                       const isChecked = !off.has(entryIndex)
                       return [
-                        <li key={entryIndex} className="flex flex-wrap items-center gap-2 text-sm">
-                          <Checkbox checked={isChecked} disabled={!dest[packProject]} aria-label={entry.name} onCheckedChange={(checked) => setEntryChecked(entryIndex, checked)} />
-                          <span className="font-mono text-xs">{entry.name}</span>
+                        <li
+                          key={entryIndex}
+                          className="flex flex-wrap items-center gap-2 text-sm"
+                        >
+                          <Checkbox
+                            checked={isChecked}
+                            disabled={!dest[packProject]}
+                            aria-label={entry.name}
+                            onCheckedChange={(checked) =>
+                              setEntryChecked(entryIndex, checked)
+                            }
+                          />
+                          <span className="font-mono text-xs">
+                            {entry.name}
+                          </span>
                           {clash(entry) && isChecked && (
-                            <select aria-label={t("memory.pack.clashAria", { name: entry.name })} value={actFor(entryIndex)} onChange={(event) => setActs({ ...acts, [entryIndex]: event.target.value as Act })} className={SELECT_CLASS_NAME}>
-                              <option value="skip">{t("memory.pack.skip")}</option>
-                              <option value="replace">{t("memory.pack.replace")}</option>
-                              <option value="both">{t("memory.pack.both")}</option>
+                            <select
+                              aria-label={t("memory.pack.clashAria", {
+                                name: entry.name,
+                              })}
+                              value={actFor(entryIndex)}
+                              onChange={(event) =>
+                                setActs({
+                                  ...acts,
+                                  [entryIndex]: event.target.value as Act,
+                                })
+                              }
+                              className={SELECT_CLASS_NAME}
+                            >
+                              <option value="skip">
+                                {t("memory.pack.skip")}
+                              </option>
+                              <option value="replace">
+                                {t("memory.pack.replace")}
+                              </option>
+                              <option value="both">
+                                {t("memory.pack.both")}
+                              </option>
                             </select>
                           )}
                         </li>,

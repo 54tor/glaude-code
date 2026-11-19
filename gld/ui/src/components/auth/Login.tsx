@@ -27,10 +27,19 @@ export function AuthScreen() {
   )
 }
 
-export function Heading({ children, sub }: { children: ReactNode; sub?: ReactNode }) {
+export function Heading({
+  children,
+  sub,
+}: {
+  children: ReactNode
+  sub?: ReactNode
+}) {
   return (
     <div className="mb-6 space-y-1 text-center">
-      <LockKeyhole className="mx-auto size-8 text-muted-foreground" aria-hidden />
+      <LockKeyhole
+        className="mx-auto size-8 text-muted-foreground"
+        aria-hidden
+      />
       <h1 className="text-xl font-semibold tracking-tight">{children}</h1>
       {sub && <p className="text-sm text-muted-foreground">{sub}</p>}
     </div>
@@ -41,7 +50,11 @@ export function Heading({ children, sub }: { children: ReactNode; sub?: ReactNod
 export function ErrorLine({ msg, wait }: { msg?: string; wait?: number }) {
   const { t } = useTranslation()
   return (
-    <p role="alert" aria-live="assertive" className="min-h-5 text-sm text-destructive">
+    <p
+      role="alert"
+      aria-live="assertive"
+      className="min-h-5 text-sm text-destructive"
+    >
       {msg}
       {msg && wait ? " " : ""}
       {wait ? t("auth.wait", { n: wait }) : ""}
@@ -49,7 +62,9 @@ export function ErrorLine({ msg, wait }: { msg?: string; wait?: number }) {
   )
 }
 
-const isInstalledApp = () => typeof matchMedia === "function" && matchMedia("(display-mode: standalone)").matches
+const isInstalledApp = () =>
+  typeof matchMedia === "function" &&
+  matchMedia("(display-mode: standalone)").matches
 
 export function Login() {
   const { t } = useTranslation()
@@ -71,11 +86,21 @@ export function Login() {
     setBusy(true)
     setErr(false)
     try {
-      const session = await http.post<{ mfa: string[]; enroll: boolean; csrf: string }>("/auth/sessions", { name, password: pw })
+      const session = await http.post<{
+        mfa: string[]
+        enroll: boolean
+        csrf: string
+      }>("/auth/sessions", { name, password: pw })
       setBusy(false)
       if (!session.csrf) return setErr(true)
       setPw("")
-      setAuth({ state: "mfa", csrf: session.csrf, methods: session.mfa ?? [], enroll: !!session.enroll, user: undefined })
+      setAuth({
+        state: "mfa",
+        csrf: session.csrf,
+        methods: session.mfa ?? [],
+        enroll: !!session.enroll,
+        user: undefined,
+      })
     } catch (loginError) {
       setBusy(false)
       setErr(true)
@@ -85,18 +110,42 @@ export function Login() {
   }
   return (
     <form onSubmit={submit} className="space-y-4" noValidate>
-      <Heading sub={auth.expired ? t("auth.login.expired") : undefined}>{t("auth.login.title")}</Heading>
+      <Heading sub={auth.expired ? t("auth.login.expired") : undefined}>
+        {t("auth.login.title")}
+      </Heading>
       {pairFirst && pairButton}
       <div className="space-y-1.5">
         <Label htmlFor="gld-login-name">{t("auth.login.name")}</Label>
-        <Input id="gld-login-name" name="username" autoComplete="username" autoCapitalize="none" spellCheck={false} autoFocus required value={name} onChange={(event) => setName(event.target.value)} />
+        <Input
+          id="gld-login-name"
+          name="username"
+          autoComplete="username"
+          autoCapitalize="none"
+          spellCheck={false}
+          autoFocus
+          required
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+        />
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="gld-login-pw">{t("auth.login.password")}</Label>
-        <Input id="gld-login-pw" name="password" type="password" autoComplete="current-password" required value={pw} onChange={(event) => setPw(event.target.value)} />
+        <Input
+          id="gld-login-pw"
+          name="password"
+          type="password"
+          autoComplete="current-password"
+          required
+          value={pw}
+          onChange={(event) => setPw(event.target.value)}
+        />
       </div>
       <ErrorLine msg={err ? t("auth.login.invalid") : undefined} wait={left} />
-      <Button type="submit" className="w-full" disabled={busy || left > 0 || !name || !pw}>
+      <Button
+        type="submit"
+        className="w-full"
+        disabled={busy || left > 0 || !name || !pw}
+      >
         {t("auth.login.submit")}
       </Button>
       {!pairFirst && pairButton}
@@ -109,9 +158,16 @@ function Unavailable() {
   const [busy, setBusy] = useState(false)
   return (
     <div className="space-y-4 text-center">
-      <ServerCrash className="mx-auto size-8 text-muted-foreground" aria-hidden />
-      <h1 className="text-xl font-semibold tracking-tight">{t("auth.unavailable.title")}</h1>
-      <p className="text-sm text-muted-foreground">{t("auth.unavailable.text")}</p>
+      <ServerCrash
+        className="mx-auto size-8 text-muted-foreground"
+        aria-hidden
+      />
+      <h1 className="text-xl font-semibold tracking-tight">
+        {t("auth.unavailable.title")}
+      </h1>
+      <p className="text-sm text-muted-foreground">
+        {t("auth.unavailable.text")}
+      </p>
       <Button
         disabled={busy}
         onClick={async () => {

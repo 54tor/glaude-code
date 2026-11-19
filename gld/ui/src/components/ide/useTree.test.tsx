@@ -5,16 +5,24 @@ import { api } from "@/lib/api"
 import { useTree } from "./useTree"
 
 type L = Awaited<ReturnType<typeof api.fsTree>>
-const listing = (name: string): L => ({ entries: [{ name, type: "file", size: 1, mtime: 1 }], truncated: false })
+const listing = (name: string): L => ({
+  entries: [{ name, type: "file", size: 1, mtime: 1 }],
+  truncated: false,
+})
 afterEach(() => (vi.restoreAllMocks(), localStorage.clear()))
 
 describe("useTree", () => {
   it("une réponse plus ancienne n'écrase pas un listing plus récent du même dossier", async () => {
     let first!: (record: L) => void
-    const tree = vi.spyOn(api, "fsTree").mockReturnValueOnce(new Promise<L>((callback) => (first = callback))).mockResolvedValue(listing("neuf"))
+    const tree = vi
+      .spyOn(api, "fsTree")
+      .mockReturnValueOnce(new Promise<L>((callback) => (first = callback)))
+      .mockResolvedValue(listing("neuf"))
     const { result } = renderHook(() => useTree("/p"))
     act(() => result.current.refresh(""))
-    await waitFor(() => expect(result.current.lists[""]).toEqual(listing("neuf")))
+    await waitFor(() =>
+      expect(result.current.lists[""]).toEqual(listing("neuf"))
+    )
     await act(async () => first(listing("vieux")))
     expect(result.current.lists[""]).toEqual(listing("neuf"))
     expect(tree).toHaveBeenCalledTimes(2)
@@ -26,17 +34,24 @@ describe("useTree", () => {
     const { result } = renderHook(() => useTree("/p"))
     await waitFor(() => expect(tree).toHaveBeenCalledTimes(2))
     act(() => result.current.refreshAll())
-    expect(tree.mock.calls.slice(2)).toEqual([["/p", ""], ["/p", "src"]])
+    expect(tree.mock.calls.slice(2)).toEqual([
+      ["/p", ""],
+      ["/p", "src"],
+    ])
     act(() => result.current.collapseAll())
     expect(result.current.open.size).toBe(0)
     expect(tree).toHaveBeenCalledTimes(4)
   })
   it("refreshAll garde la garde par chemin : une réponse plus ancienne est ignorée", async () => {
     let first!: (record: L) => void
-    vi.spyOn(api, "fsTree").mockReturnValueOnce(new Promise<L>((callback) => (first = callback))).mockResolvedValue(listing("neuf"))
+    vi.spyOn(api, "fsTree")
+      .mockReturnValueOnce(new Promise<L>((callback) => (first = callback)))
+      .mockResolvedValue(listing("neuf"))
     const { result } = renderHook(() => useTree("/p"))
     act(() => result.current.refreshAll())
-    await waitFor(() => expect(result.current.lists[""]).toEqual(listing("neuf")))
+    await waitFor(() =>
+      expect(result.current.lists[""]).toEqual(listing("neuf"))
+    )
     await act(async () => first(listing("vieux")))
     expect(result.current.lists[""]).toEqual(listing("neuf"))
   })

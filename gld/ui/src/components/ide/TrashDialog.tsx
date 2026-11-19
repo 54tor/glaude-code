@@ -55,12 +55,10 @@ function Body({ dir, canWrite, onRestored }: Omit<Props, "open" | "onClose">) {
   }, [])
   const load = useCallback(
     () =>
-      api
-        .fsTrash(dir)
-        .then(
-          (response) => alive.current && setItems(response.items),
-          () => alive.current && setItems("failed")
-        ),
+      api.fsTrash(dir).then(
+        (response) => alive.current && setItems(response.items),
+        () => alive.current && setItems("failed")
+      ),
     [dir]
   )
   useEffect(() => {
@@ -79,15 +77,21 @@ function Body({ dir, canWrite, onRestored }: Omit<Props, "open" | "onClose">) {
     }
   }
 
-  const failMsg = (error: unknown) => (error instanceof ApiError ? error.message : t("shell.act.failed"))
+  const failMsg = (error: unknown) =>
+    error instanceof ApiError ? error.message : t("shell.act.failed")
   const restore = (item: FsTrashItem) =>
     exclusive(item.id, async () => {
       try {
         await api.fsTrashRestore(dir, item.id)
       } catch (restoreError) {
         if (!alive.current) return
-        const alreadyExists = restoreError instanceof ApiError && restoreError.status === CONFLICT
-        return setError(alreadyExists ? t("ide.trash.exists", { path: item.path }) : failMsg(restoreError))
+        const alreadyExists =
+          restoreError instanceof ApiError && restoreError.status === CONFLICT
+        return setError(
+          alreadyExists
+            ? t("ide.trash.exists", { path: item.path })
+            : failMsg(restoreError)
+        )
       }
       // Le fichier est revenu sur le disque même si la fenêtre a été fermée entre-temps : l'arbre doit le montrer.
       onRestored()

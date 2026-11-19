@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
-import { dismissGitPush, gitPushOutputTail, resumeGitPushes, setGitPushTerminalOpen, useGitPushRuns, type GitPushRun } from "@/hooks/useGitPush"
+import {
+  dismissGitPush,
+  gitPushOutputTail,
+  resumeGitPushes,
+  setGitPushTerminalOpen,
+  useGitPushRuns,
+  type GitPushRun,
+} from "@/hooks/useGitPush"
 import { GitPushPill } from "./GitPushPill"
 import { GitPushSendDialog } from "./GitPushSendDialog"
 import { GitPushTerminal } from "./GitPushTerminal"
@@ -24,29 +31,65 @@ export function GitPushHost() {
       {runs.map((run) => (
         <GitPushRunView key={run.id} run={run} requestSend={requestSend} />
       ))}
-      {runningRuns.map((run, position) => !run.isTerminalOpen && <GitPushPill key={run.id} run={run} position={position} />)}
-      {runToSend && <GitPushSendDialog run={runToSend} open onOpenChange={(isOpen) => !isOpen && closeSend()} />}
+      {runningRuns.map(
+        (run, position) =>
+          !run.isTerminalOpen && (
+            <GitPushPill key={run.id} run={run} position={position} />
+          )
+      )}
+      {runToSend && (
+        <GitPushSendDialog
+          run={runToSend}
+          open
+          onOpenChange={(isOpen) => !isOpen && closeSend()}
+        />
+      )}
     </>
   )
 }
 
-function GitPushRunView({ run, requestSend }: { run: GitPushRun; requestSend: (runId: number) => void }) {
+function GitPushRunView({
+  run,
+  requestSend,
+}: {
+  run: GitPushRun
+  requestSend: (runId: number) => void
+}) {
   useGitPushToast(run, requestSend)
   return <GitPushTerminal run={run} />
 }
 
-function ToastBody({ runId, tail, openLabel }: { runId: number; tail?: string; openLabel: string }) {
+function ToastBody({
+  runId,
+  tail,
+  openLabel,
+}: {
+  runId: number
+  tail?: string
+  openLabel: string
+}) {
   return (
     <div className="flex flex-col gap-1">
-      {tail && <pre className="max-h-16 overflow-hidden text-xs whitespace-pre-wrap break-all">{tail}</pre>}
-      <button type="button" onClick={() => setGitPushTerminalOpen(runId, true)} className="w-fit cursor-pointer text-xs font-medium underline">
+      {tail && (
+        <pre className="max-h-16 overflow-hidden text-xs break-all whitespace-pre-wrap">
+          {tail}
+        </pre>
+      )}
+      <button
+        type="button"
+        onClick={() => setGitPushTerminalOpen(runId, true)}
+        className="w-fit cursor-pointer text-xs font-medium underline"
+      >
         {openLabel}
       </button>
     </div>
   )
 }
 
-function useGitPushToast(run: GitPushRun, requestSend: (runId: number) => void) {
+function useGitPushToast(
+  run: GitPushRun,
+  requestSend: (runId: number) => void
+) {
   const { t } = useTranslation()
   const { id: runId, status, exitCode, errorMessage, branch, remote } = run
   const toastId = toastIdOf(run)
@@ -65,9 +108,41 @@ function useGitPushToast(run: GitPushRun, requestSend: (runId: number) => void) 
     }
     const dismissRun = () => dismissGitPush(runId)
     const shared = { id: toastId, duration: Infinity, onDismiss: dismissRun }
-    const tail = status === "error" ? errorMessage : gitPushOutputTail(runId, TOAST_TAIL_LINES)
-    const description = <ToastBody runId={runId} tail={tail} openLabel={t("conversation.gitPush.openTerminal")} />
-    if (status === "succeeded") toast.success(t("conversation.gitPush.toastDone", { branch, remote }), { ...shared, description, duration: TOAST_SUCCESS_MS, onAutoClose: dismissRun })
-    else toast.error(t("conversation.gitPush.toastFailed", { remote, code: exitCode ?? "?" }), { ...shared, description, action: sendToClaude, closeButton: true })
-  }, [runId, toastId, status, exitCode, errorMessage, branch, remote, requestSend, t])
+    const tail =
+      status === "error"
+        ? errorMessage
+        : gitPushOutputTail(runId, TOAST_TAIL_LINES)
+    const description = (
+      <ToastBody
+        runId={runId}
+        tail={tail}
+        openLabel={t("conversation.gitPush.openTerminal")}
+      />
+    )
+    if (status === "succeeded")
+      toast.success(t("conversation.gitPush.toastDone", { branch, remote }), {
+        ...shared,
+        description,
+        duration: TOAST_SUCCESS_MS,
+        onAutoClose: dismissRun,
+      })
+    else
+      toast.error(
+        t("conversation.gitPush.toastFailed", {
+          remote,
+          code: exitCode ?? "?",
+        }),
+        { ...shared, description, action: sendToClaude, closeButton: true }
+      )
+  }, [
+    runId,
+    toastId,
+    status,
+    exitCode,
+    errorMessage,
+    branch,
+    remote,
+    requestSend,
+    t,
+  ])
 }

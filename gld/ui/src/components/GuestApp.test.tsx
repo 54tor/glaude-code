@@ -8,17 +8,59 @@ import { GuestApp } from "./GuestApp"
 import { Message } from "./Message"
 
 const S = "/v1/sessions/{id}"
-const WHITE = new Set([`GET ${S}/conversation`, `GET ${S}/conversation/text`, `GET ${S}/conversation/tools`, `GET ${S}/conversation/images/{img}`, `GET ${S}/live`, `GET ${S}/state`, `GET ${S}/tasks/{task}/output`, `GET ${S}/queue`, `POST ${S}/queue`, `DELETE ${S}/queue/{qid}`, "GET /v1/guest/me", "GET /v1/guest/sessions", "DELETE /v1/guest/me"])
+const WHITE = new Set([
+  `GET ${S}/conversation`,
+  `GET ${S}/conversation/text`,
+  `GET ${S}/conversation/tools`,
+  `GET ${S}/conversation/images/{img}`,
+  `GET ${S}/live`,
+  `GET ${S}/state`,
+  `GET ${S}/tasks/{task}/output`,
+  `GET ${S}/queue`,
+  `POST ${S}/queue`,
+  `DELETE ${S}/queue/{qid}`,
+  "GET /v1/guest/me",
+  "GET /v1/guest/sessions",
+  "DELETE /v1/guest/me",
+])
 // Les segments variables d'une route, comme dans les motifs du serveur.
-const norm = (path: string) => path.replace(/^\/v1\/sessions\/[^/]+/, S).replace(/\/images\/[^/]+$/, "/images/{img}").replace(/\/queue\/[^/]+$/, "/queue/{qid}").replace(/\/tasks\/[^/]+\/output$/, "/tasks/{task}/output")
-const key = (record: { method: string; path: string }) => `${record.method} ${record.path}`
-const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { "Content-Type": "application/json" } })
-const live = { open: true, status: "", activity: "", thinking: false, since: 0, context: 0, out: 0, model: "", subs: [] }
+const norm = (path: string) =>
+  path
+    .replace(/^\/v1\/sessions\/[^/]+/, S)
+    .replace(/\/images\/[^/]+$/, "/images/{img}")
+    .replace(/\/queue\/[^/]+$/, "/queue/{qid}")
+    .replace(/\/tasks\/[^/]+\/output$/, "/tasks/{task}/output")
+const key = (record: { method: string; path: string }) =>
+  `${record.method} ${record.path}`
+const json = (value: unknown, status = 200) =>
+  new Response(JSON.stringify(value), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  })
+const live = {
+  open: true,
+  status: "",
+  activity: "",
+  thinking: false,
+  since: 0,
+  context: 0,
+  out: 0,
+  model: "",
+  subs: [],
+}
 
 let mode: "rw" | "ro"
 let ended: number | "html" | null
 let queue: unknown[]
-let calls: { path: string; raw: string; method: string; csrf: string | null; body: string; search: string; share: string | null }[]
+let calls: {
+  path: string
+  raw: string
+  method: string
+  csrf: string | null
+  body: string
+  search: string
+  share: string | null
+}[]
 let shares: { handle: string; title: string; mode: "rw" | "ro" }[] | 403
 let title: string
 const H = "0123456789abcdef"
@@ -34,7 +76,10 @@ beforeEach(() => {
   ended = null
   queue = []
   rich = false
-  all = [{ r: "assistant", t: "salut invité" }, { r: "doc", t: "/d/a.md" }]
+  all = [
+    { r: "assistant", t: "salut invité" },
+    { r: "doc", t: "/d/a.md" },
+  ]
   calls = []
   shares = [{ handle: H, title: "Ma session", mode: "rw" }]
   title = "Ma session"
@@ -47,25 +92,80 @@ beforeEach(() => {
       const path = norm(raw)
       const search = new URL(url, "http://x").search
       const method = init.method ?? "GET"
-      calls.push({ path, raw, search, method: init.method ?? "GET", csrf: new Headers(init.headers).get("X-Gld-CSRF"), share: new Headers(init.headers).get("X-Gld-Share"), body: String(init.body ?? "") })
-      if (path === "/v1/guest/sessions") return shares === 403 ? json({ error: { code: "forbidden", message: "x" } }, 403) : json(shares)
-      if (ended === "html") return new Response("<html></html>", { status: 200, headers: { "Content-Type": "text/html" } })
-      if (ended) return json({ error: { code: "forbidden", message: "x" } }, ended)
-      if (path === "/v1/guest/sessions") return shares === 403 ? json({ error: { code: "forbidden", message: "x" } }, 403) : json(shares)
-      if (path === "/v1/guest/me" && method === "GET") return json({ id: "s1", dir: "/d", mode, csrf: "tok", handle: H, title, invite: "inv1", label: "Léa" })
+      calls.push({
+        path,
+        raw,
+        search,
+        method: init.method ?? "GET",
+        csrf: new Headers(init.headers).get("X-Gld-CSRF"),
+        share: new Headers(init.headers).get("X-Gld-Share"),
+        body: String(init.body ?? ""),
+      })
+      if (path === "/v1/guest/sessions")
+        return shares === 403
+          ? json({ error: { code: "forbidden", message: "x" } }, 403)
+          : json(shares)
+      if (ended === "html")
+        return new Response("<html></html>", {
+          status: 200,
+          headers: { "Content-Type": "text/html" },
+        })
+      if (ended)
+        return json({ error: { code: "forbidden", message: "x" } }, ended)
+      if (path === "/v1/guest/sessions")
+        return shares === 403
+          ? json({ error: { code: "forbidden", message: "x" } }, 403)
+          : json(shares)
+      if (path === "/v1/guest/me" && method === "GET")
+        return json({
+          id: "s1",
+          dir: "/d",
+          mode,
+          csrf: "tok",
+          handle: H,
+          title,
+          invite: "inv1",
+          label: "Léa",
+        })
       if (path === `${S}/conversation`) {
         const uRLSearchParams = new URL(url, "http://x").searchParams
         const limit = Number(uRLSearchParams.get("limit") ?? 1000)
-        const end = uRLSearchParams.has("before") && Number(uRLSearchParams.get("before")) > 0 ? Number(uRLSearchParams.get("before")) : all.length
+        const end =
+          uRLSearchParams.has("before") &&
+          Number(uRLSearchParams.get("before")) > 0
+            ? Number(uRLSearchParams.get("before"))
+            : all.length
         const start = Math.max(0, end - limit)
-        const base = rich ? [{ r: "assistant", t: "[lien](https://ex.org/x)" }, { r: "user", t: "", img: "1", o: 1, k: 0 }, { r: "assistant", t: "coupé", cut: 5, len: 9000, o: 2, n: 1 }, { r: "tool", t: "Bash  ls" }] : []
-        return json({ msgs: [...base, ...all.slice(start, end)], start, more: start > 0 })
+        const base = rich
+          ? [
+              { r: "assistant", t: "[lien](https://ex.org/x)" },
+              { r: "user", t: "", img: "1", o: 1, k: 0 },
+              { r: "assistant", t: "coupé", cut: 5, len: 9000, o: 2, n: 1 },
+              { r: "tool", t: "Bash  ls" },
+            ]
+          : []
+        return json({
+          msgs: [...base, ...all.slice(start, end)],
+          start,
+          more: start > 0,
+        })
       }
       if (path === `${S}/conversation/text`) return json({ t: "suite", cut: 0 })
       if (path === `${S}/live`) return json(live)
-      if (path === `${S}/queue` && method === "GET") return json({ items: queue })
+      if (path === `${S}/queue` && method === "GET")
+        return json({ items: queue })
       if (path === `${S}/queue` && method === "POST") {
-        queue = [{ id: "q1", text: JSON.parse(String(init.body)).text, author: "guest", guest: "inv1", label: "Léa", state: "queued", at: 1 }]
+        queue = [
+          {
+            id: "q1",
+            text: JSON.parse(String(init.body)).text,
+            author: "guest",
+            guest: "inv1",
+            label: "Léa",
+            state: "queued",
+            at: 1,
+          },
+        ]
         return json({ item: queue[0] }, 201)
       }
       if (path === `${S}/queue/{qid}` && method === "DELETE") {
@@ -73,7 +173,8 @@ beforeEach(() => {
         queue = []
         return json({ text })
       }
-      if (path === "/v1/guest/me" && method === "DELETE") return new Response(null, { status: 204 })
+      if (path === "/v1/guest/me" && method === "DELETE")
+        return new Response(null, { status: 204 })
       return json({ error: { code: "forbidden", message: "x" } }, 403)
     })
   )
@@ -84,7 +185,8 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-const tick = (ms: number) => act(async () => void (await vi.advanceTimersByTimeAsync(ms)))
+const tick = (ms: number) =>
+  act(async () => void (await vi.advanceTimersByTimeAsync(ms)))
 const mount = async () => {
   render(<GuestApp />)
   await tick(50)
@@ -92,7 +194,9 @@ const mount = async () => {
 const box = () => screen.getByRole("textbox") as HTMLTextAreaElement
 const send = async (text: string) => {
   fireEvent.change(box(), { target: { value: text } })
-  fireEvent.click(screen.getByRole("button", { name: i18n.t("conversation.composer.send") }))
+  fireEvent.click(
+    screen.getByRole("button", { name: i18n.t("conversation.composer.send") })
+  )
   await tick(50)
 }
 
@@ -101,7 +205,9 @@ describe("GuestApp", () => {
     await mount()
     expect(screen.getByText("salut invité")).toBeTruthy()
     await send("coucou")
-    const add = calls.find((record) => record.path === `${S}/queue` && record.method === "POST")!
+    const add = calls.find(
+      (record) => record.path === `${S}/queue` && record.method === "POST"
+    )!
     expect(add.csrf).toBe("tok")
     expect(JSON.parse(add.body).text).toBe("coucou")
     await tick(2100)
@@ -141,7 +247,9 @@ describe("GuestApp", () => {
     await send("x")
     await tick(12000)
     expect(calls.length).toBeGreaterThan(3)
-    expect([...new Set(calls.map(key))].filter((path) => !WHITE.has(path))).toEqual([])
+    expect(
+      [...new Set(calls.map(key))].filter((path) => !WHITE.has(path))
+    ).toEqual([])
     expect(document.querySelector("a[href]")).toBeNull()
     expect(document.querySelector("nav, aside")).toBeNull()
     expect(screen.queryByText("a.md")).toBeNull()
@@ -150,22 +258,75 @@ describe("GuestApp", () => {
   it("retirer : seulement sur les éléments de cette invitation, pas ceux de l'hôte, d'un autre invité ni en cours d'envoi", async () => {
     queue = [
       { id: "h", text: "hôte", author: "host", state: "queued", at: 1 },
-      { id: "g1", text: "invité un", author: "guest", guest: "inv1", label: "Léa", state: "queued", at: 2 },
-      { id: "g2", text: "invité deux", author: "guest", guest: "inv1", label: "Léa", state: "sending", at: 3 },
-      { id: "g3", text: "invité trois", author: "guest", guest: "inv1", label: "Léa", state: "uncertain", at: 4 },
-      { id: "g4", text: "autre invité", author: "guest", guest: "inv2", label: "Bob", state: "queued", at: 5 },
+      {
+        id: "g1",
+        text: "invité un",
+        author: "guest",
+        guest: "inv1",
+        label: "Léa",
+        state: "queued",
+        at: 2,
+      },
+      {
+        id: "g2",
+        text: "invité deux",
+        author: "guest",
+        guest: "inv1",
+        label: "Léa",
+        state: "sending",
+        at: 3,
+      },
+      {
+        id: "g3",
+        text: "invité trois",
+        author: "guest",
+        guest: "inv1",
+        label: "Léa",
+        state: "uncertain",
+        at: 4,
+      },
+      {
+        id: "g4",
+        text: "autre invité",
+        author: "guest",
+        guest: "inv2",
+        label: "Bob",
+        state: "queued",
+        at: 5,
+      },
     ]
     await mount()
-    expect(screen.getAllByRole("button", { name: i18n.t("conversation.composer.dequeue") })).toHaveLength(2)
-    fireEvent.click(screen.getAllByRole("button", { name: i18n.t("conversation.composer.dequeue") })[0])
+    expect(
+      screen.getAllByRole("button", {
+        name: i18n.t("conversation.composer.dequeue"),
+      })
+    ).toHaveLength(2)
+    fireEvent.click(
+      screen.getAllByRole("button", {
+        name: i18n.t("conversation.composer.dequeue"),
+      })[0]
+    )
     await tick(50)
-    expect(calls.find((record) => record.method === "DELETE")!.raw.split("/").pop()).toBe("g1")
+    expect(
+      calls
+        .find((record) => record.method === "DELETE")!
+        .raw.split("/")
+        .pop()
+    ).toBe("g1")
   })
 
   it("la file nomme l'auteur : libellé de l'invité, Hôte pour l'hôte", async () => {
     queue = [
       { id: "h", text: "hôte", author: "host", state: "queued", at: 1 },
-      { id: "g4", text: "autre invité", author: "guest", guest: "inv2", label: "Bob", state: "queued", at: 5 },
+      {
+        id: "g4",
+        text: "autre invité",
+        author: "guest",
+        guest: "inv2",
+        label: "Bob",
+        state: "queued",
+        at: 5,
+      },
     ]
     await mount()
     expect(screen.getByText("Bob")).toBeTruthy()
@@ -174,9 +335,18 @@ describe("GuestApp", () => {
 
   it("Quitter : appelle DELETE /v1/guest/me, affiche l'au revoir et arrête les sondages", async () => {
     await mount()
-    fireEvent.click(screen.getByRole("button", { name: i18n.t("conversation.guest.leave") }))
+    fireEvent.click(
+      screen.getByRole("button", { name: i18n.t("conversation.guest.leave") })
+    )
     await tick(50)
-    expect(calls.some((record) => record.path === "/v1/guest/me" && record.method === "DELETE" && record.csrf === "tok")).toBe(true)
+    expect(
+      calls.some(
+        (record) =>
+          record.path === "/v1/guest/me" &&
+          record.method === "DELETE" &&
+          record.csrf === "tok"
+      )
+    ).toBe(true)
     expect(screen.getByText(i18n.t("conversation.guest.bye"))).toBeTruthy()
     const count = calls.length
     await tick(15000)
@@ -189,13 +359,19 @@ describe("GuestApp", () => {
     fireEvent.click(screen.getByRole("button", { name: /suite|more/i }))
     await tick(50)
     await tick(2100)
-    expect(document.querySelector("img")!.getAttribute("src")).toMatch(/^\/v1\/sessions\/s1\/conversation\/images\/1-0\?/)
+    expect(document.querySelector("img")!.getAttribute("src")).toMatch(
+      /^\/v1\/sessions\/s1\/conversation\/images\/1-0\?/
+    )
     const link = document.querySelector("a[href='https://ex.org/x']")!
     expect(link.getAttribute("rel")).toContain("noopener")
     expect(link.getAttribute("rel")).toContain("noreferrer")
     expect(screen.getByText(/Bash/)).toBeTruthy()
-    expect(calls.some((record) => record.path === `${S}/conversation/text`)).toBe(true)
-    expect([...new Set(calls.map(key))].filter((path) => !WHITE.has(path))).toEqual([])
+    expect(
+      calls.some((record) => record.path === `${S}/conversation/text`)
+    ).toBe(true)
+    expect(
+      [...new Set(calls.map(key))].filter((path) => !WHITE.has(path))
+    ).toEqual([])
   })
 
   it("historique : plus de 200 messages, bouton, préfixe conservé par le sondage suivant", async () => {
@@ -203,33 +379,63 @@ describe("GuestApp", () => {
     await mount()
     expect(screen.queryByText("m249")).toBeNull()
     expect(screen.getByText("m449")).toBeTruthy()
-    fireEvent.click(screen.getByRole("button", { name: i18n.t("conversation.view.loadOlder") }))
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: i18n.t("conversation.view.loadOlder"),
+      })
+    )
     await tick(50)
     expect(screen.getByText("m249")).toBeTruthy()
     all = [...all, msg(450)]
     await tick(2100)
     expect(screen.getByText("m450")).toBeTruthy()
     expect(screen.getByText("m249")).toBeTruthy()
-    fireEvent.click(screen.getByRole("button", { name: i18n.t("conversation.view.loadOlder") }))
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: i18n.t("conversation.view.loadOlder"),
+      })
+    )
     await tick(50)
     expect(screen.getByText("m0")).toBeTruthy()
-    expect(screen.queryByRole("button", { name: i18n.t("conversation.view.loadOlder") })).toBeNull()
+    expect(
+      screen.queryByRole("button", {
+        name: i18n.t("conversation.view.loadOlder"),
+      })
+    ).toBeNull()
   })
 
   it("bascule des outils : redemande /conv avec tools=1", async () => {
     await mount()
-    expect(calls.filter((record) => record.path === `${S}/conversation`).every((record) => !record.search.includes("tools=1"))).toBe(true)
-    fireEvent.click(screen.getByRole("button", { name: i18n.t("conversation.view.tools") }))
+    expect(
+      calls
+        .filter((record) => record.path === `${S}/conversation`)
+        .every((record) => !record.search.includes("tools=1"))
+    ).toBe(true)
+    fireEvent.click(
+      screen.getByRole("button", { name: i18n.t("conversation.view.tools") })
+    )
     await tick(50)
-    expect(calls.some((record) => record.path === `${S}/conversation` && record.search.includes("tools=1"))).toBe(true)
-    expect(screen.getByRole("button", { name: i18n.t("conversation.view.tools") }).getAttribute("aria-pressed")).toBe("true")
+    expect(
+      calls.some(
+        (record) =>
+          record.path === `${S}/conversation` &&
+          record.search.includes("tools=1")
+      )
+    ).toBe(true)
+    expect(
+      screen
+        .getByRole("button", { name: i18n.t("conversation.view.tools") })
+        .getAttribute("aria-pressed")
+    ).toBe("true")
   })
 
   it("l'hôte met fin au partage pendant la saisie : écran terminé après le POST refusé", async () => {
     await mount()
     fireEvent.change(box(), { target: { value: "x" } })
     ended = 403
-    fireEvent.click(screen.getByRole("button", { name: i18n.t("conversation.composer.send") }))
+    fireEvent.click(
+      screen.getByRole("button", { name: i18n.t("conversation.composer.send") })
+    )
     await tick(50)
     expect(screen.getByText(i18n.t("conversation.guest.ended"))).toBeTruthy()
     const count = calls.length
@@ -258,7 +464,11 @@ describe("GuestApp", () => {
     fireEvent.keyDown(box(), { key: "Enter" })
     fireEvent.keyDown(box(), { key: "Enter" })
     await tick(50)
-    expect(calls.filter((record) => record.path === `${S}/queue` && record.method === "POST")).toHaveLength(1)
+    expect(
+      calls.filter(
+        (record) => record.path === `${S}/queue` && record.method === "POST"
+      )
+    ).toHaveLength(1)
   })
 
   it("chaque requête porte X-Gld-Share (sauf /v1/guest/sessions) et rien ne part avant", async () => {
@@ -268,7 +478,11 @@ describe("GuestApp", () => {
     const own = calls.filter((record) => record.path !== "/v1/guest/sessions")
     expect(own.length).toBeGreaterThan(3)
     expect(own.filter((record) => record.share !== H)).toEqual([])
-    expect(calls.filter((record) => record.path === "/v1/guest/sessions").every((record) => record.share === null)).toBe(true)
+    expect(
+      calls
+        .filter((record) => record.path === "/v1/guest/sessions")
+        .every((record) => record.share === null)
+    ).toBe(true)
   })
 
   it("poignée invalide dans l'URL : traitée comme /guest, aucune requête avec en-tête", async () => {
@@ -276,7 +490,12 @@ describe("GuestApp", () => {
     shares = 403
     await mount()
     expect(screen.getByText(i18n.t("conversation.guest.ended"))).toBeTruthy()
-    expect(calls.every((record) => record.share === null && record.path === "/v1/guest/sessions")).toBe(true)
+    expect(
+      calls.every(
+        (record) =>
+          record.share === null && record.path === "/v1/guest/sessions"
+      )
+    ).toBe(true)
   })
 
   it("titre du partage dans l'en-tête", async () => {
@@ -289,7 +508,12 @@ describe("GuestApp", () => {
     beforeEach(() => go("/guest"))
     const loc = () => {
       const replace = vi.fn()
-      vi.stubGlobal("location", { ...window.location, pathname: window.location.pathname, replace, assign: replace })
+      vi.stubGlobal("location", {
+        ...window.location,
+        pathname: window.location.pathname,
+        replace,
+        assign: replace,
+      })
       return replace
     }
     it("0 partage ou 403 : partage terminé", async () => {
@@ -308,25 +532,40 @@ describe("GuestApp", () => {
       expect(replace).toHaveBeenCalledWith(`/guest/${H}`)
     })
     it("plusieurs partages : sélecteur avec titres, mode et repli de titre", async () => {
-      shares = [{ handle: H, title: "Alpha", mode: "rw" }, { handle: H2, title: "", mode: "ro" }]
+      shares = [
+        { handle: H, title: "Alpha", mode: "rw" },
+        { handle: H2, title: "", mode: "ro" },
+      ]
       await mount()
       expect(screen.getByText("Alpha")).toBeTruthy()
       expect(screen.getByText(i18n.t("conversation.guest.title"))).toBeTruthy()
-      expect(screen.getByRole("link", { name: /Alpha/ }).getAttribute("href")).toBe(`/guest/${H}`)
+      expect(
+        screen.getByRole("link", { name: /Alpha/ }).getAttribute("href")
+      ).toBe(`/guest/${H}`)
       expect(screen.getByText(i18n.t("conversation.guest.modeRo"))).toBeTruthy()
     })
   })
 
   describe("autres sessions", () => {
-    const menu = () => screen.queryByRole("button", { name: i18n.t("conversation.guest.others") })
+    const menu = () =>
+      screen.queryByRole("button", {
+        name: i18n.t("conversation.guest.others"),
+      })
     it("pas de menu avec un seul partage", async () => {
       await mount()
       expect(menu()).toBeNull()
     })
     it("menu avec plusieurs partages, navigue vers la poignée choisie", async () => {
-      shares = [{ handle: H, title: "Ma session", mode: "rw" }, { handle: H2, title: "Autre", mode: "ro" }]
+      shares = [
+        { handle: H, title: "Ma session", mode: "rw" },
+        { handle: H2, title: "Autre", mode: "ro" },
+      ]
       const assign = vi.fn()
-      vi.stubGlobal("location", { ...window.location, pathname: window.location.pathname, assign })
+      vi.stubGlobal("location", {
+        ...window.location,
+        pathname: window.location.pathname,
+        assign,
+      })
       await mount()
       fireEvent.pointerDown(menu()!, { button: 0, ctrlKey: false })
       await tick(50)
@@ -335,12 +574,19 @@ describe("GuestApp", () => {
       expect(screen.queryByRole("menuitem", { name: /Ma session/ })).toBeNull()
     })
     it("Quitter propose les autres partages", async () => {
-      shares = [{ handle: H, title: "Ma session", mode: "rw" }, { handle: H2, title: "Autre", mode: "ro" }]
+      shares = [
+        { handle: H, title: "Ma session", mode: "rw" },
+        { handle: H2, title: "Autre", mode: "ro" },
+      ]
       await mount()
-      fireEvent.click(screen.getByRole("button", { name: i18n.t("conversation.guest.leave") }))
+      fireEvent.click(
+        screen.getByRole("button", { name: i18n.t("conversation.guest.leave") })
+      )
       await tick(50)
       expect(screen.getByText(i18n.t("conversation.guest.bye"))).toBeTruthy()
-      expect(screen.getByRole("link", { name: /Autre/ }).getAttribute("href")).toBe(`/guest/${H2}`)
+      expect(
+        screen.getByRole("link", { name: /Autre/ }).getAttribute("href")
+      ).toBe(`/guest/${H2}`)
     })
   })
 
@@ -351,11 +597,20 @@ describe("GuestApp", () => {
     const img = document.querySelector("img")!
     expect(img.getAttribute("src")).toContain(`share=${H}`)
     fireEvent.click(img.closest("button")!)
-    expect(document.querySelector("[role=dialog] img")!.getAttribute("src")).toContain(`share=${H}`)
+    expect(
+      document.querySelector("[role=dialog] img")!.getAttribute("src")
+    ).toContain(`share=${H}`)
     cleanup()
     setAuth({ share: undefined })
-    render(<Message m={{ r: "user", t: "", img: "1", o: 1, k: 0 }} conv={{ dir: "/d", id: "s1", tools: false }} />)
-    expect(document.querySelector("img")!.getAttribute("src")).not.toContain("share=")
+    render(
+      <Message
+        m={{ r: "user", t: "", img: "1", o: 1, k: 0 }}
+        conv={{ dir: "/d", id: "s1", tools: false }}
+      />
+    )
+    expect(document.querySelector("img")!.getAttribute("src")).not.toContain(
+      "share="
+    )
   })
 
   it("poignée avec barre finale : retombe sur le sélecteur", async () => {
@@ -369,21 +624,38 @@ describe("GuestApp", () => {
     go("/guest")
     const base = vi.mocked(fetch).getMockImplementation()!
     let down = true
-    vi.mocked(fetch).mockImplementation(async (uRL, requestInit) => (down && String(uRL).startsWith("/v1/guest/sessions") ? new Response("x", { status: 500 }) : base(uRL, requestInit)))
+    vi.mocked(fetch).mockImplementation(async (uRL, requestInit) =>
+      down && String(uRL).startsWith("/v1/guest/sessions")
+        ? new Response("x", { status: 500 })
+        : base(uRL, requestInit)
+    )
     await mount()
-    expect(screen.getByText(i18n.t("conversation.guest.listFailed"))).toBeTruthy()
+    expect(
+      screen.getByText(i18n.t("conversation.guest.listFailed"))
+    ).toBeTruthy()
     down = false
-    shares = [{ handle: H, title: "A", mode: "rw" }, { handle: H2, title: "B", mode: "rw" }]
-    fireEvent.click(screen.getByRole("button", { name: i18n.t("conversation.guest.retry") }))
+    shares = [
+      { handle: H, title: "A", mode: "rw" },
+      { handle: H2, title: "B", mode: "rw" },
+    ]
+    fireEvent.click(
+      screen.getByRole("button", { name: i18n.t("conversation.guest.retry") })
+    )
     await tick(50)
     expect(screen.getByRole("link", { name: /B/ })).toBeTruthy()
   })
 
   it("sondage /v1/guest/sessions : ignoré onglet caché, arrêté en phase terminée", async () => {
-    shares = [{ handle: H, title: "A", mode: "rw" }, { handle: H2, title: "B", mode: "rw" }]
+    shares = [
+      { handle: H, title: "A", mode: "rw" },
+      { handle: H2, title: "B", mode: "rw" },
+    ]
     await mount()
-    const callback = () => calls.filter((record) => record.path === "/v1/guest/sessions").length
-    const vis = vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden")
+    const callback = () =>
+      calls.filter((record) => record.path === "/v1/guest/sessions").length
+    const vis = vi
+      .spyOn(document, "visibilityState", "get")
+      .mockReturnValue("hidden")
     const n0 = callback()
     await tick(31000)
     expect(callback()).toBe(n0)
@@ -401,12 +673,17 @@ describe("GuestApp", () => {
   })
 
   it("partage terminé : l'écran propose les autres partages valides", async () => {
-    shares = [{ handle: H, title: "A", mode: "rw" }, { handle: H2, title: "Autre B", mode: "rw" }]
+    shares = [
+      { handle: H, title: "A", mode: "rw" },
+      { handle: H2, title: "Autre B", mode: "rw" },
+    ]
     await mount()
     ended = 403
     shares = [{ handle: H2, title: "Autre B", mode: "rw" }]
     await tick(5100)
     expect(screen.getByText(i18n.t("conversation.guest.ended"))).toBeTruthy()
-    expect(screen.getByRole("link", { name: /Autre B/ }).getAttribute("href")).toBe(`/guest/${H2}`)
+    expect(
+      screen.getByRole("link", { name: /Autre B/ }).getAttribute("href")
+    ).toBe(`/guest/${H2}`)
   })
 })

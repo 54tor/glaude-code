@@ -104,7 +104,10 @@ export function ThemeProvider({
     store.set("palette", id)
     paletteRef.current = id
     setPaletteState(id)
-    applyPalette(id, document.documentElement.classList.contains("dark") ? "dark" : "light")
+    applyPalette(
+      id,
+      document.documentElement.classList.contains("dark") ? "dark" : "light"
+    )
   }, [])
 
   const setTheme = React.useCallback(
@@ -173,7 +176,8 @@ export function ThemeProvider({
       }
 
       setThemeState((currentTheme) => {
-        const displayedTheme = currentTheme === "system" ? getSystemTheme() : currentTheme
+        const displayedTheme =
+          currentTheme === "system" ? getSystemTheme() : currentTheme
         const nextTheme = displayedTheme === "dark" ? "light" : "dark"
 
         store.set(storageKey, nextTheme)

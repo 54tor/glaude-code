@@ -3,7 +3,11 @@ import tailwindcss from "@tailwindcss/vite"
 import react from "@vitejs/plugin-react"
 import { defineConfig } from "vitest/config"
 
-type ChunkCtx = { getModuleInfo(id: string): { importedIds: string[]; importers: string[]; code: string | null } | null }
+type ChunkCtx = {
+  getModuleInfo(
+    id: string
+  ): { importedIds: string[]; importers: string[]; code: string | null } | null
+}
 const isMonaco = (id: string) => /node_modules[\\/]monaco-editor[\\/]/.test(id)
 const monacoIds: string[] = []
 let slices: Map<string, string> | undefined
@@ -17,8 +21,13 @@ function monacoSlice(id: string, ctx: ChunkCtx) {
     const map = new Map<string, string>()
     const set = new Set(monacoIds)
     const info = (m: string) => ctx.getModuleInfo(m)
-    let n = 0, part = 1, size = 0
-    const idx = new Map<string, number>(), low = new Map<string, number>(), stack: string[] = [], on = new Set<string>()
+    let n = 0,
+      part = 1,
+      size = 0
+    const idx = new Map<string, number>(),
+      low = new Map<string, number>(),
+      stack: string[] = [],
+      on = new Set<string>()
     const visit = (v: string) => {
       idx.set(v, n)
       low.set(v, n++)
@@ -47,7 +56,8 @@ function monacoSlice(id: string, ctx: ChunkCtx) {
       size += sz
       for (const m of scc) map.set(m, `monaco${part}`)
     }
-    for (const r of monacoIds) if (!idx.has(r) && info(r)?.importers.some((i) => !set.has(i))) visit(r)
+    for (const r of monacoIds)
+      if (!idx.has(r) && info(r)?.importers.some((i) => !set.has(i))) visit(r)
     slices = map
   }
   return slices.get(id) ?? null
@@ -74,7 +84,14 @@ export default defineConfig({
         // Monaco (≈ 4 Mo) découpé en morceaux < 700 ko, tous chargés à la demande avec l'éditeur ; app-<hash>.js reste l'entrée.
         // Pas de maxSize : il coupait Monaco en chunks qui s'importaient mutuellement, page blanche en production.
         codeSplitting: {
-          groups: [{ name: monacoSlice, debugName: "monaco", test: (id) => isMonaco(id) && !!monacoIds.push(id), includeDependenciesRecursively: false }],
+          groups: [
+            {
+              name: monacoSlice,
+              debugName: "monaco",
+              test: (id) => isMonaco(id) && !!monacoIds.push(id),
+              includeDependenciesRecursively: false,
+            },
+          ],
         },
         entryFileNames: "assets/app-[hash].js",
         chunkFileNames: "assets/[name]-[hash].js",

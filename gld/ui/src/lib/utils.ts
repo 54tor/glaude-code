@@ -1,19 +1,38 @@
 export { cn } from "cn"
 
 // Écran tactile sans souris (iPhone) : pas de Maj+Entrée sur le clavier virtuel.
-export const touchOnly = () => typeof matchMedia === "function" && matchMedia("(hover: none) and (pointer: coarse)").matches
+export const touchOnly = () =>
+  typeof matchMedia === "function" &&
+  matchMedia("(hover: none) and (pointer: coarse)").matches
 
 // Entrée envoie (Maj+Entrée va à la ligne, Ctrl/Cmd+Entrée envoie aussi) ; pas pendant une composition (IME). Au clavier tactile,
 // Entrée va à la ligne comme dans Messages : on envoie par le bouton.
-export const isSend = (event: { key: string; shiftKey: boolean; ctrlKey?: boolean; metaKey?: boolean; nativeEvent: { isComposing?: boolean } }) => {
-  const isPlainEnter = event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing
+export const isSend = (event: {
+  key: string
+  shiftKey: boolean
+  ctrlKey?: boolean
+  metaKey?: boolean
+  nativeEvent: { isComposing?: boolean }
+}) => {
+  const isPlainEnter =
+    event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing
   if (!isPlainEnter) return false
   const hasSendModifier = !!event.ctrlKey || !!event.metaKey
   return !touchOnly() || hasSendModifier
 }
 
-export const opensInAnotherTab = (clickEvent: { button: number; metaKey: boolean; ctrlKey: boolean; shiftKey: boolean; altKey: boolean }) =>
-  clickEvent.button !== 0 || clickEvent.metaKey || clickEvent.ctrlKey || clickEvent.shiftKey || clickEvent.altKey
+export const opensInAnotherTab = (clickEvent: {
+  button: number
+  metaKey: boolean
+  ctrlKey: boolean
+  shiftKey: boolean
+  altKey: boolean
+}) =>
+  clickEvent.button !== 0 ||
+  clickEvent.metaKey ||
+  clickEvent.ctrlKey ||
+  clickEvent.shiftKey ||
+  clickEvent.altKey
 
 const TRAILING_PARENTHESIZED_HINT = /\s*\([^()]*\)$/
 
@@ -30,7 +49,8 @@ export function copyText(text: string): Promise<void> {
   const hiddenTextarea = document.createElement("textarea")
   hiddenTextarea.value = text
   hiddenTextarea.readOnly = true
-  hiddenTextarea.style.cssText = "position:fixed;top:0;left:0;opacity:0;font-size:16px"
+  hiddenTextarea.style.cssText =
+    "position:fixed;top:0;left:0;opacity:0;font-size:16px"
   document.body.append(hiddenTextarea)
   hiddenTextarea.select()
   hiddenTextarea.setSelectionRange(0, text.length)
@@ -41,9 +61,17 @@ export function copyText(text: string): Promise<void> {
 }
 
 // Insère insertedText à la place de la sélection d'un champ de texte (à la fin sans champ), dans la limite maxLength.
-export function spliceAtCaret(textarea: HTMLTextAreaElement | null, currentText: string, insertedText: string, maxLength: number): string {
+export function spliceAtCaret(
+  textarea: HTMLTextAreaElement | null,
+  currentText: string,
+  insertedText: string,
+  maxLength: number
+): string {
   const selectionStart = textarea?.selectionStart ?? currentText.length
   const selectionEnd = textarea?.selectionEnd ?? selectionStart
-  const textWithInsertion = currentText.slice(0, selectionStart) + insertedText + currentText.slice(selectionEnd)
+  const textWithInsertion =
+    currentText.slice(0, selectionStart) +
+    insertedText +
+    currentText.slice(selectionEnd)
   return textWithInsertion.slice(0, maxLength)
 }

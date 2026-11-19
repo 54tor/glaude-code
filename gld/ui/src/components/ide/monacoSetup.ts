@@ -26,8 +26,10 @@ self.MonacoEnvironment = {
   getWorker(_id: string, label: string) {
     if (label === "typescript" || label === "javascript") return new TsWorker()
     if (label === "json") return new JsonWorker()
-    if (label === "css" || label === "scss" || label === "less") return new CssWorker()
-    if (label === "html" || label === "handlebars" || label === "razor") return new HtmlWorker()
+    if (label === "css" || label === "scss" || label === "less")
+      return new CssWorker()
+    if (label === "html" || label === "handlebars" || label === "razor")
+      return new HtmlWorker()
     return new EditorWorker()
   },
 }

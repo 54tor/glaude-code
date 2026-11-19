@@ -8,7 +8,10 @@ const listeners = new Set<() => void>()
 export const refreshPending = () => listeners.forEach((listener) => listener())
 
 export function usePending(id: string): QItem[] {
-  const [loaded, setLoaded] = useState<{ id: string; items: QItem[] }>({ id, items: [] })
+  const [loaded, setLoaded] = useState<{ id: string; items: QItem[] }>({
+    id,
+    items: [],
+  })
   useEffect(() => {
     let mounted = true
     const load = () =>
@@ -16,7 +19,9 @@ export function usePending(id: string): QItem[] {
         (response) =>
           mounted &&
           setLoaded((previous) => {
-            const unchanged = previous.id === id && JSON.stringify(previous.items) === JSON.stringify(response.items)
+            const unchanged =
+              previous.id === id &&
+              JSON.stringify(previous.items) === JSON.stringify(response.items)
             if (unchanged) return previous
             return { id, items: response.items ?? [] }
           }),
@@ -24,7 +29,10 @@ export function usePending(id: string): QItem[] {
       )
     load()
     listeners.add(load)
-    const pollTimer = setInterval(() => document.visibilityState === "visible" && load(), POLL_INTERVAL_MS)
+    const pollTimer = setInterval(
+      () => document.visibilityState === "visible" && load(),
+      POLL_INTERVAL_MS
+    )
     return () => {
       mounted = false
       listeners.delete(load)

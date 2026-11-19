@@ -1,7 +1,10 @@
 import { useState } from "react"
 
 // État mémorisé dans le navigateur (localStorage). Sans stockage disponible, il reste un simple état.
-export function useLocal(key: string, init: string): [string, (value: string) => void] {
+export function useLocal(
+  key: string,
+  init: string
+): [string, (value: string) => void] {
   const [storedValue, setStoredValue] = useState(() => {
     try {
       return localStorage.getItem(key) ?? init

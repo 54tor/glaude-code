@@ -4,25 +4,43 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const toastError = vi.fn()
 const toastDismiss = vi.fn()
-vi.mock("sonner", () => ({ toast: { error: (...values: unknown[]) => toastError(...values), dismiss: (...values: unknown[]) => toastDismiss(...values) } }))
+vi.mock("sonner", () => ({
+  toast: {
+    error: (...values: unknown[]) => toastError(...values),
+    dismiss: (...values: unknown[]) => toastDismiss(...values),
+  },
+}))
 
 const { useAppData } = await import("./useAppData")
 const { setAuth } = await import("@/lib/auth")
 
-const DATA = { home: "/h", root: "/h/.claude", groups: [], dirs: [], live: [], waiting: [], vgroups: [], favs: [], projects: [], providers: [] }
+const DATA = {
+  home: "/h",
+  root: "/h/.claude",
+  groups: [],
+  dirs: [],
+  live: [],
+  waiting: [],
+  vgroups: [],
+  favs: [],
+  projects: [],
+  providers: [],
+}
 const SNIPS = { dir: "/h/s", files: [], scopes: [] }
 
 // Faux serveur : /v1/state, /v1/snippets et /v1/state/stamp ; down rend des 502.
 function server() {
   const st = { down: false, stamp: 1, calls: { api: 0, stamp: 0 } }
-  const json = (body: unknown, status = 200) => Promise.resolve(new Response(JSON.stringify(body), { status }))
+  const json = (body: unknown, status = 200) =>
+    Promise.resolve(new Response(JSON.stringify(body), { status }))
   vi.stubGlobal(
     "fetch",
     vi.fn((url: string) => {
       if (st.down) return json({}, 502)
-      if (url === "/v1/state") return st.calls.api++, json(DATA)
+      if (url === "/v1/state") return (st.calls.api++, json(DATA))
       if (url === "/v1/snippets") return json(SNIPS)
-      if (url === "/v1/state/stamp") return st.calls.stamp++, json({ stamp: st.stamp })
+      if (url === "/v1/state/stamp")
+        return (st.calls.stamp++, json({ stamp: st.stamp }))
       return json({}, 404)
     })
   )
@@ -33,7 +51,9 @@ let visibility: DocumentVisibilityState = "visible"
 beforeEach(() => {
   vi.useFakeTimers()
   visibility = "visible"
-  vi.spyOn(document, "visibilityState", "get").mockImplementation(() => visibility)
+  vi.spyOn(document, "visibilityState", "get").mockImplementation(
+    () => visibility
+  )
   toastError.mockClear()
   toastDismiss.mockClear()
 })
@@ -49,13 +69,22 @@ const flush = () => act(() => vi.advanceTimersByTimeAsync(0))
 describe("useAppData", () => {
   it("ignore la réponse d'une relecture ancienne arrivée après une plus récente", async () => {
     const pendingResponses: Array<(response: Response) => void> = []
-    const answer = (home: string) => new Response(JSON.stringify({ ...DATA, home }), { status: 200 })
+    const answer = (home: string) =>
+      new Response(JSON.stringify({ ...DATA, home }), { status: 200 })
     vi.stubGlobal(
       "fetch",
       vi.fn((url: string) => {
-        if (url === "/v1/state") return new Promise<Response>((resolve) => pendingResponses.push(resolve))
-        if (url === "/v1/snippets") return Promise.resolve(new Response(JSON.stringify(SNIPS), { status: 200 }))
-        return Promise.resolve(new Response(JSON.stringify({ stamp: 1 }), { status: 200 }))
+        if (url === "/v1/state")
+          return new Promise<Response>((resolve) =>
+            pendingResponses.push(resolve)
+          )
+        if (url === "/v1/snippets")
+          return Promise.resolve(
+            new Response(JSON.stringify(SNIPS), { status: 200 })
+          )
+        return Promise.resolve(
+          new Response(JSON.stringify({ stamp: 1 }), { status: 200 })
+        )
       })
     )
     const { result } = renderHook(() => useAppData())
@@ -86,7 +115,10 @@ describe("useAppData", () => {
     await flush()
     expect(result.current.data).toBeNull()
     expect(result.current.error).toBe("Erreur : 502")
-    expect(toastError).toHaveBeenCalledWith(expect.stringContaining("Erreur : 502"), expect.objectContaining({ id: "server-down" }))
+    expect(toastError).toHaveBeenCalledWith(
+      expect.stringContaining("Erreur : 502"),
+      expect.objectContaining({ id: "server-down" })
+    )
     st.down = false
     await act(() => result.current.reload())
     expect(result.current.error).toBeNull()
@@ -124,13 +156,19 @@ describe("useAppData", () => {
   })
 
   it("403 : « accès refusé » en session établie seulement ; en mode ouvert, une erreur comme avant", async () => {
-    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(new Response("{}", { status: 403 }))))
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve(new Response("{}", { status: 403 })))
+    )
     setAuth({ state: "open" })
     const open = renderHook(() => useAppData())
     await flush()
     expect(open.result.current.denied).toBe(false)
     expect(open.result.current.error).toBe("Erreur : 403")
-    expect(toastError).toHaveBeenCalledWith(expect.stringContaining("Erreur : 403"), expect.objectContaining({ id: "server-down" }))
+    expect(toastError).toHaveBeenCalledWith(
+      expect.stringContaining("Erreur : 403"),
+      expect.objectContaining({ id: "server-down" })
+    )
     open.unmount()
     toastError.mockClear()
     setAuth({ state: "ok" })
@@ -148,7 +186,14 @@ describe("markClosing", () => {
     const stillListed = { ...DATA, live: ["s1", "s2"], waiting: ["s1"] }
     vi.stubGlobal(
       "fetch",
-      vi.fn((url: string) => Promise.resolve(new Response(JSON.stringify(url === "/v1/snippets" ? SNIPS : stillListed), { status: 200 })))
+      vi.fn((url: string) =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify(url === "/v1/snippets" ? SNIPS : stillListed),
+            { status: 200 }
+          )
+        )
+      )
     )
     markClosing(["s1"])
     const { result } = renderHook(() => useAppData())

@@ -1,5 +1,20 @@
 import { useTranslation } from "react-i18next"
-import { AArrowDown, AArrowUp, Command, CopyX, ListOrdered, PanelLeft, BookOpen, Redo2, Replace, Save, SaveAll, Search, Undo2, WrapText } from "lucide-react"
+import {
+  AArrowDown,
+  AArrowUp,
+  Command,
+  CopyX,
+  ListOrdered,
+  PanelLeft,
+  BookOpen,
+  Redo2,
+  Replace,
+  Save,
+  SaveAll,
+  Search,
+  Undo2,
+  WrapText,
+} from "lucide-react"
 import { Toolbar } from "radix-ui"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { CmdButton } from "./ToolButton"
@@ -11,7 +26,10 @@ export function EditorToolbar({ ctx }: { ctx: CmdCtx }) {
   const sep = <Toolbar.Separator className="mx-1 h-4 w-px bg-border" />
   return (
     <TooltipProvider>
-      <Toolbar.Root aria-label={t("ide.toolbar.editor")} className="flex shrink-0 items-center gap-0.5 overflow-x-auto border-b px-1 py-0.5">
+      <Toolbar.Root
+        aria-label={t("ide.toolbar.editor")}
+        className="flex shrink-0 items-center gap-0.5 overflow-x-auto border-b px-1 py-0.5"
+      >
         <CmdButton id="file.save" ctx={ctx}>
           <Save />
         </CmdButton>
@@ -51,7 +69,11 @@ export function EditorToolbar({ ctx }: { ctx: CmdCtx }) {
         <CmdButton id="view.toggleTree" ctx={ctx} pressed={ctx.prefs.showTree}>
           <PanelLeft />
         </CmdButton>
-        <CmdButton id="view.togglePreview" ctx={ctx} pressed={ctx.prefs.showPreview}>
+        <CmdButton
+          id="view.togglePreview"
+          ctx={ctx}
+          pressed={ctx.prefs.showPreview}
+        >
           <BookOpen />
         </CmdButton>
         <span className="flex-1" />

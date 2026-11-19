@@ -8,7 +8,9 @@ describe("copyText", () => {
   it("sans API Clipboard (HTTP sur le réseau local), copie par execCommand et ne laisse rien dans la page", async () => {
     vi.stubGlobal("navigator", { ...navigator, clipboard: undefined })
     let sel = ""
-    document.execCommand = vi.fn(() => ((sel = document.querySelector("textarea")!.value), true))
+    document.execCommand = vi.fn(
+      () => ((sel = document.querySelector("textarea")!.value), true)
+    )
     await expect(copyText("abc")).resolves.toBeUndefined()
     expect(sel).toBe("abc")
     expect(document.querySelector("textarea")).toBeNull()
@@ -23,8 +25,17 @@ describe("copyText", () => {
 
 describe("Entrée au clavier tactile", () => {
   afterEach(() => vi.unstubAllGlobals())
-  const enter = (record: { shiftKey?: boolean; ctrlKey?: boolean } = {}) => ({ key: "Enter", shiftKey: false, nativeEvent: {}, ...record })
-  const touch = (on: boolean) => vi.stubGlobal("matchMedia", (query: string) => ({ matches: on && query.includes("coarse"), media: query }))
+  const enter = (record: { shiftKey?: boolean; ctrlKey?: boolean } = {}) => ({
+    key: "Enter",
+    shiftKey: false,
+    nativeEvent: {},
+    ...record,
+  })
+  const touch = (on: boolean) =>
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: on && query.includes("coarse"),
+      media: query,
+    }))
 
   it("avec un clavier, Entrée envoie et Maj+Entrée va à la ligne", () => {
     touch(false)
@@ -37,7 +48,9 @@ describe("Entrée au clavier tactile", () => {
     touch(true)
     expect(isSend(enter())).toBe(false)
     expect(isSend(enter({ ctrlKey: true }))).toBe(true)
-    expect(keyHint("Écrire à Claude… (Entrée envoie, Maj+Entrée : saut de ligne)")).toBe("Écrire à Claude…")
+    expect(
+      keyHint("Écrire à Claude… (Entrée envoie, Maj+Entrée : saut de ligne)")
+    ).toBe("Écrire à Claude…")
   })
 })
 

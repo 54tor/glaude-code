@@ -1,4 +1,23 @@
-import { BookOpen, Check, CheckSquare, Copy, Download, FolderInput, Info, MessageSquareReply, Plus, Power, Share2, Star, StarOff, Tag, TextCursorInput, Trash2, X, RefreshCcwDot } from "lucide-react"
+import {
+  BookOpen,
+  Check,
+  CheckSquare,
+  Copy,
+  Download,
+  FolderInput,
+  Info,
+  MessageSquareReply,
+  Plus,
+  Power,
+  Share2,
+  Star,
+  StarOff,
+  Tag,
+  TextCursorInput,
+  Trash2,
+  X,
+  RefreshCcwDot,
+} from "lucide-react"
 import { useTranslation } from "react-i18next"
 import type { VGroup } from "@/lib/api"
 import { useShares } from "@/hooks/useShares"
@@ -64,7 +83,9 @@ function Groups({ M: kit, rows }: { M: Kit; rows: Row[] }) {
     )
   const project = rows[0].g.project
   const ids = rows.map((row) => row.s.id)
-  const projectGroups = actions.vgroups.filter((virtualGroup) => virtualGroup.project === project)
+  const projectGroups = actions.vgroups.filter(
+    (virtualGroup) => virtualGroup.project === project
+  )
   return (
     <kit.Sub>
       <kit.SubTrigger>
@@ -79,7 +100,8 @@ function Groups({ M: kit, rows }: { M: Kit; rows: Row[] }) {
           }
           return (
             <kit.Item key={virtualGroup.name} onSelect={toggleMembership}>
-              <Check className={containsAll ? "" : "invisible"} /> <span className="truncate">{virtualGroup.name}</span>
+              <Check className={containsAll ? "" : "invisible"} />{" "}
+              <span className="truncate">{virtualGroup.name}</span>
             </kit.Item>
           )
         })}
@@ -98,25 +120,39 @@ function Fav({ M: kit, ids }: { M: Kit; ids: string[] }) {
   const allFavorite = ids.every((id) => actions.favs.has(id))
   return (
     <kit.Item onSelect={() => actions.toggleFav(ids)}>
-      {allFavorite ? <StarOff /> : <Star />} {allFavorite ? t("shell.menu.unfav") : t("shell.menu.fav")}
+      {allFavorite ? <StarOff /> : <Star />}{" "}
+      {allFavorite ? t("shell.menu.unfav") : t("shell.menu.fav")}
     </kit.Item>
   )
 }
 
 // Entrées d'une session ; si elle fait partie d'une sélection multiple, elles s'appliquent à toute la sélection.
 // full : entrées supplémentaires du clic droit (lire, reprendre, sélectionner), déjà visibles ailleurs sinon.
-export function SessionItems({ M: kit, row, after, full }: { M: Kit; row: Row; after?: () => void; full?: boolean }) {
+export function SessionItems({
+  M: kit,
+  row,
+  after,
+  full,
+}: {
+  M: Kit
+  row: Row
+  after?: () => void
+  full?: boolean
+}) {
   const { t } = useTranslation()
   const actions = useActions()
   const { s: session, g: group } = row
-  const appliesToSelection = actions.picked.has(session.id) && actions.selected.length > 1
+  const appliesToSelection =
+    actions.picked.has(session.id) && actions.selected.length > 1
   if (appliesToSelection) {
     const rows = actions.selected
     const ids = rows.map((selectedRow) => selectedRow.s.id)
     const liveIds = ids.filter((id) => actions.live.has(id))
     return (
       <>
-        <kit.Label>{t("shell.selection.count", { count: rows.length })}</kit.Label>
+        <kit.Label>
+          {t("shell.selection.count", { count: rows.length })}
+        </kit.Label>
         <Fav M={kit} ids={ids} />
         <Groups M={kit} rows={rows} />
         {actions.inGroup && (
@@ -137,12 +173,18 @@ export function SessionItems({ M: kit, row, after, full }: { M: Kit; row: Row; a
           variant="destructive"
           onSelect={() =>
             actions.remove(
-              rows.map((selectedRow) => ({ dir: selectedRow.s.dir, id: selectedRow.s.id })),
+              rows.map((selectedRow) => ({
+                dir: selectedRow.s.dir,
+                id: selectedRow.s.id,
+              })),
               t("shell.menu.removeSelected", { count: rows.length })
             )
           }
         >
-          <Trash2 /> {t("shell.menu.deleteN", { sessions: t("shell.count.sessions", { count: rows.length }) })}
+          <Trash2 />{" "}
+          {t("shell.menu.deleteN", {
+            sessions: t("shell.count.sessions", { count: rows.length }),
+          })}
         </kit.Item>
       </>
     )
@@ -155,7 +197,9 @@ export function SessionItems({ M: kit, row, after, full }: { M: Kit; row: Row; a
         </kit.Item>
       )}
       {full && !group.missing && (
-        <kit.Item onSelect={() => actions.open({ dir: session.dir, id: session.id })}>
+        <kit.Item
+          onSelect={() => actions.open({ dir: session.dir, id: session.id })}
+        >
           <RefreshCcwDot /> {t("shell.list.resume")}
         </kit.Item>
       )}
@@ -193,7 +237,10 @@ export function SessionItems({ M: kit, row, after, full }: { M: Kit; row: Row; a
       )}
       {(full || touchOnly()) && (
         <kit.Item onSelect={() => actions.pick(session.id)}>
-          <CheckSquare /> {actions.picked.has(session.id) ? t("shell.menu.deselect") : t("shell.menu.select")}
+          <CheckSquare />{" "}
+          {actions.picked.has(session.id)
+            ? t("shell.menu.deselect")
+            : t("shell.menu.select")}
         </kit.Item>
       )}
       <kit.Item onSelect={() => actions.move([row])}>
@@ -205,7 +252,16 @@ export function SessionItems({ M: kit, row, after, full }: { M: Kit; row: Row; a
         </kit.Item>
       )}
       <kit.Sep />
-      <kit.Item variant="destructive" onSelect={() => actions.remove([{ dir: session.dir, id: session.id }], t("shell.menu.quoted", { title: session.title }), after)}>
+      <kit.Item
+        variant="destructive"
+        onSelect={() =>
+          actions.remove(
+            [{ dir: session.dir, id: session.id }],
+            t("shell.menu.quoted", { title: session.title }),
+            after
+          )
+        }
+      >
         <Trash2 /> {t("common.delete")}
       </kit.Item>
     </>
@@ -216,7 +272,8 @@ export function SessionItems({ M: kit, row, after, full }: { M: Kit; row: Row; a
 export function ShareItem({ M: kit, row }: { M: Kit; row: Row }) {
   const { t } = useTranslation()
   const actions = useActions()
-  const shared = !!useShares().shares?.find((share) => share.id === row.s.id)?.invites.length
+  const shared = !!useShares().shares?.find((share) => share.id === row.s.id)
+    ?.invites.length
   return (
     <kit.Item onSelect={() => actions.share(row)}>
       <Share2 /> {shared ? t("shell.menu.shared") : t("shell.menu.share")}
@@ -225,7 +282,15 @@ export function ShareItem({ M: kit, row }: { M: Kit; row: Row }) {
 }
 
 // Entrées d'un groupe virtuel (clic droit dans l'arbre, menu « ⋯ » de sa page).
-export function GroupItems({ M: kit, vg, page }: { M: Kit; vg: VGroup; page?: boolean }) {
+export function GroupItems({
+  M: kit,
+  vg,
+  page,
+}: {
+  M: Kit
+  vg: VGroup
+  page?: boolean
+}) {
   const { t } = useTranslation()
   const actions = useActions()
   const sessionCount = actions.groupActs.rows(vg).length
@@ -239,26 +304,39 @@ export function GroupItems({ M: kit, vg, page }: { M: Kit; vg: VGroup; page?: bo
         </kit.Item>
       )}
       <kit.Item onSelect={() => groupActions.open(vg)} disabled={!sessionCount}>
-        <RefreshCcwDot /> {t("shell.menu.resumeAll", { sessions: t("shell.count.sessions", { count: sessionCount }) })}
+        <RefreshCcwDot />{" "}
+        {t("shell.menu.resumeAll", {
+          sessions: t("shell.count.sessions", { count: sessionCount }),
+        })}
       </kit.Item>
-      <kit.Item onSelect={() => groupActions.prompt(vg)} disabled={!sessionCount}>
+      <kit.Item
+        onSelect={() => groupActions.prompt(vg)}
+        disabled={!sessionCount}
+      >
         <Plus /> {t("shell.menu.newWithRefs")}
       </kit.Item>
       <kit.Sep />
       <kit.Item onSelect={() => groupActions.refs(vg)} disabled={!sessionCount}>
         <Copy /> {t("shell.menu.copyRefs")}
       </kit.Item>
-      <kit.Item onSelect={() => groupActions.export(vg)} disabled={!sessionCount}>
+      <kit.Item
+        onSelect={() => groupActions.export(vg)}
+        disabled={!sessionCount}
+      >
         <Download /> {t("shell.menu.exportMd")}
       </kit.Item>
       <kit.Sep />
       <kit.Item onSelect={() => groupActions.fav(vg)}>
-        {vg.fav ? <StarOff /> : <Star />} {vg.fav ? t("shell.menu.unfav") : t("shell.menu.fav")}
+        {vg.fav ? <StarOff /> : <Star />}{" "}
+        {vg.fav ? t("shell.menu.unfav") : t("shell.menu.fav")}
       </kit.Item>
       <kit.Item onSelect={() => groupActions.rename(vg)}>
         <TextCursorInput /> {t("shell.menu.rename")}
       </kit.Item>
-      <kit.Item onSelect={() => groupActions.select(vg)} disabled={!sessionCount}>
+      <kit.Item
+        onSelect={() => groupActions.select(vg)}
+        disabled={!sessionCount}
+      >
         <CheckSquare /> {t("shell.menu.selectSessions")}
       </kit.Item>
       <kit.Sep />
@@ -271,7 +349,17 @@ export function GroupItems({ M: kit, vg, page }: { M: Kit; vg: VGroup; page?: bo
 
 // Menu « ⋯ » d'une session.
 // extra : entrées propres à l'appelant, en tête du menu (commandes du lecteur repliées sur petit écran).
-export function SessionDropdown({ row, after, extra, children }: { row: Row; after?: () => void; extra?: React.ReactNode; children: React.ReactNode }) {
+export function SessionDropdown({
+  row,
+  after,
+  extra,
+  children,
+}: {
+  row: Row
+  after?: () => void
+  extra?: React.ReactNode
+  children: React.ReactNode
+}) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>

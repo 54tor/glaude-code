@@ -5,7 +5,13 @@ import { clearUserData, signedOut } from "@/lib/auth"
 import { readDrafts, writeDrafts } from "./drafts"
 import type { Tab } from "./ideState"
 
-const tab = { path: "/home/bob/a.txt", content: "secret", etag: "e1", readOnly: false, saved: "x" } as unknown as Tab
+const tab = {
+  path: "/home/bob/a.txt",
+  content: "secret",
+  etag: "e1",
+  readOnly: false,
+  saved: "x",
+} as unknown as Tab
 
 afterEach(() => {
   sessionStorage.clear()

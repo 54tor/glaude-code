@@ -10,44 +10,99 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-const avail = (name: string): PluginAvail => ({ id: name + "@m", name, description: "", marketplace: "m", installs: 0, installed: false })
+const avail = (name: string): PluginAvail => ({
+  id: name + "@m",
+  name,
+  description: "",
+  marketplace: "m",
+  installs: 0,
+  installed: false,
+})
 
 describe("PluginsCatalog", () => {
   it("une réponse lente d'une recherche précédente n'écrase pas la dernière", async () => {
     vi.useFakeTimers()
     vi.spyOn(api, "marketplaces").mockResolvedValue({ marketplaces: [] })
-    const pending: Record<string, (record: Awaited<ReturnType<typeof api.plugins>>) => void> = {}
-    vi.spyOn(api, "plugins").mockImplementation((query = "") => new Promise((res) => void (pending[query] = res)))
-    render(<PluginsCatalog projects={[]} home="" scope="user" onChange={() => {}} />)
+    const pending: Record<
+      string,
+      (record: Awaited<ReturnType<typeof api.plugins>>) => void
+    > = {}
+    vi.spyOn(api, "plugins").mockImplementation(
+      (query = "") => new Promise((res) => void (pending[query] = res))
+    )
+    render(
+      <PluginsCatalog projects={[]} home="" scope="user" onChange={() => {}} />
+    )
     await act(async () => void vi.advanceTimersByTime(0))
     const box = screen.getByRole("textbox", { name: /rechercher un plugin/i })
     fireEvent.change(box, { target: { value: "a" } })
     await act(async () => void vi.advanceTimersByTime(300))
     fireEvent.change(box, { target: { value: "ab" } })
     await act(async () => void vi.advanceTimersByTime(300))
-    await act(async () => pending["ab"]({ installed: [], available: [avail("bon")] }))
-    await act(async () => pending["a"]({ installed: [], available: [avail("perime")] }))
+    await act(async () =>
+      pending["ab"]({ installed: [], available: [avail("bon")] })
+    )
+    await act(async () =>
+      pending["a"]({ installed: [], available: [avail("perime")] })
+    )
     expect(screen.queryByText("perime")).toBeNull()
     expect(screen.getByText("bon")).toBeTruthy()
   })
 
   it("les plugins déjà installés quittent la liste des disponibles", async () => {
     vi.spyOn(api, "marketplaces").mockResolvedValue({ marketplaces: [] })
-    vi.spyOn(api, "plugins").mockResolvedValue({ installed: [], available: [avail("garde"), avail("pris")] })
+    vi.spyOn(api, "plugins").mockResolvedValue({
+      installed: [],
+      available: [avail("garde"), avail("pris")],
+    })
     const inst = [{ id: "pris@m", version: "1", scope: "user", enabled: true }]
-    await act(async () => void render(<PluginsCatalog projects={[]} home="" scope="user" installed={inst} onChange={() => {}} />))
+    await act(
+      async () =>
+        void render(
+          <PluginsCatalog
+            projects={[]}
+            home=""
+            scope="user"
+            installed={inst}
+            onChange={() => {}}
+          />
+        )
+    )
     expect(await screen.findByText("garde")).toBeTruthy()
     expect(screen.queryByText("pris")).toBeNull()
   })
 
   it("installe en une fois tous les plugins cochés", async () => {
     vi.spyOn(api, "marketplaces").mockResolvedValue({ marketplaces: [] })
-    vi.spyOn(api, "plugins").mockResolvedValue({ installed: [], available: [avail("un"), avail("deux"), avail("trois")] })
-    const pluginAct = vi.spyOn(api, "pluginAct").mockResolvedValue({ message: "" })
-    await act(async () => void render(<PluginsCatalog projects={[]} home="" scope="user" onChange={() => {}} />))
+    vi.spyOn(api, "plugins").mockResolvedValue({
+      installed: [],
+      available: [avail("un"), avail("deux"), avail("trois")],
+    })
+    const pluginAct = vi
+      .spyOn(api, "pluginAct")
+      .mockResolvedValue({ message: "" })
+    await act(
+      async () =>
+        void render(
+          <PluginsCatalog
+            projects={[]}
+            home=""
+            scope="user"
+            onChange={() => {}}
+          />
+        )
+    )
     fireEvent.click(await screen.findByRole("checkbox", { name: /un/i }))
     fireEvent.click(screen.getByRole("checkbox", { name: /trois/i }))
-    await act(async () => void fireEvent.click(screen.getByRole("button", { name: /installer la sélection \(2\)/i })))
-    expect(pluginAct.mock.calls.map((call) => call[1])).toEqual(["un@m", "trois@m"])
+    await act(
+      async () =>
+        void fireEvent.click(
+          screen.getByRole("button", { name: /installer la sélection \(2\)/i })
+        )
+    )
+    expect(pluginAct.mock.calls.map((call) => call[1])).toEqual([
+      "un@m",
+      "trois@m",
+    ])
   })
 })

@@ -5,8 +5,13 @@ type Draft = { key: string; text: string } | null
 const readStoredDraft = (storageKey: string): Draft => {
   try {
     const storedDraft = JSON.parse(localStorage.getItem(storageKey) ?? "null")
-    const isValidDraft = storedDraft && typeof storedDraft.key === "string" && typeof storedDraft.text === "string"
-    return isValidDraft ? { key: storedDraft.key, text: storedDraft.text } : null
+    const isValidDraft =
+      storedDraft &&
+      typeof storedDraft.key === "string" &&
+      typeof storedDraft.text === "string"
+    return isValidDraft
+      ? { key: storedDraft.key, text: storedDraft.text }
+      : null
   } catch {
     return null
   }

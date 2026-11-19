@@ -54,8 +54,22 @@ describe("toMarks", () => {
 
 describe("toMarks avec préfixe", () => {
   it("ramène au dossier de l'espace et ignore le reste", () => {
-    const { marks, dirs } = toMarks([f("sub/dir/a.ts", " M"), f("sub/dir/d/b.ts", "??"), f("sub/other.ts", " M"), f("top.ts", " M"), f("sub/dir/new.ts", "R ", "sub/old.ts")], 0, "sub/dir/")
-    expect(Object.fromEntries(marks)).toEqual({ "a.ts": "M", "d/b.ts": "?", "new.ts": "R" })
+    const { marks, dirs } = toMarks(
+      [
+        f("sub/dir/a.ts", " M"),
+        f("sub/dir/d/b.ts", "??"),
+        f("sub/other.ts", " M"),
+        f("top.ts", " M"),
+        f("sub/dir/new.ts", "R ", "sub/old.ts"),
+      ],
+      0,
+      "sub/dir/"
+    )
+    expect(Object.fromEntries(marks)).toEqual({
+      "a.ts": "M",
+      "d/b.ts": "?",
+      "new.ts": "R",
+    })
     expect([...dirs]).toEqual(["d"])
   })
 })
@@ -83,7 +97,10 @@ describe("useGitMarks", () => {
 
 describe("GitChanges onOpen", () => {
   it("avec un préfixe : liste filtrée et chemin relatif transmis", async () => {
-    vi.spyOn(api, "gitChanges").mockResolvedValue({ files: [f("sub/a.ts", " M"), f("autre.ts", " M")], prefix: "sub/" })
+    vi.spyOn(api, "gitChanges").mockResolvedValue({
+      files: [f("sub/a.ts", " M"), f("autre.ts", " M")],
+      prefix: "sub/",
+    })
     const onOpen = vi.fn()
     render(<GitChanges dir="/p/sub" count={1} onOpen={onOpen} prefix="sub/" />)
     fireEvent.click(screen.getByRole("button"))

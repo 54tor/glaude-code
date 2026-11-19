@@ -12,12 +12,18 @@ const MAX_SESSIONS = 50
 // Files locales d'avant le serveur, tenues de côté et réécrites telles quelles tant qu'elles ne sont pas importées.
 const legacy = new Map<string, Legacy>()
 
-const readStoredEntry = (sessionId: string, storedEntry: StoredEntry): [string, Entry] => {
+const readStoredEntry = (
+  sessionId: string,
+  storedEntry: StoredEntry
+): [string, Entry] => {
   const queue = Array.isArray(storedEntry.queue)
-    ? storedEntry.queue.filter((queuedText): queuedText is string => typeof queuedText === "string")
+    ? storedEntry.queue.filter(
+        (queuedText): queuedText is string => typeof queuedText === "string"
+      )
     : []
   if (queue.length > 0) {
-    const sending = typeof storedEntry.sending === "number" ? storedEntry.sending : undefined
+    const sending =
+      typeof storedEntry.sending === "number" ? storedEntry.sending : undefined
     legacy.set(sessionId, { queue, sending })
   }
   const text = typeof storedEntry.text === "string" ? storedEntry.text : ""
@@ -27,26 +33,40 @@ const readStoredEntry = (sessionId: string, storedEntry: StoredEntry): [string, 
 const load = (): Map<string, Entry> => {
   legacy.clear()
   try {
-    const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}") as Record<string, StoredEntry>
-    return new Map(Object.entries(raw).map(([sessionId, storedEntry]) => readStoredEntry(sessionId, storedEntry)))
+    const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}") as Record<
+      string,
+      StoredEntry
+    >
+    return new Map(
+      Object.entries(raw).map(([sessionId, storedEntry]) =>
+        readStoredEntry(sessionId, storedEntry)
+      )
+    )
   } catch {
     return new Map()
   }
 }
 const entries = load()
 const subscribers = new Set<() => void>()
-const notifySubscribers = () => subscribers.forEach((subscriber) => subscriber())
+const notifySubscribers = () =>
+  subscribers.forEach((subscriber) => subscriber())
 
 let writable = () => true
-export const guardDrafts = (isWritable: () => boolean) => void (writable = isWritable)
+export const guardDrafts = (isWritable: () => boolean) =>
+  void (writable = isWritable)
 
 const save = () => {
   if (!writable()) return
   try {
     // les plus récemment modifiées en dernier : au-delà de la limite, les plus anciennes partent
     const keptEntries = [...entries].slice(-MAX_SESSIONS)
-    const serialized: Record<string, Entry & Partial<Legacy>> = Object.fromEntries(keptEntries)
-    for (const [sessionId, legacyQueue] of legacy) serialized[sessionId] = { ...(serialized[sessionId] ?? emptyEntry), ...legacyQueue }
+    const serialized: Record<string, Entry & Partial<Legacy>> =
+      Object.fromEntries(keptEntries)
+    for (const [sessionId, legacyQueue] of legacy)
+      serialized[sessionId] = {
+        ...(serialized[sessionId] ?? emptyEntry),
+        ...legacyQueue,
+      }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(serialized))
   } catch {
     /* stockage plein ou indisponible : le magasin en mémoire continue de servir */
@@ -84,7 +104,8 @@ export const subscribe = (subscriber: () => void) => {
   return () => void subscribers.delete(subscriber)
 }
 
-export const useDraft = (id: string): Entry => useSyncExternalStore(subscribe, () => draftOf(id))
+export const useDraft = (id: string): Entry =>
+  useSyncExternalStore(subscribe, () => draftOf(id))
 
 // Pour importLocalQueues (importQueues.ts, à part : api.ts importe ce module via auth.ts).
 export const legacyQueues = legacy

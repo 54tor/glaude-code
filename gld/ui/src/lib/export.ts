@@ -25,12 +25,18 @@ export async function wholeConv(session: Item): Promise<Msg[]> {
 }
 
 // Télécharge une ou plusieurs conversations (sans les outils) en un seul fichier Markdown.
-export async function exportMarkdown(items: { s: Session; project: string }[], title?: string) {
-  const authorHeading = (message: Msg) => (message.r === "user" ? i18n.t("shell.export.you") : "Claude")
+export async function exportMarkdown(
+  items: { s: Session; project: string }[],
+  title?: string
+) {
+  const authorHeading = (message: Msg) =>
+    message.r === "user" ? i18n.t("shell.export.you") : "Claude"
   const parts = await Promise.all(
     items.map(async ({ s: session, project }) => {
       const messages = await wholeConv(session)
-      const body = messages.map((message) => `## ${authorHeading(message)}\n\n${message.t}`).join("\n\n")
+      const body = messages
+        .map((message) => `## ${authorHeading(message)}\n\n${message.t}`)
+        .join("\n\n")
       return `# ${session.title}\n\n_${project} · ${full(session.mtime)} · claude --resume ${session.id}_\n\n${body}\n`
     })
   )
@@ -38,8 +44,13 @@ export async function exportMarkdown(items: { s: Session; project: string }[], t
   const markdown = titleHeading + parts.join("\n---\n\n")
   const firstSession = items[0].s
   const downloadLink = document.createElement("a")
-  downloadLink.href = URL.createObjectURL(new Blob([markdown], { type: "text/markdown;charset=utf-8" }))
+  downloadLink.href = URL.createObjectURL(
+    new Blob([markdown], { type: "text/markdown;charset=utf-8" })
+  )
   downloadLink.download = `${slug(title ?? firstSession.title) || firstSession.id}.md`
   downloadLink.click()
-  setTimeout(() => URL.revokeObjectURL(downloadLink.href), OBJECT_URL_LIFETIME_MS)
+  setTimeout(
+    () => URL.revokeObjectURL(downloadLink.href),
+    OBJECT_URL_LIFETIME_MS
+  )
 }

@@ -1,16 +1,40 @@
 import { asked } from "@/lib/sessionsView"
 import { loc } from "@/i18n"
 import { useTranslation } from "react-i18next"
-import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { ChevronRight, Coffee, Globe, MoreHorizontal, SquareTerminal, Star, Tag } from "lucide-react"
+import {
+  Fragment,
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react"
+import {
+  ChevronRight,
+  Coffee,
+  Globe,
+  MoreHorizontal,
+  SquareTerminal,
+  Star,
+  Tag,
+} from "lucide-react"
 import { ago, bucket, compact, full, tilde, tokTotal } from "@/lib/format"
 import { Badge } from "@/components/ui/badge"
 import { cn, opensInAnotherTab } from "@/lib/utils"
 import { sessionHref } from "@/lib/route"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "@/components/ui/context-menu"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { useActions, type Row as SessionRow } from "./actions"
 import { CM, SessionDropdown, SessionItems } from "./SessionMenu"
 
@@ -21,13 +45,23 @@ export function BgBadge({ id }: { id: string }) {
   const actions = useActions()
   if (!actions.background.has(id)) return null
   return (
-    <Badge variant="outline" className="shrink-0" title={t("shell.list.backgroundHint")}>
+    <Badge
+      variant="outline"
+      className="shrink-0"
+      title={t("shell.list.backgroundHint")}
+    >
       {t("shell.list.background")}
     </Badge>
   )
 }
 
-export function Live({ className, waiting }: { className?: string; waiting?: boolean }) {
+export function Live({
+  className,
+  waiting,
+}: {
+  className?: string
+  waiting?: boolean
+}) {
   const { t } = useTranslation()
   return (
     <span
@@ -37,7 +71,13 @@ export function Live({ className, waiting }: { className?: string; waiting?: boo
         className
       )}
     >
-      <span className={cn("size-1.5 rounded-full bg-current", !waiting && "animate-pulse")} /> {waiting ? t("shell.list.waiting") : t("shell.list.running")}
+      <span
+        className={cn(
+          "size-1.5 rounded-full bg-current",
+          !waiting && "animate-pulse"
+        )}
+      />{" "}
+      {waiting ? t("shell.list.waiting") : t("shell.list.running")}
     </span>
   )
 }
@@ -57,7 +97,10 @@ function Snip({ text }: { text: string }) {
     <span className="mt-1 line-clamp-2 text-xs text-muted-foreground">
       {parts.map((part, partIndex) =>
         part.isHit ? (
-          <mark key={partIndex} className="rounded-sm bg-amber-200/70 px-0.5 text-foreground dark:bg-amber-500/30">
+          <mark
+            key={partIndex}
+            className="rounded-sm bg-amber-200/70 px-0.5 text-foreground dark:bg-amber-500/30"
+          >
             {part.text}
           </mark>
         ) : (
@@ -95,8 +138,12 @@ const Row = memo(function Row({
   const hit = actions.hit(session.id)
   // Une session peut appartenir à plusieurs groupes de son dossier.
   const isOtherGroupOfSession = (viewGroup: (typeof actions.vgroups)[number]) =>
-    viewGroup.project === group.project && viewGroup.ids.includes(session.id) && viewGroup.name !== actions.inGroup?.name
-  const groups = actions.vgroups.filter(isOtherGroupOfSession).map((viewGroup) => viewGroup.name)
+    viewGroup.project === group.project &&
+    viewGroup.ids.includes(session.id) &&
+    viewGroup.name !== actions.inGroup?.name
+  const groups = actions.vgroups
+    .filter(isOtherGroupOfSession)
+    .map((viewGroup) => viewGroup.name)
   const tokenTotal = tokTotal(session.tok)
   return (
     <ContextMenu>
@@ -115,37 +162,57 @@ const Row = memo(function Row({
             aria-label={t("shell.list.select")}
             className={cn(
               "relative z-10 transition-opacity",
-              !picked && actions.selected.length === 0 && "md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100 pointer-coarse:hidden"
+              !picked &&
+                actions.selected.length === 0 &&
+                "md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100 pointer-coarse:hidden"
             )}
           />
           <a
             data-row
             data-id={session.id}
             href={sessionHref(session.id)}
-            className="min-w-0 flex-1 text-left outline-none after:absolute after:inset-0 after:rounded-lg focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-ring/80"
+            className="min-w-0 flex-1 text-left outline-none after:absolute after:inset-0 after:rounded-lg focus-visible:after:ring-2 focus-visible:after:ring-ring/80 focus-visible:after:ring-inset"
             onClick={(clickEvent) => {
               if (opensInAnotherTab(clickEvent)) return
               clickEvent.preventDefault()
               actions.read(session)
             }}
           >
-            <span className={cn("line-clamp-1 text-md", session.named ? "font-medium" : "text-foreground/85")}>
-              {actions.favs.has(session.id) && <Star className="mr-1 inline size-3.5 -translate-y-px fill-amber-400 text-amber-400" aria-label={t("shell.list.favorite")} />}
+            <span
+              className={cn(
+                "line-clamp-1 text-md",
+                session.named ? "font-medium" : "text-foreground/85"
+              )}
+            >
+              {actions.favs.has(session.id) && (
+                <Star
+                  className="mr-1 inline size-3.5 -translate-y-px fill-amber-400 text-amber-400"
+                  aria-label={t("shell.list.favorite")}
+                />
+              )}
               {session.title}
             </span>
             <span className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
               {live && <Live waiting={actions.waiting.has(session.id)} />}
               {live && <BgBadge id={session.id} />}
-              {live && actions.rc.has(session.id) && <Globe className="size-3.5 shrink-0 text-success" aria-label={t("shell.list.remoteControl")} />}
+              {live && actions.rc.has(session.id) && (
+                <Globe
+                  className="size-3.5 shrink-0 text-success"
+                  aria-label={t("shell.list.remoteControl")}
+                />
+              )}
               {left !== null && (
                 <>
                   <span
                     className={cn(
                       "inline-flex shrink-0 items-center gap-1",
-                      left <= CACHE_LOW_THRESHOLD ? "font-medium text-warning" : "text-warning"
+                      left <= CACHE_LOW_THRESHOLD
+                        ? "font-medium text-warning"
+                        : "text-warning"
                     )}
                   >
-                    <Coffee className="size-3.5" aria-hidden /> {t("shell.list.cache", { left })}
+                    <Coffee className="size-3.5" aria-hidden />{" "}
+                    {t("shell.list.cache", { left })}
                   </span>
                 </>
               )}
@@ -176,11 +243,16 @@ const Row = memo(function Row({
               )}
               {showProject && (
                 <>
-                  <span className="truncate">{tilde(group.project, actions.home)}</span>
+                  <span className="truncate">
+                    {tilde(group.project, actions.home)}
+                  </span>
                 </>
               )}
               {groups.length > 0 && (
-                <span className="flex min-w-0 items-center gap-1 text-info" title={t("shell.list.groups", { names: groups.join(", ") })}>
+                <span
+                  className="flex min-w-0 items-center gap-1 text-info"
+                  title={t("shell.list.groups", { names: groups.join(", ") })}
+                >
                   <Tag className="size-3 shrink-0" />
                   <span className="truncate">{groups.join(", ")}</span>
                 </span>
@@ -195,7 +267,12 @@ const Row = memo(function Row({
               aria-label={t("shell.list.subSessions", { count: kids })}
               className="relative z-10 flex h-6 shrink-0 items-center gap-0.5 rounded-sm px-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground pointer-coarse:h-10 pointer-coarse:px-2"
             >
-              <ChevronRight className={cn("size-3.5 transition-transform", open && "rotate-90")} />
+              <ChevronRight
+                className={cn(
+                  "size-3.5 transition-transform",
+                  open && "rotate-90"
+                )}
+              />
               <span className="tabular-nums">{kids}</span>
             </button>
           )}
@@ -204,15 +281,29 @@ const Row = memo(function Row({
             {!group.missing && (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon-sm" className="max-md:pointer-coarse:hidden" onClick={() => actions.open({ dir: session.dir, id: session.id })} aria-label={t("shell.list.resume")}>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="max-md:pointer-coarse:hidden"
+                    onClick={() =>
+                      actions.open({ dir: session.dir, id: session.id })
+                    }
+                    aria-label={t("shell.list.resume")}
+                  >
                     <SquareTerminal />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>{live ? t("shell.list.resumeAnyway") : t("shell.list.resume")}</TooltipContent>
+                <TooltipContent>
+                  {live ? t("shell.list.resumeAnyway") : t("shell.list.resume")}
+                </TooltipContent>
               </Tooltip>
             )}
             <SessionDropdown row={row}>
-              <Button variant="ghost" size="icon-sm" aria-label={t("shell.list.moreActions")}>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label={t("shell.list.moreActions")}
+              >
                 <MoreHorizontal />
               </Button>
             </SessionDropdown>
@@ -237,9 +328,12 @@ function More({ onMore }: { onMore: () => void }) {
   useEffect(() => {
     const sentinel = ref.current
     if (!sentinel) return
-    const observer = new IntersectionObserver(([entry]) => entry.isIntersecting && onMore(), {
-      rootMargin: "800px",
-    })
+    const observer = new IntersectionObserver(
+      ([entry]) => entry.isIntersecting && onMore(),
+      {
+        rootMargin: "800px",
+      }
+    )
     observer.observe(sentinel)
     return () => observer.disconnect()
   }, [onMore])
@@ -253,13 +347,24 @@ export function nest(all: SessionRow[]) {
   const tops: SessionRow[] = []
   for (const row of all) {
     const parentId = row.s.parent
-    if (parentId && ids.has(parentId)) kids.set(parentId, [...(kids.get(parentId) ?? []), row])
+    if (parentId && ids.has(parentId))
+      kids.set(parentId, [...(kids.get(parentId) ?? []), row])
     else tops.push(row)
   }
   return { tops, kids }
 }
 
-export function SessionList({ items: every, showProject, flat, showCache }: { items: SessionRow[]; showProject: boolean; flat?: boolean; showCache?: boolean }) {
+export function SessionList({
+  items: every,
+  showProject,
+  flat,
+  showCache,
+}: {
+  items: SessionRow[]
+  showProject: boolean
+  flat?: boolean
+  showCache?: boolean
+}) {
   const { tops: all, kids } = useMemo(() => nest(every), [every])
   const [opened, setOpened] = useState<Set<string>>(new Set())
   const toggle = useCallback(
@@ -274,7 +379,10 @@ export function SessionList({ items: every, showProject, flat, showCache }: { it
   )
   // Chargement paresseux : seules les premières lignes sont rendues (milliers de sessions possibles).
   const [limit, setLimit] = useState(STEP)
-  const more = useCallback(() => setLimit((currentLimit) => currentLimit + STEP), [])
+  const more = useCallback(
+    () => setLimit((currentLimit) => currentLimit + STEP),
+    []
+  )
   const items = all.slice(0, limit)
   const rest = all.length > limit
   const line = (row: SessionRow) => {
@@ -282,8 +390,24 @@ export function SessionList({ items: every, showProject, flat, showCache }: { it
     const open = opened.has(row.s.id)
     return (
       <Fragment key={row.s.id}>
-        <Row row={row} showProject={showProject} showCache={showCache} kids={children.length} open={open} onToggle={() => toggle(row.s.id)} />
-        {open && children.map((childRow) => <Row key={childRow.s.id} row={childRow} showProject={showProject} showCache={showCache} child />)}
+        <Row
+          row={row}
+          showProject={showProject}
+          showCache={showCache}
+          kids={children.length}
+          open={open}
+          onToggle={() => toggle(row.s.id)}
+        />
+        {open &&
+          children.map((childRow) => (
+            <Row
+              key={childRow.s.id}
+              row={childRow}
+              showProject={showProject}
+              showCache={showCache}
+              child
+            />
+          ))}
       </Fragment>
     )
   }
@@ -304,10 +428,10 @@ export function SessionList({ items: every, showProject, flat, showCache }: { it
     <div className="space-y-6">
       {groups.map(([period, list]) => (
         <section key={period}>
-          <h3 className="sticky top-0 z-20 border-b bg-background px-3 py-1.5 text-xs font-semibold text-muted-foreground">{period}</h3>
-          <ul className="space-y-px">
-            {list.map(line)}
-          </ul>
+          <h3 className="sticky top-0 z-20 border-b bg-background px-3 py-1.5 text-xs font-semibold text-muted-foreground">
+            {period}
+          </h3>
+          <ul className="space-y-px">{list.map(line)}</ul>
         </section>
       ))}
       {rest && (

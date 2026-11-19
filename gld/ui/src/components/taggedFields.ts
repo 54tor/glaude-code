@@ -7,13 +7,20 @@ const ENTITIES: [RegExp, string][] = [
 ]
 
 // Les valeurs d'une <task-notification> arrivent échappées en XML : « && » y est écrit « &amp;&amp; ».
-export const decodeEntities = (text: string) => ENTITIES.reduce((decoded, [pattern, replacement]) => decoded.replace(pattern, replacement), text)
+export const decodeEntities = (text: string) =>
+  ENTITIES.reduce(
+    (decoded, [pattern, replacement]) => decoded.replace(pattern, replacement),
+    text
+  )
 
 const USAGE_FIELD = /<([a-z][a-z0-9_-]*)>([^<]*)<\/\1>/g
 
 // <usage> : une suite de <nom>valeur</nom> (jetons, appels d'outils, durée).
 export function parseUsage(body: string): [name: string, value: string][] {
-  return [...body.matchAll(USAGE_FIELD)].map(([, fieldName, fieldValue]) => [fieldName, fieldValue.trim()])
+  return [...body.matchAll(USAGE_FIELD)].map(([, fieldName, fieldValue]) => [
+    fieldName,
+    fieldValue.trim(),
+  ])
 }
 
 const MILLISECONDS_PER_SECOND = 1000

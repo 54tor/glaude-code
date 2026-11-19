@@ -26,7 +26,12 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Choose } from "./Choose"
-import { Marketplaces, PluginsCatalog, pluginKey, usePluginRun } from "./PluginsDialog"
+import {
+  Marketplaces,
+  PluginsCatalog,
+  pluginKey,
+  usePluginRun,
+} from "./PluginsDialog"
 import { MIN_QUERY_LENGTH, SkillsNpxPanel } from "./SkillsNpxDialog"
 import { Skills } from "./Skills"
 import type { Ask } from "./Confirm"
@@ -35,7 +40,10 @@ import { useConfigEdit } from "./configEdit"
 
 type Enabled = Record<string, boolean>
 type ScopeCode = "u" | "p" | "l"
-type ScopeFileData = { skillOverrides?: Record<string, string>; disabledMcpjsonServers?: string[] }
+type ScopeFileData = {
+  skillOverrides?: Record<string, string>
+  disabledMcpjsonServers?: string[]
+}
 
 const GIT_HASH_PATTERN = /^[0-9a-f]{12}/
 const SHORT_HASH_LENGTH = 7
@@ -78,13 +86,17 @@ export function Extensions({
         api.skills().then((skillsResponse) => setSkills(skillsResponse.skills)),
         api.configMcp().then((mcpResponse) => setMcp(mcpResponse.servers)),
         api.plugins().then(
-          (pluginsResponse) => setInstalledPlugins(pluginsResponse.installed ?? []),
+          (pluginsResponse) =>
+            setInstalledPlugins(pluginsResponse.installed ?? []),
           (error) => setErr(errMsg(error))
         ),
       ]),
     []
   )
-  useEffect(() => void reload().catch((error) => setErr(String(error))), [reload]) // sinon la page reste sur le squelette
+  useEffect(
+    () => void reload().catch((error) => setErr(String(error))),
+    [reload]
+  ) // sinon la page reste sur le squelette
   useEffect(() => {
     api.configMcpCheck().then(
       (checkResponse) => setStatus(checkResponse.status),
@@ -96,8 +108,10 @@ export function Extensions({
   const enabledByFile = useMemo(() => {
     const enabledPluginsByFileId: Record<string, Enabled> = {}
     for (const configFile of overview?.files ?? []) {
-      const fileData = configFile.data as { enabledPlugins?: Enabled } | undefined
-      enabledPluginsByFileId[configFile.id] = (fileData?.enabledPlugins ?? {}) as Enabled
+      const fileData = configFile.data as
+        { enabledPlugins?: Enabled } | undefined
+      enabledPluginsByFileId[configFile.id] = (fileData?.enabledPlugins ??
+        {}) as Enabled
     }
     return enabledPluginsByFileId
   }, [overview])
@@ -115,16 +129,21 @@ export function Extensions({
     ]),
   ].sort()
   const normalizedPluginQuery = pluginQuery.trim().toLowerCase()
-  const ids = allIds.filter((id) => id.toLowerCase().includes(normalizedPluginQuery))
+  const ids = allIds.filter((id) =>
+    id.toLowerCase().includes(normalizedPluginQuery)
+  )
   const effectiveEnabled = (id: string) =>
     filesByPriority
       .map((fileId) => (fileId ? enabledByFile[fileId]?.[id] : undefined))
       .find((enabled) => enabled !== undefined)
-  const version = (id: string) => installedPlugins.find((plugin) => plugin.id === id)?.version
+  const version = (id: string) =>
+    installedPlugins.find((plugin) => plugin.id === id)?.version
   const appliesToContext = (fileId: string) =>
     !dir || fileId === "u" || fileId === "p/" + dir || fileId === "l/" + dir // fichier qui s'applique à ce contexte
   const hooks = overview.hooks.filter((hook) => appliesToContext(hook.file))
-  const contextProjectName = overview.projects.find((project) => project.dir === dir)?.project
+  const contextProjectName = overview.projects.find(
+    (project) => project.dir === dir
+  )?.project
   const mcpHere = mcp.filter(
     (server) =>
       server.scope === "user" ||
@@ -139,13 +158,18 @@ export function Extensions({
   const others = Object.keys(status ?? {})
     .filter((serverName) => !knownServerNames.has(serverName))
     .sort() // plugins et connecteurs claude.ai : pas dans ~/.claude.json
-  const isServerUp = (serverName: string) => /✔|Connected/.test(status?.[serverName] ?? "")
+  const isServerUp = (serverName: string) =>
+    /✔|Connected/.test(status?.[serverName] ?? "")
   const contextCharacters = (skillList: Skill[]) =>
-    skillList.filter((skill) => !skill.manual).reduce((characterTotal, skill) => characterTotal + skill.chars, 0)
+    skillList
+      .filter((skill) => !skill.manual)
+      .reduce((characterTotal, skill) => characterTotal + skill.chars, 0)
   const chars = contextCharacters(skillsHere)
   const fileData = (fileId: string) =>
-    overview.files.find((configFile) => configFile.id === fileId)?.data as ScopeFileData | undefined
-  const skillMode = (fileId: string, name: string) => fileData(fileId)?.skillOverrides?.[name]
+    overview.files.find((configFile) => configFile.id === fileId)?.data as
+      ScopeFileData | undefined
+  const skillMode = (fileId: string, name: string) =>
+    fileData(fileId)?.skillOverrides?.[name]
   const effectiveSkillMode = (name: string) =>
     filesByPriority
       .map((fileId) => (fileId ? skillMode(fileId, name) : undefined))
@@ -175,19 +199,22 @@ export function Extensions({
   const setPlugin = async (id: string, on: boolean) => {
     await edit(fileOf(to), "set", ["enabledPlugins", id], on)
     for (const scope of higher) {
-      if (enabledByFile[fileOf(scope)]?.[id] !== undefined) await edit(fileOf(scope), "delete", ["enabledPlugins", id])
+      if (enabledByFile[fileOf(scope)]?.[id] !== undefined)
+        await edit(fileOf(scope), "delete", ["enabledPlugins", id])
     }
   }
   const setSkill = async (name: string, on: boolean) => {
     if (on) {
       for (const scope of order) {
-        if (skillMode(fileOf(scope), name) === "off") await edit(fileOf(scope), "delete", ["skillOverrides", name])
+        if (skillMode(fileOf(scope), name) === "off")
+          await edit(fileOf(scope), "delete", ["skillOverrides", name])
       }
       return
     }
     await edit(fileOf(to), "set", ["skillOverrides", name], "off")
     for (const scope of higher) {
-      if (skillMode(fileOf(scope), name) !== undefined) await edit(fileOf(scope), "delete", ["skillOverrides", name])
+      if (skillMode(fileOf(scope), name) !== undefined)
+        await edit(fileOf(scope), "delete", ["skillOverrides", name])
     }
   }
   const toggleMcp = async (name: string, on: boolean) => {
@@ -196,7 +223,8 @@ export function Extensions({
       return
     }
     for (const scope of order) {
-      if (isMcpOff(fileOf(scope), name)) await edit(fileOf(scope), "remove", ["disabledMcpjsonServers"], name)
+      if (isMcpOff(fileOf(scope), name))
+        await edit(fileOf(scope), "remove", ["disabledMcpjsonServers"], name)
     }
   }
   const here = dir ? "p/" + dir : "user" // portée d'installation : le contexte affiché
@@ -213,7 +241,9 @@ export function Extensions({
     }
   }
   const instLabel = (plugin: PluginInst) =>
-    plugin.scope === "user" ? t("extensions.fromUser") : tilde(plugin.project ?? "", home)
+    plugin.scope === "user"
+      ? t("extensions.fromUser")
+      : tilde(plugin.project ?? "", home)
   const row = "flex items-start gap-3 py-2"
   const shortVersion = (versionText?: string) => {
     const isGitHash = !!versionText && GIT_HASH_PATTERN.test(versionText)
@@ -221,13 +251,21 @@ export function Extensions({
   }
   const normalizedSkillQuery = skillQuery.trim().toLowerCase()
   const matchesSkillQuery = (skill: Skill) =>
-    !normalizedSkillQuery || (skill.name + " " + skill.description).toLowerCase().includes(normalizedSkillQuery)
-  const ownSkills = skillsHere.filter((skill) => !skill.plugin && matchesSkillQuery(skill))
+    !normalizedSkillQuery ||
+    (skill.name + " " + skill.description)
+      .toLowerCase()
+      .includes(normalizedSkillQuery)
+  const ownSkills = skillsHere.filter(
+    (skill) => !skill.plugin && matchesSkillQuery(skill)
+  )
   const skillsByPluginId: Record<string, Skill[]> = {}
   for (const skill of skillsHere.filter(matchesSkillQuery)) {
     if (skill.plugin) (skillsByPluginId[skill.plugin] ??= []).push(skill)
   }
-  const byPlugin = Object.entries(skillsByPluginId).sort(([firstPluginId], [secondPluginId]) => firstPluginId.localeCompare(secondPluginId))
+  const byPlugin = Object.entries(skillsByPluginId).sort(
+    ([firstPluginId], [secondPluginId]) =>
+      firstPluginId.localeCompare(secondPluginId)
+  )
   const skillRow = (skill: Skill) => {
     const scope = decidingScope((fileId) => skillMode(fileId, skill.name))
     const off = effectiveSkillMode(skill.name) === "off"
@@ -263,7 +301,9 @@ export function Extensions({
               </span>
             )}
             {!skill.plugin && (dir || off) && (
-              <span className="text-xs text-muted-foreground">{why(scope)}</span>
+              <span className="text-xs text-muted-foreground">
+                {why(scope)}
+              </span>
             )}
             <span className="ml-auto text-xs whitespace-nowrap text-muted-foreground tabular-nums">
               {t("extensions.tokens", { n: skill.descTokens })}
@@ -281,7 +321,11 @@ export function Extensions({
   }
   const sect =
     "text-md font-semibold border-b pb-2 mb-3 flex items-center gap-2"
-  const search = (value: string, setValue: (value: string) => void, label: string) => (
+  const search = (
+    value: string,
+    setValue: (value: string) => void,
+    label: string
+  ) => (
     <div className="relative mb-4">
       <Search className="absolute top-2.5 left-2.5 size-4 text-muted-foreground" />
       <Input
@@ -320,7 +364,8 @@ export function Extensions({
               options={[
                 ["", t("extensions.contextUser")],
                 ...overview.projects.map(
-                  (project) => [project.dir, tilde(project.project, home)] as const
+                  (project) =>
+                    [project.dir, tilde(project.project, home)] as const
                 ),
               ]}
             />
@@ -412,18 +457,23 @@ export function Extensions({
               )}
               <ul className="grid grid-cols-1 gap-x-8 md:grid-cols-2">
                 {ids.map((id) => {
-                  const scope = decidingScope((fileId) => enabledByFile[fileId]?.[id])
+                  const scope = decidingScope(
+                    (fileId) => enabledByFile[fileId]?.[id]
+                  )
                   const [name, market] = id.split("@")
                   const missing =
-                    !overview.plugins.find((plugin) => plugin.id === id)?.installed &&
-                    !version(id)
+                    !overview.plugins.find((plugin) => plugin.id === id)
+                      ?.installed && !version(id)
                   const { recs, rec } = record(id)
                   const recordDir = rec && plug.dirOf(rec)
                   const key = rec ? pluginKey(rec) : id
                   const off =
-                    plug.busy === key || recordDir === null || recordDir === undefined
+                    plug.busy === key ||
+                    recordDir === null ||
+                    recordDir === undefined
                   const runPluginAction = (action: "update" | "uninstall") =>
-                    rec && plug.run(key, action, rec.id, rec.scope, recordDir ?? "")
+                    rec &&
+                    plug.run(key, action, rec.id, rec.scope, recordDir ?? "")
                   const isEnabled = effectiveEnabled(id) === true
                   return (
                     <li key={id} className={row + " border-b"}>
@@ -510,7 +560,9 @@ export function Extensions({
               </ul>
               {!ids.length && (
                 <p className="py-3 text-sm text-muted-foreground">
-                  {pluginQuery ? t("extensions.noMatch") : t("extensions.noPlugins")}
+                  {pluginQuery
+                    ? t("extensions.noMatch")
+                    : t("extensions.noPlugins")}
                 </p>
               )}
               <p className="mt-2 mb-4 text-xs text-muted-foreground">
@@ -588,7 +640,9 @@ export function Extensions({
               </div>
               {!ownSkills.length && !byPlugin.length && (
                 <p className="py-3 text-sm text-muted-foreground">
-                  {normalizedSkillQuery ? t("extensions.noMatch") : t("extensions.noSkills")}
+                  {normalizedSkillQuery
+                    ? t("extensions.noMatch")
+                    : t("extensions.noSkills")}
                 </p>
               )}
             </section>
@@ -608,7 +662,10 @@ export function Extensions({
             </h3>
             <ul className="space-y-1">
               {hooks.map((hook, hookIndex) => (
-                <li key={hookIndex} className="rounded-md border px-3 py-1.5 text-sm">
+                <li
+                  key={hookIndex}
+                  className="rounded-md border px-3 py-1.5 text-sm"
+                >
                   <p className="flex flex-wrap items-center gap-2">
                     <span className="font-medium">{hook.event}</span>
                     {hook.matcher && (
@@ -656,8 +713,12 @@ export function Extensions({
                   {server.scope === "project" ? (
                     <Switch
                       checked={!isMcpEffectivelyOff(server.name)}
-                      aria-label={t("extensions.toggleOne", { id: server.name })}
-                      onCheckedChange={(checked) => toggleMcp(server.name, checked)}
+                      aria-label={t("extensions.toggleOne", {
+                        id: server.name,
+                      })}
+                      onCheckedChange={(checked) =>
+                        toggleMcp(server.name, checked)
+                      }
                       className="mt-0.5"
                     />
                   ) : (
@@ -673,7 +734,9 @@ export function Extensions({
                       {status && (
                         <span
                           className={
-                            isServerUp(server.name) ? "text-success" : "text-warning"
+                            isServerUp(server.name)
+                              ? "text-success"
+                              : "text-warning"
                           }
                           title={status[server.name]}
                         >
@@ -708,7 +771,9 @@ export function Extensions({
                   </span>
                   <div className="min-w-0 flex-1">
                     <span
-                      className={isServerUp(serverName) ? "text-success" : "text-warning"}
+                      className={
+                        isServerUp(serverName) ? "text-success" : "text-warning"
+                      }
                       title={status?.[serverName]}
                     >
                       ●{" "}

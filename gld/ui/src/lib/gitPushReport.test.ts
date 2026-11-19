@@ -5,7 +5,10 @@ const baseRun = { dir: "/depot", remote: "origin", branch: "main" }
 
 describe("buildGitPushReport", () => {
   it("contient la branche, le remote, le code de retour et la mention du fichier joint", () => {
-    const report = buildGitPushReport({ ...baseRun, exitCode: 1 }, "@~/uploads/push-1.txt")
+    const report = buildGitPushReport(
+      { ...baseRun, exitCode: 1 },
+      "@~/uploads/push-1.txt"
+    )
 
     expect(report).toContain("main")
     expect(report).toContain("origin")
@@ -22,7 +25,10 @@ describe("buildGitPushReport", () => {
   })
 
   it("rapporte le message d'erreur quand il n'y a pas de code de retour", () => {
-    const report = buildGitPushReport({ ...baseRun, errorMessage: "réseau coupé" })
+    const report = buildGitPushReport({
+      ...baseRun,
+      errorMessage: "réseau coupé",
+    })
 
     expect(report).toContain("réseau coupé")
   })

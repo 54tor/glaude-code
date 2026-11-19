@@ -9,13 +9,34 @@ import { ShareDialog } from "./ShareDialog"
 
 const homes = (current: string) => ({ current, main: "/m", homes: [] })
 let write: ReturnType<typeof vi.fn>
-const inv = (inviteInfo: Partial<InviteInfo> = {}): InviteInfo => ({ id: "i1", seq: 1, name: "", label: "Invité 1", mode: "rw", state: "pending", lastSeen: 0, redeemed: false, queue: [], ...inviteInfo })
-const sh = (invites: InviteInfo[]): ShareInfo => ({ id: "s1", dir: "/d", title: "T", handle: "h", open: true, invites })
+const inv = (inviteInfo: Partial<InviteInfo> = {}): InviteInfo => ({
+  id: "i1",
+  seq: 1,
+  name: "",
+  label: "Invité 1",
+  mode: "rw",
+  state: "pending",
+  lastSeen: 0,
+  redeemed: false,
+  queue: [],
+  ...inviteInfo,
+})
+const sh = (invites: InviteInfo[]): ShareInfo => ({
+  id: "s1",
+  dir: "/d",
+  title: "T",
+  handle: "h",
+  open: true,
+  invites,
+})
 
 beforeEach(() => {
   resetShares()
   write = vi.fn().mockResolvedValue(undefined)
-  Object.defineProperty(navigator, "clipboard", { value: { writeText: write }, configurable: true })
+  Object.defineProperty(navigator, "clipboard", {
+    value: { writeText: write },
+    configurable: true,
+  })
   vi.spyOn(api, "homes").mockResolvedValue(homes(""))
   vi.spyOn(api, "shares").mockResolvedValue({ shares: [] })
 })
@@ -37,17 +58,31 @@ const click = async (name: RegExp) => {
 
 describe("ShareDialog", () => {
   it("inviter : titre de la session, nom, lien copié", async () => {
-    const mock = vi.spyOn(api, "inviteCreate").mockResolvedValue({ token: "tok", invite: { id: "i1", seq: 1, label: "Léa" } })
+    const mock = vi.spyOn(api, "inviteCreate").mockResolvedValue({
+      token: "tok",
+      invite: { id: "i1", seq: 1, label: "Léa" },
+    })
     await open(undefined, "Ma session")
-    fireEvent.change(screen.getByLabelText(/Nom de l'invité/), { target: { value: " Léa " } })
+    fireEvent.change(screen.getByLabelText(/Nom de l'invité/), {
+      target: { value: " Léa " },
+    })
     await click(/Inviter quelqu'un/)
     expect(mock).toHaveBeenCalledWith("s1", "/d", "Ma session", "Léa")
     expect(write).toHaveBeenCalledWith(`${location.origin}/invite/main/tok`)
-    expect((screen.getByDisplayValue(/invite\/main\/tok/) as HTMLInputElement).value).toBe(`${location.origin}/invite/main/tok`)
+    expect(
+      (screen.getByDisplayValue(/invite\/main\/tok/) as HTMLInputElement).value
+    ).toBe(`${location.origin}/invite/main/tok`)
   })
 
-  it.each([["x".repeat(130), "x".repeat(120)], ["(sans titre)", undefined], ["", undefined]])("titre %#", async (given, sent) => {
-    const mock = vi.spyOn(api, "inviteCreate").mockResolvedValue({ token: "tok", invite: { id: "i1", seq: 1, label: "Léa" } })
+  it.each([
+    ["x".repeat(130), "x".repeat(120)],
+    ["(sans titre)", undefined],
+    ["", undefined],
+  ])("titre %#", async (given, sent) => {
+    const mock = vi.spyOn(api, "inviteCreate").mockResolvedValue({
+      token: "tok",
+      invite: { id: "i1", seq: 1, label: "Léa" },
+    })
     await open(undefined, given)
     await click(/Inviter quelqu'un/)
     expect(mock).toHaveBeenCalledWith("s1", "/d", sent, undefined)
@@ -55,7 +90,10 @@ describe("ShareDialog", () => {
 
   it("utilise le nom du home courant, échappé", async () => {
     vi.spyOn(api, "homes").mockResolvedValue(homes("a b"))
-    vi.spyOn(api, "inviteCreate").mockResolvedValue({ token: "tok", invite: { id: "i1", seq: 1, label: "Léa" } })
+    vi.spyOn(api, "inviteCreate").mockResolvedValue({
+      token: "tok",
+      invite: { id: "i1", seq: 1, label: "Léa" },
+    })
     await open()
     await click(/Inviter quelqu'un/)
     expect(write).toHaveBeenCalledWith(`${location.origin}/invite/a%20b/tok`)
@@ -71,7 +109,9 @@ describe("ShareDialog", () => {
   })
 
   it("une erreur à la fin dit que le partage est révoqué", async () => {
-    vi.spyOn(api, "shareEnd").mockRejectedValue(new ApiError(500, "internal", "boom"))
+    vi.spyOn(api, "shareEnd").mockRejectedValue(
+      new ApiError(500, "internal", "boom")
+    )
     const err = vi.spyOn(toast, "error")
     await open([sh([inv()])])
     await click(/Mettre fin au partage/)
@@ -80,7 +120,9 @@ describe("ShareDialog", () => {
   })
 
   it("erreur de création : toast, pas de copie", async () => {
-    vi.spyOn(api, "inviteCreate").mockRejectedValue(new ApiError(500, "internal", "non"))
+    vi.spyOn(api, "inviteCreate").mockRejectedValue(
+      new ApiError(500, "internal", "non")
+    )
     const err = vi.spyOn(toast, "error")
     await open()
     await click(/Inviter quelqu'un/)
@@ -99,13 +141,17 @@ describe("ShareDialog", () => {
   })
 
   it("avant la première réponse, aucune action ; si elle échoue : erreur et réessai, pas de « aucun invité » supposé", async () => {
-    const mock = vi.spyOn(api, "shares").mockRejectedValueOnce(Object.assign(new Error("x"), { status: 500 }))
+    const mock = vi
+      .spyOn(api, "shares")
+      .mockRejectedValueOnce(Object.assign(new Error("x"), { status: 500 }))
     render(<ShareDialog id="s1" dir="/d" onClose={() => {}} />)
     await act(async () => {})
     expect(screen.queryByRole("button", { name: /Inviter/ })).toBeNull()
     mock.mockResolvedValue({ shares: [] })
     await click(/Réessayer/)
-    expect(screen.getByRole("button", { name: /Inviter quelqu'un/ })).toBeTruthy()
+    expect(
+      screen.getByRole("button", { name: /Inviter quelqu'un/ })
+    ).toBeTruthy()
   })
 
   it("lecture en cours : pas d'action", async () => {
@@ -117,18 +163,36 @@ describe("ShareDialog", () => {
   })
 
   it("un double clic sur Inviter n'appelle inviteCreate qu'une fois", async () => {
-    const mock = vi.spyOn(api, "inviteCreate").mockImplementation(() => new Promise((callback) => setTimeout(() => callback({ token: "t", invite: { id: "i1", seq: 1, label: "Léa" } }), 10)))
+    const mock = vi.spyOn(api, "inviteCreate").mockImplementation(
+      () =>
+        new Promise((callback) =>
+          setTimeout(
+            () =>
+              callback({
+                token: "t",
+                invite: { id: "i1", seq: 1, label: "Léa" },
+              }),
+            10
+          )
+        )
+    )
     await open()
     const element = screen.getByRole("button", { name: /Inviter quelqu'un/ })
     fireEvent.click(element)
     fireEvent.click(element)
-    await act(async () => void (await new Promise((callback) => setTimeout(callback, 30))))
+    await act(
+      async () =>
+        void (await new Promise((callback) => setTimeout(callback, 30)))
+    )
     expect(mock).toHaveBeenCalledTimes(1)
   })
 
   it("homes en échec : toast, rien de créé", async () => {
     vi.spyOn(api, "homes").mockRejectedValue(new Error("x"))
-    const mock = vi.spyOn(api, "inviteCreate").mockResolvedValue({ token: "t", invite: { id: "i1", seq: 1, label: "Léa" } })
+    const mock = vi.spyOn(api, "inviteCreate").mockResolvedValue({
+      token: "t",
+      invite: { id: "i1", seq: 1, label: "Léa" },
+    })
     const err = vi.spyOn(toast, "error")
     await open()
     await click(/Inviter quelqu'un/)
@@ -137,17 +201,31 @@ describe("ShareDialog", () => {
   })
 
   it("sans navigator.clipboard : lien affiché et toast de copie échouée", async () => {
-    Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true })
-    vi.spyOn(api, "inviteCreate").mockResolvedValue({ token: "tok", invite: { id: "i1", seq: 1, label: "Léa" } })
+    Object.defineProperty(navigator, "clipboard", {
+      value: undefined,
+      configurable: true,
+    })
+    vi.spyOn(api, "inviteCreate").mockResolvedValue({
+      token: "tok",
+      invite: { id: "i1", seq: 1, label: "Léa" },
+    })
     const err = vi.spyOn(toast, "error")
     await open()
     await click(/Inviter quelqu'un/)
-    expect((screen.getByDisplayValue(/\/invite\/main\/tok/) as HTMLInputElement).value).toBe(`${location.origin}/invite/main/tok`)
-    expect(err).toHaveBeenCalledWith(expect.stringContaining("Copie impossible"))
+    expect(
+      (screen.getByDisplayValue(/\/invite\/main\/tok/) as HTMLInputElement)
+        .value
+    ).toBe(`${location.origin}/invite/main/tok`)
+    expect(err).toHaveBeenCalledWith(
+      expect.stringContaining("Copie impossible")
+    )
   })
 
   it("ne montre que la session demandée", async () => {
-    await open([sh([inv({ label: "Léa" })]), { ...sh([inv({ id: "z", label: "Zoé" })]), id: "s2" }])
+    await open([
+      sh([inv({ label: "Léa" })]),
+      { ...sh([inv({ id: "z", label: "Zoé" })]), id: "s2" },
+    ])
     expect(screen.getByText("Léa")).toBeTruthy()
     expect(screen.queryByText("Zoé")).toBeNull()
   })

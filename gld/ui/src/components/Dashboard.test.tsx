@@ -1,5 +1,12 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react"
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react"
 import { toast } from "sonner"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { api, type McpServer, type Session } from "@/lib/api"
@@ -9,26 +16,76 @@ import * as utils from "@/lib/utils"
 import { ActionsCtx, type Actions, type Row } from "./actions"
 import { Dashboard } from "./Dashboard"
 
-class ResizeObserverStub { observe() {} unobserve() {} disconnect() {} }
-globalThis.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver
+class ResizeObserverStub {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+globalThis.ResizeObserver =
+  ResizeObserverStub as unknown as typeof ResizeObserver
 Element.prototype.scrollIntoView = () => {}
 
 const HOME = "/home/bob"
 const NOW = 1_800_000_000
 const flush = () => act(async () => {})
-const session = (id: string, overrides: Partial<Session> = {}): Session => ({ id, dir: `dir-${id}`, title: `Titre ${id}`, named: true, cwd: HOME, mtime: NOW - 120, kb: 1, tok: { in: 0, out: 0, cr: 0, cw: 0 }, ...overrides })
-const row = (id: string, overrides: Partial<Session> = {}): Row => ({ s: session(id, overrides), g: { project: `${HOME}/Projets/a`, missing: false, sessions: [] } })
-const server = (name: string): McpServer => ({ name, scope: "user", type: "stdio" })
-const update = (overrides: Partial<Awaited<ReturnType<typeof api.updateInfo>>> = {}) => ({ current: "v0.9.0", latest: "v0.9.0", url: "https://github.com/example/glaude-code/releases/tag/v0.9.1", newer: false, ...overrides })
+const session = (id: string, overrides: Partial<Session> = {}): Session => ({
+  id,
+  dir: `dir-${id}`,
+  title: `Titre ${id}`,
+  named: true,
+  cwd: HOME,
+  mtime: NOW - 120,
+  kb: 1,
+  tok: { in: 0, out: 0, cr: 0, cw: 0 },
+  ...overrides,
+})
+const row = (id: string, overrides: Partial<Session> = {}): Row => ({
+  s: session(id, overrides),
+  g: { project: `${HOME}/Projets/a`, missing: false, sessions: [] },
+})
+const server = (name: string): McpServer => ({
+  name,
+  scope: "user",
+  type: "stdio",
+})
+const update = (
+  overrides: Partial<Awaited<ReturnType<typeof api.updateInfo>>> = {}
+) => ({
+  current: "v0.9.0",
+  latest: "v0.9.0",
+  url: "https://github.com/example/glaude-code/releases/tag/v0.9.1",
+  newer: false,
+  ...overrides,
+})
 
 type Props = { open?: Row[]; closed?: Row[]; waiting?: string[] }
 const mount = async (props: Props = {}) => {
   const go = vi.fn<(route: Route) => void>()
   const read = vi.fn()
-  const actions = { home: HOME, favs: new Set(), picked: new Set(), selected: [], live: new Set(), asking: new Set(), waiting: new Set(), vgroups: [], inGroup: null, caps: () => ({}) } as unknown as Actions
+  const actions = {
+    home: HOME,
+    favs: new Set(),
+    picked: new Set(),
+    selected: [],
+    live: new Set(),
+    asking: new Set(),
+    waiting: new Set(),
+    vgroups: [],
+    inGroup: null,
+    caps: () => ({}),
+  } as unknown as Actions
   render(
     <ActionsCtx.Provider value={actions}>
-      <Dashboard open={props.open ?? []} closed={props.closed ?? []} waiting={new Set(props.waiting ?? [])} now={NOW} ttl={3600} home={HOME} go={go} read={read} />
+      <Dashboard
+        open={props.open ?? []}
+        closed={props.closed ?? []}
+        waiting={new Set(props.waiting ?? [])}
+        now={NOW}
+        ttl={3600}
+        home={HOME}
+        go={go}
+        read={read}
+      />
     </ActionsCtx.Provider>
   )
   await flush()
@@ -55,12 +112,21 @@ describe("Dashboard — sessions", () => {
 
   it("chaque carte a un titre de niveau 2 qui ne contient pas ses boutons", async () => {
     await mount()
-    const titresDesCartes = screen.getAllByRole("heading", { level: 2 }).map((titre) => titre.textContent)
-    expect(titresDesCartes).toEqual(["Sessions ouvertes (0)", "Dernières fermées (0)", "Serveurs MCP (0)", "Mise à jour"])
+    const titresDesCartes = screen
+      .getAllByRole("heading", { level: 2 })
+      .map((titre) => titre.textContent)
+    expect(titresDesCartes).toEqual([
+      "Sessions ouvertes (0)",
+      "Dernières fermées (0)",
+      "Serveurs MCP (0)",
+      "Mise à jour",
+    ])
   })
 
   it("une session : titre, dossier abrégé, ancienneté ; un clic la lit", async () => {
-    const { read } = await mount({ open: [row("1", { title: "Migration REST", mtime: NOW - 7200 })] })
+    const { read } = await mount({
+      open: [row("1", { title: "Migration REST", mtime: NOW - 7200 })],
+    })
     const sessionButton = screen.getByRole("button", { name: /Migration REST/ })
     expect(sessionButton.textContent).toContain("~/Projets/a")
     fireEvent.click(sessionButton)
@@ -70,7 +136,11 @@ describe("Dashboard — sessions", () => {
   it("session qui attend : pastille « attend »", async () => {
     await mount({ open: [row("1"), row("2")], waiting: ["2"] })
     expect(screen.getAllByText("attend")).toHaveLength(1)
-    expect(within(screen.getByRole("button", { name: /Titre 2/ })).getByText("attend")).toBeTruthy()
+    expect(
+      within(screen.getByRole("button", { name: /Titre 2/ })).getByText(
+        "attend"
+      )
+    ).toBeTruthy()
   })
 
   it("limite à huit lignes par carte, le compteur garde le total", async () => {
@@ -109,19 +179,30 @@ describe("Dashboard — serveurs MCP", () => {
   })
 
   it("liste fusionnée configurés + vérifiés, triée, sans doublon", async () => {
-    vi.mocked(api.configMcp).mockResolvedValue({ servers: [server("zeta"), server("alpha")] })
-    vi.mocked(api.configMcpCheck).mockResolvedValue({ status: { alpha: "✔ Connected", extra: "✗ Failed" } })
+    vi.mocked(api.configMcp).mockResolvedValue({
+      servers: [server("zeta"), server("alpha")],
+    })
+    vi.mocked(api.configMcpCheck).mockResolvedValue({
+      status: { alpha: "✔ Connected", extra: "✗ Failed" },
+    })
     await mount()
     expect(screen.getByText(/Serveurs MCP \(3\)/)).toBeTruthy()
-    const names = screen.getAllByRole("listitem").map((item) => item.textContent)
+    const names = screen
+      .getAllByRole("listitem")
+      .map((item) => item.textContent)
     expect(names).toEqual(["●alpha", "●extra", "●zeta"])
   })
 
   it("couleur selon l'état : connecté, en échec, jamais vérifié", async () => {
-    vi.mocked(api.configMcp).mockResolvedValue({ servers: [server("ok"), server("ko"), server("inconnu")] })
-    vi.mocked(api.configMcpCheck).mockResolvedValue({ status: { ok: "✔ Connected", ko: "✗ Failed to connect" } })
+    vi.mocked(api.configMcp).mockResolvedValue({
+      servers: [server("ok"), server("ko"), server("inconnu")],
+    })
+    vi.mocked(api.configMcpCheck).mockResolvedValue({
+      status: { ok: "✔ Connected", ko: "✗ Failed to connect" },
+    })
     await mount()
-    const dot = (name: string) => screen.getByText(name).previousElementSibling as HTMLElement
+    const dot = (name: string) =>
+      screen.getByText(name).previousElementSibling as HTMLElement
     expect(dot("ok").className).toContain("text-success")
     expect(dot("ko").className).toContain("text-warning")
     expect(dot("inconnu").className).toContain("text-warning")
@@ -131,12 +212,16 @@ describe("Dashboard — serveurs MCP", () => {
     vi.mocked(api.configMcp).mockResolvedValue({ servers: [server("a")] })
     vi.mocked(api.configMcpCheck).mockReturnValue(new Promise(() => {}))
     await mount()
-    expect((screen.getByText("a").previousElementSibling as HTMLElement).className).toContain("text-muted-foreground")
+    expect(
+      (screen.getByText("a").previousElementSibling as HTMLElement).className
+    ).toContain("text-muted-foreground")
   })
 
   it("échec de la vérification : l'état devient vide, pas d'exception", async () => {
     vi.mocked(api.configMcp).mockResolvedValue({ servers: [server("a")] })
-    vi.mocked(api.configMcpCheck).mockRejectedValue(new ApiError(500, "boom", "x"))
+    vi.mocked(api.configMcpCheck).mockRejectedValue(
+      new ApiError(500, "boom", "x")
+    )
     await mount()
     expect(screen.getByText("a")).toBeTruthy()
   })
@@ -148,10 +233,16 @@ describe("Dashboard — serveurs MCP", () => {
   })
 
   it("le bouton de revérification relance la vérification et se désactive pendant", async () => {
-    let resolveCheck: (value: { status: Record<string, string> }) => void = () => {}
-    vi.mocked(api.configMcpCheck).mockReturnValueOnce(Promise.resolve({ status: {} })).mockReturnValueOnce(new Promise((resolve) => (resolveCheck = resolve)))
+    let resolveCheck: (value: {
+      status: Record<string, string>
+    }) => void = () => {}
+    vi.mocked(api.configMcpCheck)
+      .mockReturnValueOnce(Promise.resolve({ status: {} }))
+      .mockReturnValueOnce(new Promise((resolve) => (resolveCheck = resolve)))
     await mount()
-    const recheck = screen.getByRole("button", { name: "Revérifier l'état" }) as HTMLButtonElement
+    const recheck = screen.getByRole("button", {
+      name: "Revérifier l'état",
+    }) as HTMLButtonElement
     expect(recheck.disabled).toBe(false)
     fireEvent.click(recheck)
     expect(api.configMcpCheck).toHaveBeenCalledTimes(2)
@@ -163,7 +254,9 @@ describe("Dashboard — serveurs MCP", () => {
 
   it("menu d'un serveur : ouvrir dans Extensions, copier le nom", async () => {
     vi.mocked(api.configMcp).mockResolvedValue({ servers: [server("alpha")] })
-    const copySpy = vi.spyOn(utils, "copyText").mockResolvedValue(undefined as never)
+    const copySpy = vi
+      .spyOn(utils, "copyText")
+      .mockResolvedValue(undefined as never)
     const toastSuccess = vi.spyOn(toast, "success").mockReturnValue("")
     const { go } = await mount()
     fireEvent.contextMenu(screen.getByText("alpha"))
@@ -196,22 +289,44 @@ describe("Dashboard — mises à jour", () => {
   })
 
   it("version plus récente : message et lien sûr vers la release", async () => {
-    vi.mocked(api.updateInfo).mockResolvedValue(update({ newer: true, latest: "v0.9.1" }))
+    vi.mocked(api.updateInfo).mockResolvedValue(
+      update({ newer: true, latest: "v0.9.1" })
+    )
     await mount()
-    expect(screen.getByText(/Nouvelle version disponible : v0.9.1 \(vous avez v0.9.0\)/)).toBeTruthy()
+    expect(
+      screen.getByText(
+        /Nouvelle version disponible : v0.9.1 \(vous avez v0.9.0\)/
+      )
+    ).toBeTruthy()
     const releaseLink = screen.getByRole("link", { name: "Voir" })
     expect(releaseLink.getAttribute("href")).toContain("/releases/tag/v0.9.1")
     expect(releaseLink.getAttribute("rel")).toContain("noopener")
   })
 
   it("Claude Code : à jour, périmé, ou absent", async () => {
-    vi.mocked(api.updateInfo).mockResolvedValue(update({ claudeCurrent: "2.1.0", claudeLatest: "2.1.0", claudeNewer: false }))
+    vi.mocked(api.updateInfo).mockResolvedValue(
+      update({
+        claudeCurrent: "2.1.0",
+        claudeLatest: "2.1.0",
+        claudeNewer: false,
+      })
+    )
     await mount()
     expect(screen.getByText("Claude Code à jour : 2.1.0")).toBeTruthy()
     cleanup()
-    vi.mocked(api.updateInfo).mockResolvedValue(update({ claudeCurrent: "2.0.0", claudeLatest: "2.1.0", claudeNewer: true }))
+    vi.mocked(api.updateInfo).mockResolvedValue(
+      update({
+        claudeCurrent: "2.0.0",
+        claudeLatest: "2.1.0",
+        claudeNewer: true,
+      })
+    )
     await mount()
-    expect(screen.getByText(/Claude Code 2.0.0 n'est pas à jour \(2.1.0 disponible\)/)).toBeTruthy()
+    expect(
+      screen.getByText(
+        /Claude Code 2.0.0 n'est pas à jour \(2.1.0 disponible\)/
+      )
+    ).toBeTruthy()
     cleanup()
     vi.mocked(api.updateInfo).mockResolvedValue(update())
     await mount()
@@ -220,16 +335,28 @@ describe("Dashboard — mises à jour", () => {
 
   it("« Vérifier » force la relecture et remplace l'information", async () => {
     await mount()
-    vi.mocked(api.updateInfo).mockResolvedValue(update({ current: "v0.9.0", latest: "v0.9.2", newer: true }))
+    vi.mocked(api.updateInfo).mockResolvedValue(
+      update({ current: "v0.9.0", latest: "v0.9.2", newer: true })
+    )
     fireEvent.click(screen.getByRole("button", { name: /Vérifier/ }))
     await flush()
     expect(api.updateInfo).toHaveBeenLastCalledWith(true)
-    expect(screen.getByText(/Nouvelle version disponible : v0.9.2/)).toBeTruthy()
+    expect(
+      screen.getByText(/Nouvelle version disponible : v0.9.2/)
+    ).toBeTruthy()
   })
 
   it("menu de la carte : copier « claude update » seulement si Claude Code est périmé", async () => {
-    vi.mocked(api.updateInfo).mockResolvedValue(update({ claudeCurrent: "2.0.0", claudeLatest: "2.1.0", claudeNewer: true }))
-    const copySpy = vi.spyOn(utils, "copyText").mockResolvedValue(undefined as never)
+    vi.mocked(api.updateInfo).mockResolvedValue(
+      update({
+        claudeCurrent: "2.0.0",
+        claudeLatest: "2.1.0",
+        claudeNewer: true,
+      })
+    )
+    const copySpy = vi
+      .spyOn(utils, "copyText")
+      .mockResolvedValue(undefined as never)
     vi.spyOn(toast, "success").mockReturnValue("")
     await mount()
     fireEvent.contextMenu(screen.getByText("Mise à jour"))
@@ -247,12 +374,18 @@ describe("Dashboard — mises à jour", () => {
   })
 
   it("menu de la carte : ouvrir la release dans un nouvel onglet", async () => {
-    vi.mocked(api.updateInfo).mockResolvedValue(update({ newer: true, latest: "v0.9.1" }))
+    vi.mocked(api.updateInfo).mockResolvedValue(
+      update({ newer: true, latest: "v0.9.1" })
+    )
     const openSpy = vi.spyOn(window, "open").mockReturnValue(null)
     await mount()
     fireEvent.contextMenu(screen.getByText("Mise à jour"))
     const items = await screen.findAllByText("Voir")
     fireEvent.click(items[items.length - 1])
-    expect(openSpy).toHaveBeenCalledWith(expect.stringContaining("/releases/tag/v0.9.1"), "_blank", "noopener")
+    expect(openSpy).toHaveBeenCalledWith(
+      expect.stringContaining("/releases/tag/v0.9.1"),
+      "_blank",
+      "noopener"
+    )
   })
 })

@@ -1,6 +1,8 @@
 // Flux NDJSON (une valeur JSON par ligne) lu au fil de l'eau : chaque ligne complète est rendue dès qu'elle arrive, une ligne
 // coupée entre deux morceaux attend la suite, et la dernière ligne sans saut final n'est pas perdue.
-export async function* readNdjson<T>(body: ReadableStream<Uint8Array>): AsyncGenerator<T> {
+export async function* readNdjson<T>(
+  body: ReadableStream<Uint8Array>
+): AsyncGenerator<T> {
   const reader = body.getReader()
   const decoder = new TextDecoder()
   let pendingText = ""

@@ -3,17 +3,36 @@
 // checked : case d'une question à choix multiples (la touche chiffre la coche ou la décoche sans bouger le curseur) ; reach : touches
 // pour amener le curseur sur l'option sans la valider (nécessaire avant d'écrire dans une option « Type something ») ; edit : réponse libre
 // déjà donnée (« 3. texte ✔ »), à modifier : le curseur sur la ligne rouvre l'édition du texte.
-export type Opt = { label: string; keys: string[]; detail?: string; text?: boolean; chat?: boolean; checked?: boolean; reach?: string[]; edit?: string }
-export type Prompt = { question: string; context?: string; contextIsMessage?: boolean; preview?: string; options: Opt[]; submit?: string[]; tabs?: { label: string; done: boolean }[] } // tabs : onglets de la question (☒ répondu) ; context : la commande ou le diff d'une demande d'autorisation
+export type Opt = {
+  label: string
+  keys: string[]
+  detail?: string
+  text?: boolean
+  chat?: boolean
+  checked?: boolean
+  reach?: string[]
+  edit?: string
+}
+export type Prompt = {
+  question: string
+  context?: string
+  contextIsMessage?: boolean
+  preview?: string
+  options: Opt[]
+  submit?: string[]
+  tabs?: { label: string; done: boolean }[]
+} // tabs : onglets de la question (☒ répondu) ; context : la commande ou le diff d'une demande d'autorisation
 // Options qui attendent une réponse libre (« Type something. », « Chat about this », « No, and tell Claude what to do differently »…).
 const CHAT = /chat about this/i
-const FREE = /type something|chat about this|tell claude|something else|^\d+\.\s*other\b/i
+const FREE =
+  /type something|chat about this|tell claude|something else|^\d+\.\s*other\b/i
 const PREVIEW_PANEL_TOP = /[┌╭]─{2,}[┐╮]\s*$/
 const LABEL_BEFORE_PREVIEW_PANEL = /^(.*?\S)\s{2,}(?=[┌╭]─{2,}[┐╮]\s*$)/
 const PREVIEW_PANEL_BOTTOM = /^[└╰]─*[┘╯]/
 const FRAME_LEFT_EDGE = /^(\s*)[│┃]\s?/
 const FRAME_RIGHT_EDGE = /\s*[│┃]\s*$/
-const DIALOG_FOOTER = /(esc|escape) to (cancel|exit|go back)|enter to (select|confirm)|to navigate|tab to amend|ready to submit|submit your answers|1\.\s+submit answers|do you want to|would you like to|proceed\?/i
+const DIALOG_FOOTER =
+  /(esc|escape) to (cancel|exit|go back)|enter to (select|confirm)|to navigate|tab to amend|ready to submit|submit your answers|1\.\s+submit answers|do you want to|would you like to|proceed\?/i
 const NUMBERED_OPTION = /^\s*(?:[❯>›]\s*)?([1-9])[.)]\s+(\S.*)$/
 const NOTES_HINT_LINE = /^\s*Notes:/i
 const UNNUMBERED_CHAT_LINE = /^\s*chat about this\s*$/i
@@ -25,7 +44,8 @@ const TAB_OR_RULE_CHARACTER = /[←→☐☒✔─━]/
 const ENDS_LIKE_QUESTION = /[?:]$/
 const INDENTED_TEXT = /^\s{3,}\S/
 const HORIZONTAL_RULE = /^\s*[─━╌▔]/
-const KEY_HELP_LINE = /(esc|enter|ctrl\+|shift\+|tab)\b.*(cancel|select|navigate|edit|approve|amend)/i
+const KEY_HELP_LINE =
+  /(esc|enter|ctrl\+|shift\+|tab)\b.*(cancel|select|navigate|edit|approve|amend)/i
 const CONTEXT_SEPARATOR = /^[╌─━┄┈]{8,}$/
 const ANSWERED_FREE_TEXT = /\s✔$/
 // Lignes du bas de l'écran examinées : un dialogue tient dedans, le texte de Claude plus haut n'est pas lu.
@@ -42,7 +62,9 @@ const CONTEXT_TITLE_LINES = 2
 const SELECT_LIST_MAX_SPAN = 8
 
 const arrowKeysToward = (targetIndex: number, cursorIndex: number) =>
-  Array<string>(Math.abs(targetIndex - cursorIndex)).fill(targetIndex < cursorIndex ? "Up" : "Down")
+  Array<string>(Math.abs(targetIndex - cursorIndex)).fill(
+    targetIndex < cursorIndex ? "Up" : "Down"
+  )
 
 // Aperçu côte à côte (option.preview) : un cadre ┌─┐ à droite des options, aligné sur toute sa hauteur. On le retire des lignes (sinon il
 // se mêle aux libellés) et on garde son contenu, ligne à ligne, tel que dessiné : c'est l'aperçu de l'option sélectionnée.
@@ -53,7 +75,8 @@ function splitPreview(rows: string[]): { rows: string[]; preview?: string } {
   for (const rawRow of rows) {
     const isInsidePanel = panelColumn >= 0
     if (!isInsidePanel) {
-      const opensPanel = LABEL_BEFORE_PREVIEW_PANEL.test(rawRow) && panelLines.length === 0
+      const opensPanel =
+        LABEL_BEFORE_PREVIEW_PANEL.test(rawRow) && panelLines.length === 0
       if (opensPanel) {
         panelColumn = rawRow.search(PREVIEW_PANEL_TOP)
         rowsWithoutPanel.push(rawRow.slice(0, panelColumn).trimEnd())
@@ -68,9 +91,12 @@ function splitPreview(rows: string[]): { rows: string[]; preview?: string } {
       panelColumn = -1
       continue
     }
-    panelLines.push(panelPart.replace(/^[│┃] ?/, "").replace(FRAME_RIGHT_EDGE, ""))
+    panelLines.push(
+      panelPart.replace(/^[│┃] ?/, "").replace(FRAME_RIGHT_EDGE, "")
+    )
   }
-  const preview = panelLines.length > 0 ? panelLines.join("\n").trimEnd() : undefined
+  const preview =
+    panelLines.length > 0 ? panelLines.join("\n").trimEnd() : undefined
   return { rows: rowsWithoutPanel, preview }
 }
 export function parsePrompt(screen: string): Prompt | null {
@@ -88,7 +114,9 @@ function parseLines(src: string[]): Prompt | null {
   let previousWasBlank = false
   const allLines: string[] = []
   for (const rawLine of src) {
-    const unframedLine = rawLine.replace(FRAME_LEFT_EDGE, "$1").replace(FRAME_RIGHT_EDGE, "")
+    const unframedLine = rawLine
+      .replace(FRAME_LEFT_EDGE, "$1")
+      .replace(FRAME_RIGHT_EDGE, "")
     if (!unframedLine.trim()) {
       previousWasBlank = true
       continue
@@ -99,9 +127,11 @@ function parseLines(src: string[]): Prompt | null {
   }
   const tailStart = Math.max(0, allLines.length - TAIL_LINE_COUNT)
   const lines = allLines.slice(-TAIL_LINE_COUNT)
-  const startsParagraph = (tailIndex: number) => paragraphStarts.has(tailStart + tailIndex)
+  const startsParagraph = (tailIndex: number) =>
+    paragraphStarts.has(tailStart + tailIndex)
   // « esc to interrupt » est la ligne d'état de Claude en pleine réflexion : rien n'attend alors de réponse.
-  if (/esc to interrupt/i.test(lines.slice(-INTERRUPT_FOOTER_LINES).join("\n"))) return null
+  if (/esc to interrupt/i.test(lines.slice(-INTERRUPT_FOOTER_LINES).join("\n")))
+    return null
   // Les confirmations d'opération risquée n'ont pas toujours cette ligne d'aide tout en bas : on la cherche sur les dernières lignes,
   // ou on reconnaît la question elle-même (« Do you want to proceed? »).
   const footer = lines.slice(-DIALOG_FOOTER_LINES).join("\n")
@@ -109,16 +139,27 @@ function parseLines(src: string[]): Prompt | null {
   let numberedOptions: { n: string; label: string; at: number }[] = []
   lines.forEach((line, lineIndex) => {
     const optionMatch = NUMBERED_OPTION.exec(line)
-    if (optionMatch) numberedOptions.push({ n: optionMatch[1], label: optionMatch[2].trim(), at: lineIndex })
+    if (optionMatch)
+      numberedOptions.push({
+        n: optionMatch[1],
+        label: optionMatch[2].trim(),
+        at: lineIndex,
+      })
   })
   // Un plan ou une liste de Claude, affichés au-dessus du dialogue, sont numérotés aussi : on ne garde que la dernière suite 1, 2, 3…
-  const lastOptionOne = numberedOptions.map((option) => option.n).lastIndexOf("1")
+  const lastOptionOne = numberedOptions
+    .map((option) => option.n)
+    .lastIndexOf("1")
   if (lastOptionOne > 0) numberedOptions = numberedOptions.slice(lastOptionOne)
   // La question au-dessus de l'option `at` : ses lignes repliées jusqu'au début du paragraphe (ou de la phrase précédente).
   const widestLine = Math.max(...lines.map((line) => line.trim().length))
   const paragraphAbove = (at: number): string => {
     const parts: string[] = []
-    for (let lineIndex = at - 1; lineIndex >= 0 && lineIndex >= at - PARAGRAPH_LOOKBACK_LINES; lineIndex--) {
+    for (
+      let lineIndex = at - 1;
+      lineIndex >= 0 && lineIndex >= at - PARAGRAPH_LOOKBACK_LINES;
+      lineIndex--
+    ) {
       const trimmed = lines[lineIndex].trim()
       if (TAB_OR_RULE_LINE.test(trimmed)) break
       parts.unshift(trimmed)
@@ -134,7 +175,11 @@ function parseLines(src: string[]): Prompt | null {
     }
     let question = ""
     let questionLine = -1
-    for (let lineIndex = at - 1; lineIndex >= 0 && lineIndex >= at - QUESTION_LOOKBACK_LINES; lineIndex--) {
+    for (
+      let lineIndex = at - 1;
+      lineIndex >= 0 && lineIndex >= at - QUESTION_LOOKBACK_LINES;
+      lineIndex--
+    ) {
       const trimmed = lines[lineIndex].trim()
       if (!trimmed) continue
       question = trimmed
@@ -144,24 +189,39 @@ function parseLines(src: string[]): Prompt | null {
     // Une question longue est repliée par le terminal : les lignes pleines qui la précèdent, sans fin de phrase ni en-tête, en font partie.
     const mayBeWrapped = questionLine > 0 && ENDS_LIKE_QUESTION.test(question)
     if (!mayBeWrapped) return question
-    for (let lineIndex = questionLine - 1; lineIndex >= 0 && lineIndex >= questionLine - WRAPPED_QUESTION_LOOKBACK_LINES; lineIndex--) {
+    for (
+      let lineIndex = questionLine - 1;
+      lineIndex >= 0 &&
+      lineIndex >= questionLine - WRAPPED_QUESTION_LOOKBACK_LINES;
+      lineIndex--
+    ) {
       const trimmed = lines[lineIndex].trim()
-      const isShortLine = trimmed.length < widestLine * WRAPPED_LINE_MIN_WIDTH_RATIO
+      const isShortLine =
+        trimmed.length < widestLine * WRAPPED_LINE_MIN_WIDTH_RATIO
       const endsParagraph = startsParagraph(lineIndex + 1)
-      if (isShortLine || TAB_OR_RULE_CHARACTER.test(trimmed) || endsParagraph) break
+      if (isShortLine || TAB_OR_RULE_CHARACTER.test(trimmed) || endsParagraph)
+        break
       question = trimmed + " " + question
       if (startsParagraph(lineIndex)) break
     }
     return question
   }
-  const multiSelectPrompt = multiSelect(lines, questionAbove, (headerIndex) => recap(allLines, tailStart + headerIndex))
+  const multiSelectPrompt = multiSelect(lines, questionAbove, (headerIndex) =>
+    recap(allLines, tailStart + headerIndex)
+  )
   if (multiSelectPrompt) return multiSelectPrompt
   // Lignes suivant une option, avant la prochaine : suite d'un libellé trop long, ou description (pas le pied ni les séparateurs).
   const detailOf = (optionIndex: number) => {
     const nextOptionLine = numberedOptions[optionIndex + 1]?.at ?? lines.length
     return lines
       .slice(numberedOptions[optionIndex].at + 1, nextOptionLine)
-      .filter((line) => INDENTED_TEXT.test(line) && !HORIZONTAL_RULE.test(line) && !KEY_HELP_LINE.test(line) && !NOTES_HINT_LINE.test(line))
+      .filter(
+        (line) =>
+          INDENTED_TEXT.test(line) &&
+          !HORIZONTAL_RULE.test(line) &&
+          !KEY_HELP_LINE.test(line) &&
+          !NOTES_HINT_LINE.test(line)
+      )
       .map((line) => line.trim())
       .join(" ")
   }
@@ -170,7 +230,11 @@ function parseLines(src: string[]): Prompt | null {
   const contextOf = (at: number, question: string) => {
     const collected: string[] = []
     let separatorsSeen = 0
-    for (let lineIndex = at - 1; lineIndex >= 0 && collected.length < CONTEXT_MAX_LINES; lineIndex--) {
+    for (
+      let lineIndex = at - 1;
+      lineIndex >= 0 && collected.length < CONTEXT_MAX_LINES;
+      lineIndex--
+    ) {
       const trimmed = lines[lineIndex].trim()
       if (!CONTEXT_SEPARATOR.test(trimmed)) {
         collected.unshift(lines[lineIndex].replace(/\s+$/, ""))
@@ -179,38 +243,56 @@ function parseLines(src: string[]): Prompt | null {
       separatorsSeen++
       if (separatorsSeen === 2) {
         // le titre (type et description), au-dessus du trait
-        for (let offset = 1; offset <= CONTEXT_TITLE_LINES && lineIndex - offset >= 0; offset++) collected.unshift(lines[lineIndex - offset].trim())
+        for (
+          let offset = 1;
+          offset <= CONTEXT_TITLE_LINES && lineIndex - offset >= 0;
+          offset++
+        )
+          collected.unshift(lines[lineIndex - offset].trim())
         break
       }
     }
     if (separatorsSeen < 2) return undefined
-    const contextLines = collected.filter((line) => line.trim() && !question.includes(line.trim()))
+    const contextLines = collected.filter(
+      (line) => line.trim() && !question.includes(line.trim())
+    )
     if (contextLines.length === 0) return undefined
     return contextLines.join("\n")
   }
-  const isNumberedDialog = numberedOptions.length >= 2 && numberedOptions[0].n === "1"
+  const isNumberedDialog =
+    numberedOptions.length >= 2 && numberedOptions[0].n === "1"
   if (isNumberedDialog) {
     const firstOptionLine = numberedOptions[0].at
     const question = questionAbove(firstOptionLine)
     // Question à onglets à choix unique (« ← ☐ Q1 ☐ Q2 ✔ Submit → ») : le message de Claude au-dessus et l'état des onglets.
     const tabsHeaderLine = lines.findIndex((line) => TABS_HEADER.test(line))
     const isTabbed = tabsHeaderLine >= 0 && tabsHeaderLine < firstOptionLine
-    const cursorOption = numberedOptions.findIndex((option) => CURSOR_MARK.test(lines[option.at]))
+    const cursorOption = numberedOptions.findIndex((option) =>
+      CURSOR_MARK.test(lines[option.at])
+    )
     // Question à onglets déjà répondue en réponse libre : « 3. texte ✔ » juste avant « Chat about this ». Le chiffre la revaliderait ; le curseur
     // sur la ligne rouvre l'édition du texte.
     const isAnsweredFreeText = (optionIndex: number) => {
       if (!isTabbed || cursorOption < 0) return false
-      if (!ANSWERED_FREE_TEXT.test(numberedOptions[optionIndex].label)) return false
+      if (!ANSWERED_FREE_TEXT.test(numberedOptions[optionIndex].label))
+        return false
       return CHAT.test(numberedOptions[optionIndex + 1]?.label ?? "")
     }
     // Champ de saisie libre (l'option juste avant « Chat about this ») sous le curseur : un chiffre y serait tapé comme du texte,
     // même une fois du texte déjà saisi (« 4. 1 ») ; les flèches en sortent.
-    const freeSlotIndex = numberedOptions.findIndex((_, optionIndex) => CHAT.test(numberedOptions[optionIndex + 1]?.label ?? ""))
-    const isCursorInFreeSlot = cursorOption >= 0 && cursorOption === freeSlotIndex
-    const toOption = (option: { n: string; label: string }, optionIndex: number): Opt => {
+    const freeSlotIndex = numberedOptions.findIndex((_, optionIndex) =>
+      CHAT.test(numberedOptions[optionIndex + 1]?.label ?? "")
+    )
+    const isCursorInFreeSlot =
+      cursorOption >= 0 && cursorOption === freeSlotIndex
+    const toOption = (
+      option: { n: string; label: string },
+      optionIndex: number
+    ): Opt => {
       const isChat = CHAT.test(option.label)
       const isAnswered = isAnsweredFreeText(optionIndex)
-      const mustLeaveFreeSlot = isCursorInFreeSlot && optionIndex !== cursorOption
+      const mustLeaveFreeSlot =
+        isCursorInFreeSlot && optionIndex !== cursorOption
       const result: Opt = {
         label: `${option.n}. ${option.label}`.replace(/\s+/g, " "),
         detail: detailOf(optionIndex) || undefined,
@@ -219,7 +301,8 @@ function parseLines(src: string[]): Prompt | null {
         chat: isChat,
       }
       if (isChat) result.keys = [option.n, "Enter"]
-      if (mustLeaveFreeSlot) result.keys = [...arrowKeysToward(optionIndex, cursorOption), "Enter"]
+      if (mustLeaveFreeSlot)
+        result.keys = [...arrowKeysToward(optionIndex, cursorOption), "Enter"]
       if (isAnswered) {
         result.edit = option.label.replace(ANSWERED_FREE_TEXT, "").trim()
         result.reach = arrowKeysToward(optionIndex, cursorOption)
@@ -228,16 +311,34 @@ function parseLines(src: string[]): Prompt | null {
     }
     const permissionContext = contextOf(firstOptionLine, question)
     // Question seule (« ☐ Audit » sans Submit) : le message de Claude qui la précède reste visible dans l'écran, pas dans le transcript.
-    const singleTabLine = lines.findLastIndex((line, lineIndex) => lineIndex < firstOptionLine && SINGLE_TAB_HEADER.test(line))
+    const singleTabLine = lines.findLastIndex(
+      (line, lineIndex) =>
+        lineIndex < firstOptionLine && SINGLE_TAB_HEADER.test(line)
+    )
     const questionHeaderLine = isTabbed ? tabsHeaderLine : singleTabLine
-    const tabsContext = questionHeaderLine >= 0 ? recap(allLines, tailStart + questionHeaderLine) : undefined
+    const tabsContext =
+      questionHeaderLine >= 0
+        ? recap(allLines, tailStart + questionHeaderLine)
+        : undefined
     const options = numberedOptions.map(toOption)
     // Avec un aperçu, « Chat about this » s'affiche sans numéro sous le séparateur : on l'atteint aux flèches.
     const lastOptionLine = numberedOptions[numberedOptions.length - 1].at
-    const hasUnnumberedChat = cursorOption >= 0 && lines.slice(lastOptionLine + 1).some((line) => UNNUMBERED_CHAT_LINE.test(line))
-    if (hasUnnumberedChat && !CHAT.test(numberedOptions[numberedOptions.length - 1].label)) {
+    const hasUnnumberedChat =
+      cursorOption >= 0 &&
+      lines
+        .slice(lastOptionLine + 1)
+        .some((line) => UNNUMBERED_CHAT_LINE.test(line))
+    if (
+      hasUnnumberedChat &&
+      !CHAT.test(numberedOptions[numberedOptions.length - 1].label)
+    ) {
       const chatIndex = numberedOptions.length
-      options.push({ label: "Chat about this", keys: [...arrowKeysToward(chatIndex, cursorOption), "Enter"], text: true, chat: true })
+      options.push({
+        label: "Chat about this",
+        keys: [...arrowKeysToward(chatIndex, cursorOption), "Enter"],
+        text: true,
+        chat: true,
+      })
     }
     return {
       question,
@@ -258,44 +359,84 @@ function parseLines(src: string[]): Prompt | null {
     return !/^[─━│┌└╭╰]/.test(line[optionColumn])
   }
   let firstOptionLine = selectedLine
-  while (firstOptionLine > 0 && isAlignedOption(lines[firstOptionLine - 1])) firstOptionLine--
+  while (firstOptionLine > 0 && isAlignedOption(lines[firstOptionLine - 1]))
+    firstOptionLine--
   let lastOptionLine = selectedLine
-  while (lastOptionLine + 1 < lines.length && isAlignedOption(lines[lastOptionLine + 1])) lastOptionLine++
+  while (
+    lastOptionLine + 1 < lines.length &&
+    isAlignedOption(lines[lastOptionLine + 1])
+  )
+    lastOptionLine++
   const optionSpan = lastOptionLine - firstOptionLine
   if (optionSpan < 1 || optionSpan > SELECT_LIST_MAX_SPAN) return null
   const options: Opt[] = []
-  for (let lineIndex = firstOptionLine; lineIndex <= lastOptionLine; lineIndex++) {
+  for (
+    let lineIndex = firstOptionLine;
+    lineIndex <= lastOptionLine;
+    lineIndex++
+  ) {
     const label = lines[lineIndex].slice(optionColumn).trim()
-    options.push({ label, keys: [...arrowKeysToward(lineIndex, selectedLine), "Enter"], text: FREE.test(label) })
+    options.push({
+      label,
+      keys: [...arrowKeysToward(lineIndex, selectedLine), "Enter"],
+      text: FREE.test(label),
+    })
   }
   return { question: questionAbove(firstOptionLine), options }
 }
 
 // Question à choix multiples : « N. [ ] option » (ou [✔]), une ligne « Submit » sans numéro, puis « Chat about this » sous un séparateur.
 // Le curseur (❯) se déplace aux flèches ; la touche chiffre coche sans déplacer le curseur ; Entrée sur « Submit » (« Next » tant qu'il reste des onglets) valide.
-function multiSelect(screenLines: string[], above: (at: number) => string, recapAt: (head: number) => string | undefined): Prompt | null {
+function multiSelect(
+  screenLines: string[],
+  above: (at: number) => string,
+  recapAt: (head: number) => string | undefined
+): Prompt | null {
   // Signature stricte : les touches envoyées sont aveugles (Bas…Entrée), donc un texte qui imiterait des cases ne doit pas passer pour la vraie
   // question. Il faut l'en-tête « ← … Submit → », le pied « Enter to select » dans les 3 dernières lignes, et aucune demande d'autorisation
   // (qu'un « Valider » mal placé pourrait approuver) sur l'écran.
-  const hasPermissionRequest = screenLines.some((line) => /do you want to|would you like to|proceed\?|tab to amend|bash command/i.test(line))
+  const hasPermissionRequest = screenLines.some((line) =>
+    /do you want to|would you like to|proceed\?|tab to amend|bash command/i.test(
+      line
+    )
+  )
   if (hasPermissionRequest) return null
   const headerLine = screenLines.findIndex((line) => TABS_HEADER.test(line))
   if (headerLine < 0) return null
   if (!/enter to select/i.test(screenLines.slice(-3).join("\n"))) return null
   const lines = screenLines.slice(headerLine) // `above` indexe les lignes d'origine : décaler de headerLine
-  type Row = { at: number; kind: "box" | "submit" | "other"; n?: string; label: string; checked?: boolean }
+  type Row = {
+    at: number
+    kind: "box" | "submit" | "other"
+    n?: string
+    label: string
+    checked?: boolean
+  }
   const rows: Row[] = []
   let cursorRow = -1
   lines.forEach((line, at) => {
-    const optionMatch = /^\s*(❯)?\s*(\d)[.)]\s+(?:\[(.)\]\s+)?(\S.*)$/.exec(line)
+    const optionMatch = /^\s*(❯)?\s*(\d)[.)]\s+(?:\[(.)\]\s+)?(\S.*)$/.exec(
+      line
+    )
     const submitMatch = /^\s*(❯)?\s*(?:Submit|Next)\s*$/.exec(line)
     const isCheckbox = optionMatch !== null && optionMatch[3] !== undefined
     if (isCheckbox) {
-      rows.push({ at, kind: "box", n: optionMatch[2], label: optionMatch[4].trim(), checked: optionMatch[3] !== " " })
+      rows.push({
+        at,
+        kind: "box",
+        n: optionMatch[2],
+        label: optionMatch[4].trim(),
+        checked: optionMatch[3] !== " ",
+      })
     } else if (submitMatch && rows.some((row) => row.kind === "box")) {
       rows.push({ at, kind: "submit", label: "Submit" })
     } else if (optionMatch && rows.some((row) => row.kind === "submit")) {
-      rows.push({ at, kind: "other", n: optionMatch[2], label: optionMatch[4].trim() })
+      rows.push({
+        at,
+        kind: "other",
+        n: optionMatch[2],
+        label: optionMatch[4].trim(),
+      })
     } else {
       return
     }
@@ -309,15 +450,36 @@ function multiSelect(screenLines: string[], above: (at: number) => string, recap
   const detailOf = (rowIndex: number) =>
     lines
       .slice(rows[rowIndex].at + 1, rows[rowIndex + 1]?.at ?? lines.length)
-      .filter((line) => INDENTED_TEXT.test(line) && !HORIZONTAL_RULE.test(line) && !/enter to select|esc to cancel/i.test(line))
+      .filter(
+        (line) =>
+          INDENTED_TEXT.test(line) &&
+          !HORIZONTAL_RULE.test(line) &&
+          !/enter to select|esc to cancel/i.test(line)
+      )
       .map((line) => line.trim())
       .join(" ")
   const toOptions = (row: Row, rowIndex: number): Opt[] => {
     if (row.kind === "box") {
-      return [{ label: row.label, detail: detailOf(rowIndex) || undefined, checked: row.checked, keys: [row.n!], reach: arrowKeysToward(rowIndex, cursorRow), text: FREE.test(row.label) }]
+      return [
+        {
+          label: row.label,
+          detail: detailOf(rowIndex) || undefined,
+          checked: row.checked,
+          keys: [row.n!],
+          reach: arrowKeysToward(rowIndex, cursorRow),
+          text: FREE.test(row.label),
+        },
+      ]
     }
     if (row.kind === "other") {
-      return [{ label: `${row.n}. ${row.label}`, keys: [row.n!, "Enter"], text: FREE.test(row.label), chat: CHAT.test(row.label) }]
+      return [
+        {
+          label: `${row.n}. ${row.label}`,
+          keys: [row.n!, "Enter"],
+          text: FREE.test(row.label),
+          chat: CHAT.test(row.label),
+        },
+      ]
     }
     return []
   }
@@ -337,8 +499,14 @@ function multiSelect(screenLines: string[], above: (at: number) => string, recap
 const RECAP_MAX_LINES = 200
 function recap(allLines: string[], headerIndex: number): string | undefined {
   let firstLine = headerIndex
-  const startsTurnOrMessage = (line: string) => /^\s*●/.test(line) || /^\s*❯/.test(line)
-  while (firstLine > 0 && headerIndex - firstLine < RECAP_MAX_LINES && !startsTurnOrMessage(allLines[firstLine])) firstLine--
+  const startsTurnOrMessage = (line: string) =>
+    /^\s*●/.test(line) || /^\s*❯/.test(line)
+  while (
+    firstLine > 0 &&
+    headerIndex - firstLine < RECAP_MAX_LINES &&
+    !startsTurnOrMessage(allLines[firstLine])
+  )
+    firstLine--
   if (/^\s*❯/.test(allLines[firstLine] ?? "")) firstLine++ // la saisie de l'utilisateur ouvre le tour : ce qui précède est le tour d'avant
   const text = allLines
     .slice(firstLine, headerIndex)
@@ -349,9 +517,16 @@ function recap(allLines: string[], headerIndex: number): string | undefined {
 }
 
 // « ←  ☒ UI-01  ☐ Périmètre  ✔ Submit  → » : les onglets avant Submit, répondus (☒) ou non (☐).
-function tabsOf(headerLine: string): { label: string; done: boolean }[] | undefined {
-  const tabMatches = [...headerLine.matchAll(/([☐☒])\s+(.+?)(?=\s{2,}[☐☒✔]|\s*$)/g)]
-  const tabs = tabMatches.map((tabMatch) => ({ label: tabMatch[2].trim(), done: tabMatch[1] === "☒" }))
+function tabsOf(
+  headerLine: string
+): { label: string; done: boolean }[] | undefined {
+  const tabMatches = [
+    ...headerLine.matchAll(/([☐☒])\s+(.+?)(?=\s{2,}[☐☒✔]|\s*$)/g),
+  ]
+  const tabs = tabMatches.map((tabMatch) => ({
+    label: tabMatch[2].trim(),
+    done: tabMatch[1] === "☒",
+  }))
   if (tabs.length === 0) return undefined
   return tabs
 }
@@ -374,17 +549,30 @@ const BTW_FOOTER_MAX_DISTANCE = 4
 const BTW_MAX_INDENT = 99
 
 // Surcouche d'une question /btw : la réponse entre la ligne « /btw … » et le pied d'aide, sans l'indentation commune.
-export function parseBtw(screen: string): { question: string; answer: string } | null {
+export function parseBtw(
+  screen: string
+): { question: string; answer: string } | null {
   const lines = screen.replace(/\s+$/, "").split("\n")
-  const footerLine = lines.findLastIndex((line) => line.includes("Esc to close") && line.includes("to scroll"))
-  if (footerLine < 0 || footerLine < lines.length - BTW_FOOTER_MAX_DISTANCE) return null
-  const questionLine = lines.findLastIndex((line, lineIndex) => lineIndex < footerLine && /^\s*\/btw\b/.test(line))
+  const footerLine = lines.findLastIndex(
+    (line) => line.includes("Esc to close") && line.includes("to scroll")
+  )
+  if (footerLine < 0 || footerLine < lines.length - BTW_FOOTER_MAX_DISTANCE)
+    return null
+  const questionLine = lines.findLastIndex(
+    (line, lineIndex) => lineIndex < footerLine && /^\s*\/btw\b/.test(line)
+  )
   if (questionLine < 0) return null
   const answerLines = lines.slice(questionLine + 1, footerLine)
   const indentOf = (line: string) => line.length - line.trimStart().length
-  const commonIndent = Math.min(...answerLines.filter((line) => line.trim()).map(indentOf), BTW_MAX_INDENT)
+  const commonIndent = Math.min(
+    ...answerLines.filter((line) => line.trim()).map(indentOf),
+    BTW_MAX_INDENT
+  )
   const question = lines[questionLine].trim().replace(/^\/btw\s*/, "")
-  const answer = answerLines.map((line) => line.slice(commonIndent)).join("\n").trim()
+  const answer = answerLines
+    .map((line) => line.slice(commonIndent))
+    .join("\n")
+    .trim()
   return { question, answer }
 }
 
@@ -395,12 +583,23 @@ const URL_CONTINUATION = /^\S+$/
 const LOGIN_MAX_DISTANCE = 14
 const LOGIN_HEADER = /^\s*Login\s*$/
 const LOGIN_CANCEL_FOOTER = /esc to cancel/i
-const LOGIN_HOSTS = ["claude.com", "claude.ai", "platform.claude.com", "console.anthropic.com"]
+const LOGIN_HOSTS = [
+  "claude.com",
+  "claude.ai",
+  "platform.claude.com",
+  "console.anthropic.com",
+]
 // Le texte du terminal n'est pas fiable : seul un lien https vers un hôte de connexion officiel, sans identifiants, devient un bouton.
 function isOfficialLoginUrl(candidate: string): boolean {
   try {
     const parsed = new URL(candidate)
-    return parsed.protocol === "https:" && !parsed.username && !parsed.password && !parsed.port && LOGIN_HOSTS.includes(parsed.hostname)
+    return (
+      parsed.protocol === "https:" &&
+      !parsed.username &&
+      !parsed.password &&
+      !parsed.port &&
+      LOGIN_HOSTS.includes(parsed.hostname)
+    )
   } catch {
     return false
   }
@@ -409,10 +608,26 @@ export function parseLogin(screen: string): { url: string } | null {
   const lines = screen.replace(/\s+$/, "").split("\n")
   const codeLine = lines.findLastIndex((line) => LOGIN_CODE_PROMPT.test(line))
   if (codeLine < 0 || codeLine < lines.length - LOGIN_MAX_DISTANCE) return null
-  if (!lines.slice(-LOGIN_MAX_DISTANCE).some((line) => LOGIN_CANCEL_FOOTER.test(line))) return null
-  const urlLine = lines.findLastIndex((line, lineIndex) => lineIndex < codeLine && LOGIN_URL_START.test(line))
-  if (urlLine < 0 || !lines.slice(0, urlLine).some((line) => LOGIN_HEADER.test(line))) return null
+  if (
+    !lines
+      .slice(-LOGIN_MAX_DISTANCE)
+      .some((line) => LOGIN_CANCEL_FOOTER.test(line))
+  )
+    return null
+  const urlLine = lines.findLastIndex(
+    (line, lineIndex) => lineIndex < codeLine && LOGIN_URL_START.test(line)
+  )
+  if (
+    urlLine < 0 ||
+    !lines.slice(0, urlLine).some((line) => LOGIN_HEADER.test(line))
+  )
+    return null
   let url = LOGIN_URL_START.exec(lines[urlLine])![1]
-  for (let lineIndex = urlLine + 1; lineIndex < codeLine && URL_CONTINUATION.test(lines[lineIndex].trim()); lineIndex++) url += lines[lineIndex].trim()
+  for (
+    let lineIndex = urlLine + 1;
+    lineIndex < codeLine && URL_CONTINUATION.test(lines[lineIndex].trim());
+    lineIndex++
+  )
+    url += lines[lineIndex].trim()
   return isOfficialLoginUrl(url) ? { url } : null
 }

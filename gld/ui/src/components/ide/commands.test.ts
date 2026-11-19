@@ -3,7 +3,13 @@ import fr from "@/i18n/fr/ide.json"
 import en from "@/i18n/en/ide.json"
 import type { Right } from "@/lib/auth"
 import type { Tab } from "./ideState"
-import { ariaKeys, commands, showKeys, type CmdCtx, type EditorHandle } from "./commands"
+import {
+  ariaKeys,
+  commands,
+  showKeys,
+  type CmdCtx,
+  type EditorHandle,
+} from "./commands"
 import { DEFAULT_PREFS } from "./useViewPrefs"
 
 const at = (value: unknown, key: string) =>
@@ -132,20 +138,36 @@ describe("registre de commandes", () => {
   it("création à la racine : désactivée quand l'arborescence est masquée", () => {
     for (const id of ["file.newFile", "file.newFolder"]) {
       expect(byId(id).enabled(ctx({ treeShown: false })), id).toBe(false)
-      expect(byId(id).reason!(ctx({ treeShown: false })), id).toBe("ide.reason.noTree")
+      expect(byId(id).reason!(ctx({ treeShown: false })), id).toBe(
+        "ide.reason.noTree"
+      )
     }
   })
 
   it("aperçu Markdown : actif seulement sur un fichier .md", () => {
     const preview = byId("view.togglePreview")
     expect(preview.enabled(ctx({ tab: tab({ path: "/d/a.ts" }) }))).toBe(false)
-    expect(preview.reason!(ctx({ tab: tab({ path: "/d/a.ts" }) }))).toBe("ide.reason.notMarkdown")
-    expect(preview.enabled(ctx({ tab: tab({ path: "/d/README.MD" }) }))).toBe(true)
+    expect(preview.reason!(ctx({ tab: tab({ path: "/d/a.ts" }) }))).toBe(
+      "ide.reason.notMarkdown"
+    )
+    expect(preview.enabled(ctx({ tab: tab({ path: "/d/README.MD" }) }))).toBe(
+      true
+    )
   })
 
   it("focus : une seule source ; fermer et basculer les zones ne visent pas l'éditeur", () => {
-    const keep = ["file.saveAll", "file.closeTab", "file.closeAll", "view.toggleTree", "view.togglePreview", "view.toggleStatus"]
-    for (const command of commands) expect(command.focus, command.id).toBe(keep.includes(command.id) ? "keep" : "editor")
+    const keep = [
+      "file.saveAll",
+      "file.closeTab",
+      "file.closeAll",
+      "view.toggleTree",
+      "view.togglePreview",
+      "view.toggleStatus",
+    ]
+    for (const command of commands)
+      expect(command.focus, command.id).toBe(
+        keep.includes(command.id) ? "keep" : "editor"
+      )
   })
 
   it("une commande désactivée donne une raison non vide, traduite en fr et en", () => {
@@ -182,13 +204,21 @@ describe("registre de commandes", () => {
   })
 
   it("raccourcis : touches nommées traduites à l'affichage, noms ARIA canoniques", () => {
-    const fr = (key: string) => ({ "ide.keys.Shift": "Maj", "ide.keys.Enter": "Entrée", "ide.keys.Escape": "Échap", "ide.keys.Ctrl": "Ctrl", "ide.keys.Alt": "Alt" })[key] ?? "?"
+    const fr = (key: string) =>
+      ({
+        "ide.keys.Shift": "Maj",
+        "ide.keys.Enter": "Entrée",
+        "ide.keys.Escape": "Échap",
+        "ide.keys.Ctrl": "Ctrl",
+        "ide.keys.Alt": "Alt",
+      })[key] ?? "?"
     expect(showKeys("Ctrl+Shift+Z", fr)).toBe("Ctrl+Maj+Z")
     expect(showKeys("Alt+Enter", fr)).toBe("Alt+Entrée")
     expect(showKeys("Escape", fr)).toBe("Échap")
     expect(showKeys("F1", fr)).toBe("F1")
     expect(ariaKeys("Ctrl+Shift+Z")).toBe("Control+Shift+Z")
     expect(ariaKeys(undefined)).toBeUndefined()
-    for (const key of ["Ctrl", "Shift", "Alt", "Enter", "Escape"]) expect(has(`ide.keys.${key}`), key).toBe(true)
+    for (const key of ["Ctrl", "Shift", "Alt", "Enter", "Escape"])
+      expect(has(`ide.keys.${key}`), key).toBe(true)
   })
 })

@@ -11,16 +11,25 @@ const draftsKey = (dir: string) => `gld.ide.${dir}.drafts`
 
 const isValidDraft = (candidate: Partial<Draft> | null): candidate is Draft => {
   if (!candidate) return false
-  return typeof candidate.content === "string" && typeof candidate.baseEtag === "string"
+  return (
+    typeof candidate.content === "string" &&
+    typeof candidate.baseEtag === "string"
+  )
 }
 
 export function readDrafts(dir: string): Record<string, Draft> {
   const out: Record<string, Draft> = {}
   try {
-    const parsed: unknown = JSON.parse(sessionStorage.getItem(draftsKey(dir)) ?? "{}")
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return out
-    for (const [path, draft] of Object.entries(parsed as Record<string, Partial<Draft> | null>)) {
-      if (isValidDraft(draft)) out[path] = { content: draft.content, baseEtag: draft.baseEtag }
+    const parsed: unknown = JSON.parse(
+      sessionStorage.getItem(draftsKey(dir)) ?? "{}"
+    )
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+      return out
+    for (const [path, draft] of Object.entries(
+      parsed as Record<string, Partial<Draft> | null>
+    )) {
+      if (isValidDraft(draft))
+        out[path] = { content: draft.content, baseEtag: draft.baseEtag }
     }
   } catch {
     /* stockage illisible ou indisponible : aucun brouillon */
@@ -42,7 +51,8 @@ export function writeDrafts(dir: string, tabs: Tab[]) {
     out[tab.path] = { content: tab.content, baseEtag: tab.etag }
   }
   try {
-    if (Object.keys(out).length) sessionStorage.setItem(draftsKey(dir), JSON.stringify(out))
+    if (Object.keys(out).length)
+      sessionStorage.setItem(draftsKey(dir), JSON.stringify(out))
     else sessionStorage.removeItem(draftsKey(dir))
   } catch {
     /* stockage plein ou indisponible : la garde de sortie reste */

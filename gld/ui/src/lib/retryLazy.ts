@@ -1,4 +1,9 @@
-import { createElement, lazy, type ComponentProps, type ComponentType } from "react"
+import {
+  createElement,
+  lazy,
+  type ComponentProps,
+  type ComponentType,
+} from "react"
 
 // React garde pour toujours un import paresseux rejeté. Un lazy neuf n'est créé qu'à la demande (« Réessayer » de
 // RouteErrorBoundary) : le créer dès l'échec ferait relancer l'import par React à chaque rendu, en boucle.
@@ -10,7 +15,9 @@ export const retryFailedImports = () => {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- même contrainte que lazy() de React
-export function retryLazy<T extends ComponentType<any>>(load: () => Promise<{ default: T }>): T {
+export function retryLazy<T extends ComponentType<any>>(
+  load: () => Promise<{ default: T }>
+): T {
   const createLazyComponent = () =>
     lazy(() =>
       load().catch((loadError) => {
@@ -21,6 +28,7 @@ export function retryLazy<T extends ComponentType<any>>(load: () => Promise<{ de
       })
     )
   let LazyComponent = createLazyComponent()
-  const RetryingComponent = (props: ComponentProps<T>) => createElement(LazyComponent as ComponentType<ComponentProps<T>>, props)
+  const RetryingComponent = (props: ComponentProps<T>) =>
+    createElement(LazyComponent as ComponentType<ComponentProps<T>>, props)
   return RetryingComponent as unknown as T
 }

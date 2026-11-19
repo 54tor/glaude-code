@@ -7,20 +7,37 @@ import { isDirty, type Tab } from "./ideState"
 const MIDDLE_BUTTON = 1
 const base = (path: string) => path.slice(path.lastIndexOf("/") + 1)
 
-export function Tabs({ tabs, active, onFocus, onClose }: { tabs: Tab[]; active: string; onFocus(path: string): void; onClose(path: string): void }) {
+export function Tabs({
+  tabs,
+  active,
+  onFocus,
+  onClose,
+}: {
+  tabs: Tab[]
+  active: string
+  onFocus(path: string): void
+  onClose(path: string): void
+}) {
   const { t } = useTranslation()
   const box = useRef<HTMLDivElement>(null)
   // Le focus ne suit l'onglet actif que si le changement vient du clavier ; la demande n'est consommée que lorsque l'onglet actif ou le nombre d'onglets a changé depuis la touche (une exécution antérieure de l'effet ne doit pas l'avaler).
   const keyboardRequest = useRef<{ active: string; count: number } | null>(null)
   useEffect(() => {
     const request = keyboardRequest.current
-    if (!request || (request.active === active && request.count === tabs.length)) return
+    if (
+      !request ||
+      (request.active === active && request.count === tabs.length)
+    )
+      return
     keyboardRequest.current = null
-    box.current?.querySelector<HTMLElement>(`[data-path="${CSS.escape(active)}"]`)?.focus()
+    box.current
+      ?.querySelector<HTMLElement>(`[data-path="${CSS.escape(active)}"]`)
+      ?.focus()
   }, [active, tabs.length])
   // Activation automatique : la flèche choisit et affiche l'onglet. Suppr ferme l'onglet qui a le focus.
   const onKeyDown = (event: KeyboardEvent, tabIndex: number) => {
-    const goTo = (targetIndex: number) => onFocus(tabs[(targetIndex + tabs.length) % tabs.length].path)
+    const goTo = (targetIndex: number) =>
+      onFocus(tabs[(targetIndex + tabs.length) % tabs.length].path)
     const actions: Record<string, () => void> = {
       ArrowLeft: () => goTo(tabIndex - 1),
       ArrowRight: () => goTo(tabIndex + 1),
@@ -35,7 +52,12 @@ export function Tabs({ tabs, active, onFocus, onClose }: { tabs: Tab[]; active: 
     actions[event.key]()
   }
   return (
-    <div ref={box} role="tablist" aria-label={t("ide.tabs.label")} className="flex min-h-9 shrink-0 overflow-x-auto border-b">
+    <div
+      ref={box}
+      role="tablist"
+      aria-label={t("ide.tabs.label")}
+      className="flex min-h-9 shrink-0 overflow-x-auto border-b"
+    >
       {tabs.map((tab, tabIndex) => (
         <div
           key={tab.path}
@@ -47,14 +69,26 @@ export function Tabs({ tabs, active, onFocus, onClose }: { tabs: Tab[]; active: 
           onClick={() => onFocus(tab.path)}
           aria-keyshortcuts="Delete"
           onKeyDown={(event) => onKeyDown(event, tabIndex)}
-          onAuxClick={(event) => event.button === MIDDLE_BUTTON && onClose(tab.path)}
+          onAuxClick={(event) =>
+            event.button === MIDDLE_BUTTON && onClose(tab.path)
+          }
           className={cn(
             "group flex max-w-56 shrink-0 cursor-default items-center gap-1.5 border-r pr-1 pl-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/80",
-            tab.path === active ? "bg-background text-foreground" : "bg-muted/40 text-muted-foreground hover:bg-muted"
+            tab.path === active
+              ? "bg-background text-foreground"
+              : "bg-muted/40 text-muted-foreground hover:bg-muted"
           )}
         >
-          <span className={cn("truncate", tab.readOnly && "italic")}>{base(tab.path)}</span>
-          {isDirty(tab) && <span role="img" aria-label={t("ide.tabs.dirty")} className="size-2 shrink-0 rounded-full bg-foreground/70" />}
+          <span className={cn("truncate", tab.readOnly && "italic")}>
+            {base(tab.path)}
+          </span>
+          {isDirty(tab) && (
+            <span
+              role="img"
+              aria-label={t("ide.tabs.dirty")}
+              className="size-2 shrink-0 rounded-full bg-foreground/70"
+            />
+          )}
           <button
             tabIndex={-1}
             aria-label={t("ide.tabs.close", { path: tab.path })}

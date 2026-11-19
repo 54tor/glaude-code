@@ -7,11 +7,14 @@ import { notesOf } from "./Notes"
 // Clés des bloc-notes non vides, partagées par toutes les lignes de la barre latérale (une seule requête par rafraîchissement).
 let filled = new Set<string>()
 const subs = new Set<(keys: Set<string>) => void>()
-const hasContent = (noteValue: Parameters<typeof notesOf>[0]) => notesOf(noteValue).some((note) => note.trim())
+const hasContent = (noteValue: Parameters<typeof notesOf>[0]) =>
+  notesOf(noteValue).some((note) => note.trim())
 const load = () =>
   api.notes().then(
     (response) => {
-      const filledEntries = Object.entries(response.notes).filter(([, noteValue]) => hasContent(noteValue))
+      const filledEntries = Object.entries(response.notes).filter(
+        ([, noteValue]) => hasContent(noteValue)
+      )
       filled = new Set(filledEntries.map(([noteKey]) => noteKey))
       subs.forEach((notifySubscriber) => notifySubscriber(filled))
     },
@@ -34,5 +37,10 @@ export function NoteMark({ noteKey }: { noteKey: string }) {
     }
   }, [])
   if (!keys.has(noteKey)) return <span className="w-4 shrink-0" aria-hidden />
-  return <NotebookPen className="size-4 shrink-0 text-muted-foreground" aria-label={t("shell.notes.title")} />
+  return (
+    <NotebookPen
+      className="size-4 shrink-0 text-muted-foreground"
+      aria-label={t("shell.notes.title")}
+    />
+  )
 }

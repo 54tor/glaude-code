@@ -62,15 +62,23 @@ export type Command = {
 
 // Chaque garde renvoie la clé i18n de la raison du refus, ou "" si elle passe ; la première qui refuse l'emporte.
 type Guard = (context: CmdCtx) => string
-const write: Guard = (context) => (context.can("fs_write") ? "" : "ide.reason.noWrite")
+const write: Guard = (context) =>
+  context.can("fs_write") ? "" : "ide.reason.noWrite"
 const hasTab: Guard = (context) => (context.tab ? "" : "ide.reason.noTab")
-const writable: Guard = (context) => (context.readOnly ? "ide.reason.readOnly" : "")
-const hasEditor: Guard = (context) => (context.editor ? "" : "ide.reason.noEditor")
-const markdownTab: Guard = (context) => (context.tab && isMarkdown(context.tab.path) ? "" : "ide.reason.notMarkdown")
+const writable: Guard = (context) =>
+  context.readOnly ? "ide.reason.readOnly" : ""
+const hasEditor: Guard = (context) =>
+  context.editor ? "" : "ide.reason.noEditor"
+const markdownTab: Guard = (context) =>
+  context.tab && isMarkdown(context.tab.path) ? "" : "ide.reason.notMarkdown"
 const dirty: Guard = (context) =>
-  context.tabs.some((tab) => isDirty(tab) && !tab.readOnly) ? "" : "ide.reason.nothingDirty"
-const treeOn: Guard = (context) => (context.treeShown ? "" : "ide.reason.noTree")
-const anyTab: Guard = (context) => (context.tabs.length ? "" : "ide.reason.noTab")
+  context.tabs.some((tab) => isDirty(tab) && !tab.readOnly)
+    ? ""
+    : "ide.reason.nothingDirty"
+const treeOn: Guard = (context) =>
+  context.treeShown ? "" : "ide.reason.noTree"
+const anyTab: Guard = (context) =>
+  context.tabs.length ? "" : "ide.reason.noTab"
 
 const cmd = (
   id: string,
@@ -80,7 +88,8 @@ const cmd = (
   shortcut?: string,
   focus: Command["focus"] = "editor"
 ): Command => {
-  const reason = (context: CmdCtx) => guards.map((guard) => guard(context)).find(Boolean) ?? ""
+  const reason = (context: CmdCtx) =>
+    guards.map((guard) => guard(context)).find(Boolean) ?? ""
   return {
     id,
     label: `ide.cmd.${id}`,
@@ -93,7 +102,9 @@ const cmd = (
   }
 }
 const toggle =
-  (prefName: "wordWrap" | "minimap" | "showTree" | "showStatus" | "showPreview") =>
+  (
+    prefName: "wordWrap" | "minimap" | "showTree" | "showStatus" | "showPreview"
+  ) =>
   (context: CmdCtx) =>
     context.prefs.set(prefName, !context.prefs[prefName])
 const font = (delta: 1 | -1 | 0) => (context: CmdCtx) =>
@@ -101,7 +112,9 @@ const font = (delta: 1 | -1 | 0) => (context: CmdCtx) =>
 
 export const commands: Command[] = [
   cmd("file.newFile", "file", [write, treeOn], (context) => context.newFile()),
-  cmd("file.newFolder", "file", [write, treeOn], (context) => context.newFolder()),
+  cmd("file.newFolder", "file", [write, treeOn], (context) =>
+    context.newFolder()
+  ),
   cmd(
     "file.save",
     "file",
@@ -109,9 +122,30 @@ export const commands: Command[] = [
     (context) => context.save(),
     "Ctrl+S"
   ),
-  cmd("file.saveAll", "file", [write, dirty], (context) => context.saveAll(), undefined, "keep"),
-  cmd("file.closeTab", "file", [hasTab], (context) => context.closeTab(), undefined, "keep"),
-  cmd("file.closeAll", "file", [anyTab], (context) => context.closeAll(), undefined, "keep"),
+  cmd(
+    "file.saveAll",
+    "file",
+    [write, dirty],
+    (context) => context.saveAll(),
+    undefined,
+    "keep"
+  ),
+  cmd(
+    "file.closeTab",
+    "file",
+    [hasTab],
+    (context) => context.closeTab(),
+    undefined,
+    "keep"
+  ),
+  cmd(
+    "file.closeAll",
+    "file",
+    [anyTab],
+    (context) => context.closeAll(),
+    undefined,
+    "keep"
+  ),
   cmd("file.quickOpen", "file", [], (context) => context.openQuick(), "Ctrl+P"),
   cmd(
     "edit.undo",
@@ -127,7 +161,13 @@ export const commands: Command[] = [
     (context) => context.editor?.redo(),
     "Ctrl+Shift+Z"
   ),
-  cmd("find.find", "find", [hasEditor], (context) => context.editor?.find(), "Ctrl+F"),
+  cmd(
+    "find.find",
+    "find",
+    [hasEditor],
+    (context) => context.editor?.find(),
+    "Ctrl+F"
+  ),
   cmd(
     "find.replace",
     "find",
@@ -135,15 +175,34 @@ export const commands: Command[] = [
     (context) => context.editor?.replace(),
     "Ctrl+H"
   ),
-  cmd("goto.line", "goto", [hasEditor], (context) => context.editor?.gotoLine(), "Ctrl+G"),
-  cmd("goto.palette", "goto", [hasEditor], (context) => context.editor?.palette(), "F1"),
+  cmd(
+    "goto.line",
+    "goto",
+    [hasEditor],
+    (context) => context.editor?.gotoLine(),
+    "Ctrl+G"
+  ),
+  cmd(
+    "goto.palette",
+    "goto",
+    [hasEditor],
+    (context) => context.editor?.palette(),
+    "F1"
+  ),
   cmd("view.wordWrap", "view", [], toggle("wordWrap")),
   cmd("view.minimap", "view", [], toggle("minimap")),
   cmd("view.fontPlus", "view", [], font(1)),
   cmd("view.fontMinus", "view", [], font(-1)),
   cmd("view.fontReset", "view", [], font(0)),
   cmd("view.toggleTree", "view", [], toggle("showTree"), undefined, "keep"),
-  cmd("view.togglePreview", "view", [markdownTab], toggle("showPreview"), undefined, "keep"),
+  cmd(
+    "view.togglePreview",
+    "view",
+    [markdownTab],
+    toggle("showPreview"),
+    undefined,
+    "keep"
+  ),
   cmd("view.toggleStatus", "view", [], toggle("showStatus"), undefined, "keep"),
 ]
 
@@ -152,6 +211,9 @@ const NAMED = ["Ctrl", "Shift", "Alt", "Enter", "Escape"]
 export const showKeys = (shortcut: string, t: (key: string) => string) =>
   shortcut
     .split("+")
-    .map((keyName) => (NAMED.includes(keyName) ? t(`ide.keys.${keyName}`) : keyName))
+    .map((keyName) =>
+      NAMED.includes(keyName) ? t(`ide.keys.${keyName}`) : keyName
+    )
     .join("+")
-export const ariaKeys = (shortcut?: string) => shortcut?.replace("Ctrl", "Control")
+export const ariaKeys = (shortcut?: string) =>
+  shortcut?.replace("Ctrl", "Control")

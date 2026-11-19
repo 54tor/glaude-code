@@ -5,7 +5,14 @@ import { toast } from "sonner"
 import { api } from "@/lib/api"
 import { errMsg } from "@/lib/apiError"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Choose } from "./Choose"
 import { SnippetMenu } from "./SnippetMenu"
 import { spliceAtCaret } from "@/lib/utils"
@@ -13,15 +20,46 @@ import { spliceAtCaret } from "@/lib/utils"
 const MAX_INSTRUCTION_LENGTH = 8000
 
 // Rédaction ou révision d'un SKILL.md par un modèle, à partir d'une consigne. Le texte revient en brouillon : rien n'est enregistré.
-export function SkillWriter({ open, skillKey, name, onClose, onDraft }: { open: boolean; skillKey: string; name: string; onClose: () => void; onDraft: (text: string) => void }) {
+export function SkillWriter({
+  open,
+  skillKey,
+  name,
+  onClose,
+  onDraft,
+}: {
+  open: boolean
+  skillKey: string
+  name: string
+  onClose: () => void
+  onDraft: (text: string) => void
+}) {
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <DialogContent className="sm:max-w-2xl">{open && <Form skillKey={skillKey} name={name} onClose={onClose} onDraft={onDraft} />}</DialogContent>
+      <DialogContent className="sm:max-w-2xl">
+        {open && (
+          <Form
+            skillKey={skillKey}
+            name={name}
+            onClose={onClose}
+            onDraft={onDraft}
+          />
+        )}
+      </DialogContent>
     </Dialog>
   )
 }
 
-function Form({ skillKey, name, onClose, onDraft }: { skillKey: string; name: string; onClose: () => void; onDraft: (text: string) => void }) {
+function Form({
+  skillKey,
+  name,
+  onClose,
+  onDraft,
+}: {
+  skillKey: string
+  name: string
+  onClose: () => void
+  onDraft: (text: string) => void
+}) {
   const { t } = useTranslation()
   const models = [
     ["haiku", t("skills.writer.modelHaiku")],
@@ -34,22 +72,39 @@ function Form({ skillKey, name, onClose, onDraft }: { skillKey: string; name: st
   const [busy, setBusy] = useState(false)
   const instructionArea = useRef<HTMLTextAreaElement>(null)
   const insertSnippet = (text: string) => {
-    setInstruction((currentInstruction) => spliceAtCaret(instructionArea.current, currentInstruction, text, MAX_INSTRUCTION_LENGTH))
+    setInstruction((currentInstruction) =>
+      spliceAtCaret(
+        instructionArea.current,
+        currentInstruction,
+        text,
+        MAX_INSTRUCTION_LENGTH
+      )
+    )
     requestAnimationFrame(() => instructionArea.current?.focus())
   }
   const writeDraft = async () => {
     if (!instruction.trim() || busy) return
     setBusy(true)
-    const draft = await api.skillDraft({ model, instruction, key: skillKey }).catch((error) => void toast.error(errMsg(error)))
+    const draft = await api
+      .skillDraft({ model, instruction, key: skillKey })
+      .catch((error) => void toast.error(errMsg(error)))
     setBusy(false)
     if (!draft) return
-    const costDescription = draft.cost ? t("skills.writer.cost", { cost: draft.cost.toFixed(4) }) : undefined
-    toast.success(t("skills.writer.draftReady"), { description: costDescription })
+    const costDescription = draft.cost
+      ? t("skills.writer.cost", { cost: draft.cost.toFixed(4) })
+      : undefined
+    toast.success(t("skills.writer.draftReady"), {
+      description: costDescription,
+    })
     onClose()
     onDraft(draft.text)
   }
-  const writeDraftOnCtrlEnter = (keyboardEvent: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    const isSubmitShortcut = (keyboardEvent.ctrlKey || keyboardEvent.metaKey) && keyboardEvent.key === "Enter"
+  const writeDraftOnCtrlEnter = (
+    keyboardEvent: React.KeyboardEvent<HTMLTextAreaElement>
+  ) => {
+    const isSubmitShortcut =
+      (keyboardEvent.ctrlKey || keyboardEvent.metaKey) &&
+      keyboardEvent.key === "Enter"
     if (!isSubmitShortcut) return
     keyboardEvent.preventDefault()
     writeDraft()
@@ -77,14 +132,22 @@ function Form({ skillKey, name, onClose, onDraft }: { skillKey: string; name: st
         <SnippetMenu onInsert={insertSnippet} />
       </div>
       <div className="flex items-center gap-2 text-sm">
-        {t("skills.writer.model")} <Choose value={model} onChange={setModel} options={models} label={t("skills.writer.model")} className="min-w-0" />
+        {t("skills.writer.model")}{" "}
+        <Choose
+          value={model}
+          onChange={setModel}
+          options={models}
+          label={t("skills.writer.model")}
+          className="min-w-0"
+        />
       </div>
       <DialogFooter>
         <Button variant="ghost" onClick={onClose} disabled={busy}>
           {t("common.cancel")}
         </Button>
         <Button onClick={writeDraft} disabled={!instruction.trim() || busy}>
-          {busy ? <Fan className="animate-spin" /> : <Sparkles />} {t("skills.writer.write")}
+          {busy ? <Fan className="animate-spin" /> : <Sparkles />}{" "}
+          {t("skills.writer.write")}
         </Button>
       </DialogFooter>
     </div>

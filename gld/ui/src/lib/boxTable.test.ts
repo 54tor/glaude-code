@@ -18,7 +18,13 @@ describe("splitContextTables", () => {
 
     expect(segmentsObtenus).toEqual([
       { kind: "text", text: "- intro" },
-      { kind: "table", rows: [["", "A"], ["Pr", "un texte replié"]] },
+      {
+        kind: "table",
+        rows: [
+          ["", "A"],
+          ["Pr", "un texte replié"],
+        ],
+      },
       { kind: "text", text: "suite" },
     ])
   })
@@ -40,25 +46,48 @@ describe("splitContextTables avec un cadre à droite d'une liste", () => {
     const segmentsObtenus = splitContextTables(contexteTerminal)
 
     expect(segmentsObtenus).toEqual([
-      { kind: "text", text: "❯ 1. Sous-dossiers\n  2. Plat\ndocs/\n  README.md" },
+      {
+        kind: "text",
+        text: "❯ 1. Sous-dossiers\n  2. Plat\ndocs/\n  README.md",
+      },
     ])
   })
 })
 
 describe("contextToMarkdown", () => {
   it("transforme un tableau encadré en tableau Markdown et garde le texte", () => {
-    const contexteTerminal = ["Il en reste 2 :", "┌────┬───────┐", "│ #  │ Point │", "├────┼───────┤", "│ 1  │ a|b   │", "└────┴───────┘"].join("\n")
+    const contexteTerminal = [
+      "Il en reste 2 :",
+      "┌────┬───────┐",
+      "│ #  │ Point │",
+      "├────┼───────┤",
+      "│ 1  │ a|b   │",
+      "└────┴───────┘",
+    ].join("\n")
 
     const markdownObtenu = contextToMarkdown(contexteTerminal)
 
-    expect(markdownObtenu).toBe("Il en reste 2 :\n\n| # | Point |\n| --- | --- |\n| 1 | a\\|b |")
+    expect(markdownObtenu).toBe(
+      "Il en reste 2 :\n\n| # | Point |\n| --- | --- |\n| 1 | a\\|b |"
+    )
   })
 
   it("lit un tableau dont les lignes de contenu n'ont pas de cadre à gauche ni à droite", () => {
-    const contexteTerminal = ["┌────┬───────┬──────┐", "│    │       │      │", "│ #  │ Point │ Effet│", "├────┼───────┼──────┤", "│    │       │      │", "1   │ Coût  │ doc", "│    │       │      │", "└────┴───────┴──────┘"].join("\n")
+    const contexteTerminal = [
+      "┌────┬───────┬──────┐",
+      "│    │       │      │",
+      "│ #  │ Point │ Effet│",
+      "├────┼───────┼──────┤",
+      "│    │       │      │",
+      "1   │ Coût  │ doc",
+      "│    │       │      │",
+      "└────┴───────┴──────┘",
+    ].join("\n")
 
     const markdownObtenu = contextToMarkdown(contexteTerminal)
 
-    expect(markdownObtenu).toBe("| # | Point | Effet |\n| --- | --- | --- |\n| 1 | Coût | doc |")
+    expect(markdownObtenu).toBe(
+      "| # | Point | Effet |\n| --- | --- | --- |\n| 1 | Coût | doc |"
+    )
   })
 })

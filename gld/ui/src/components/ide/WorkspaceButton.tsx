@@ -11,7 +11,11 @@ export function WorkspaceButton({ dir }: { dir: string }) {
   if (!dir || !can("fs_read")) return null
   return (
     <Button size="icon-sm" variant="ghost" asChild>
-      <Link href={href({ kind: "workspace", dir })} title={t("ide.openHint")} aria-label={t("ide.open")}>
+      <Link
+        href={href({ kind: "workspace", dir })}
+        title={t("ide.openHint")}
+        aria-label={t("ide.open")}
+      >
         <FolderTree />
       </Link>
     </Button>

@@ -1,15 +1,41 @@
 import { describe, expect, it } from "vitest"
 import type { ProjectCfg } from "@/lib/api"
-import { hooksCoveringRule, overridingKind, projectsAddingDirectory, skillsUsingRule } from "./permDependencies"
+import {
+  hooksCoveringRule,
+  overridingKind,
+  projectsAddingDirectory,
+  skillsUsingRule,
+} from "./permDependencies"
 
-const hookWithMatcher = (matcher: string | undefined, command: string) => ({ scope: "p", file: "p/-p", event: "PreToolUse", matcher, type: "command", command })
+const hookWithMatcher = (matcher: string | undefined, command: string) => ({
+  scope: "p",
+  file: "p/-p",
+  event: "PreToolUse",
+  matcher,
+  type: "command",
+  command,
+})
 
 describe("hooksCoveringRule", () => {
-  const hooks = [hookWithMatcher("Bash", "garde-bash"), hookWithMatcher("Edit|Write", "garde-ecriture"), hookWithMatcher(undefined, "tous"), hookWithMatcher("*", "etoile"), hookWithMatcher("(", "regex-cassee")]
+  const hooks = [
+    hookWithMatcher("Bash", "garde-bash"),
+    hookWithMatcher("Edit|Write", "garde-ecriture"),
+    hookWithMatcher(undefined, "tous"),
+    hookWithMatcher("*", "etoile"),
+    hookWithMatcher("(", "regex-cassee"),
+  ]
 
   it("relie une règle aux hooks dont le matcher couvre exactement son outil", () => {
-    expect(hooksCoveringRule(hooks, "Bash(git status:*)").map((hookObtenu) => hookObtenu.command)).toEqual(["garde-bash"])
-    expect(hooksCoveringRule(hooks, "Write(src/**)").map((hookObtenu) => hookObtenu.command)).toEqual(["garde-ecriture"])
+    expect(
+      hooksCoveringRule(hooks, "Bash(git status:*)").map(
+        (hookObtenu) => hookObtenu.command
+      )
+    ).toEqual(["garde-bash"])
+    expect(
+      hooksCoveringRule(hooks, "Write(src/**)").map(
+        (hookObtenu) => hookObtenu.command
+      )
+    ).toEqual(["garde-ecriture"])
   })
 
   it("ignore les hooks sans matcher précis et les matchers invalides", () => {
@@ -30,11 +56,20 @@ describe("skillsUsingRule", () => {
   })
 })
 
-const projectWith = (dir: string, project: string, additionalDirectories: string[]): ProjectCfg => ({
+const projectWith = (
+  dir: string,
+  project: string,
+  additionalDirectories: string[]
+): ProjectCfg => ({
   dir,
   project,
   files: [],
-  perms: { additionalDirectories: additionalDirectories.map((rule) => ({ rule, scope: "l" })) },
+  perms: {
+    additionalDirectories: additionalDirectories.map((rule) => ({
+      rule,
+      scope: "l",
+    })),
+  },
   hooks: [],
   mcp: [],
   rules: [],
@@ -45,7 +80,11 @@ const projectWith = (dir: string, project: string, additionalDirectories: string
 
 describe("overridingKind", () => {
   const perms = {
-    allow: [{ rule: "Bash(rm:*)", scope: "p" }, { rule: "Bash(ls:*)", scope: "u" }, { rule: "Bash(cat:*)", scope: "p" }],
+    allow: [
+      { rule: "Bash(rm:*)", scope: "p" },
+      { rule: "Bash(ls:*)", scope: "u" },
+      { rule: "Bash(cat:*)", scope: "p" },
+    ],
     ask: [{ rule: "Bash(cat:*)", scope: "l" }],
     deny: [{ rule: "Bash(rm:*)", scope: "u" }],
   }
@@ -55,8 +94,13 @@ describe("overridingKind", () => {
   })
 
   it("préfère le refus à la confirmation quand les deux existent", () => {
-    const permsAvecLesDeux = { ...perms, deny: [...perms.deny, { rule: "Bash(cat:*)", scope: "u" }] }
-    expect(overridingKind(permsAvecLesDeux, "allow", "Bash(cat:*)")).toBe("deny")
+    const permsAvecLesDeux = {
+      ...perms,
+      deny: [...perms.deny, { rule: "Bash(cat:*)", scope: "u" }],
+    }
+    expect(overridingKind(permsAvecLesDeux, "allow", "Bash(cat:*)")).toBe(
+      "deny"
+    )
   })
 
   it("signale une règle autorisée neutralisée par une confirmation", () => {
@@ -76,12 +120,20 @@ describe("projectsAddingDirectory", () => {
   const sansLien = projectWith("-d", "/home/bob/autre", ["/home/bob/x"])
 
   it("liste les projets qui ajoutent le dossier, en chemin absolu ou avec ~", () => {
-    const projetsObtenus = projectsAddingDirectory([cible, ajouteParTilde, ajouteParChemin, sansLien], cible, "/home/bob").map((projet) => projet.dir)
+    const projetsObtenus = projectsAddingDirectory(
+      [cible, ajouteParTilde, ajouteParChemin, sansLien],
+      cible,
+      "/home/bob"
+    ).map((projet) => projet.dir)
     expect(projetsObtenus).toEqual(["-a", "-b"])
   })
 
   it("ne compte pas le projet lui-même", () => {
-    const seAjouteLuiMeme = projectWith("-c", "/home/bob/lib", ["/home/bob/lib"])
-    expect(projectsAddingDirectory([seAjouteLuiMeme], seAjouteLuiMeme, "/home/bob")).toEqual([])
+    const seAjouteLuiMeme = projectWith("-c", "/home/bob/lib", [
+      "/home/bob/lib",
+    ])
+    expect(
+      projectsAddingDirectory([seAjouteLuiMeme], seAjouteLuiMeme, "/home/bob")
+    ).toEqual([])
   })
 })

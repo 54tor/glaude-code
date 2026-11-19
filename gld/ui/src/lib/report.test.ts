@@ -2,7 +2,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const success = vi.fn()
 const error = vi.fn()
-vi.mock("sonner", () => ({ toast: { success: (...values: unknown[]) => success(...values), error: (...values: unknown[]) => error(...values) } }))
+vi.mock("sonner", () => ({
+  toast: {
+    success: (...values: unknown[]) => success(...values),
+    error: (...values: unknown[]) => error(...values),
+  },
+}))
 
 const { reportAction } = await import("./report")
 const { ApiError } = await import("./apiError")
@@ -13,8 +18,13 @@ describe("reportAction", () => {
     error.mockClear()
   })
   it("met la première ligne en titre et le reste en description", async () => {
-    await reportAction(async () => ({ message: "Enregistré\n\nsauvegarde : a.bak\n" }))
-    expect(success).toHaveBeenCalledWith("Enregistré", { id: undefined, description: "sauvegarde : a.bak" })
+    await reportAction(async () => ({
+      message: "Enregistré\n\nsauvegarde : a.bak\n",
+    }))
+    expect(success).toHaveBeenCalledWith("Enregistré", {
+      id: undefined,
+      description: "sauvegarde : a.bak",
+    })
   })
   it("donne un titre même sans sortie", async () => {
     await reportAction(async () => ({ message: "  " }))
@@ -22,16 +32,40 @@ describe("reportAction", () => {
     expect(success.mock.calls[0][1].description).toBeUndefined()
   })
   it("succès : le message de la réponse", async () => {
-    expect(await reportAction(async () => ({ message: "Fait\ndétail" }))).toBe(true)
-    expect(success).toHaveBeenCalledWith("Fait", { id: undefined, description: "détail" })
+    expect(await reportAction(async () => ({ message: "Fait\ndétail" }))).toBe(
+      true
+    )
+    expect(success).toHaveBeenCalledWith("Fait", {
+      id: undefined,
+      description: "détail",
+    })
   })
   it("suppression partielle : succès puis erreur pour les éléments refusés", async () => {
-    expect(await reportAction(async () => ({ message: "Supprimé", failed: [{ item: "a.md", error: { message: "absent" } }] }))).toBe(true)
-    expect(success).toHaveBeenCalledWith("Supprimé", { id: undefined, description: undefined })
-    expect(error).toHaveBeenCalledWith("a.md : absent", { id: undefined, description: undefined })
+    expect(
+      await reportAction(async () => ({
+        message: "Supprimé",
+        failed: [{ item: "a.md", error: { message: "absent" } }],
+      }))
+    ).toBe(true)
+    expect(success).toHaveBeenCalledWith("Supprimé", {
+      id: undefined,
+      description: undefined,
+    })
+    expect(error).toHaveBeenCalledWith("a.md : absent", {
+      id: undefined,
+      description: undefined,
+    })
   })
   it("échec : le message de l'ApiError", async () => {
-    expect(await reportAction(async () => Promise.reject(new ApiError(409, "conflict", "déjà là")), { id: 3 })).toBe(false)
-    expect(error).toHaveBeenCalledWith("déjà là", { id: 3, description: undefined })
+    expect(
+      await reportAction(
+        async () => Promise.reject(new ApiError(409, "conflict", "déjà là")),
+        { id: 3 }
+      )
+    ).toBe(false)
+    expect(error).toHaveBeenCalledWith("déjà là", {
+      id: 3,
+      description: undefined,
+    })
   })
 })

@@ -11,12 +11,19 @@ import { Choose } from "./Choose"
 import { SyncItems, type Picks } from "./SyncItems"
 
 const CATS = ["skills", "plugins", "settings", "memory", "mcp"]
-const TONE = { ok: "text-success", failed: "text-destructive", skipped: "text-muted-foreground" } as const
+const TONE = {
+  ok: "text-success",
+  failed: "text-destructive",
+  skipped: "text-muted-foreground",
+} as const
 const HTTP_NOT_FOUND = 404
 
 function categoriesFromUrl() {
-  const requestedCategories = new URLSearchParams(window.location.search).get("cats") ?? ""
-  return requestedCategories.split(",").filter((category) => CATS.includes(category))
+  const requestedCategories =
+    new URLSearchParams(window.location.search).get("cats") ?? ""
+  return requestedCategories
+    .split(",")
+    .filter((category) => CATS.includes(category))
 }
 
 // Sauvegarde : export de la configuration Claude en archive, puis import en deux temps (aperçu, puis application des seuls éléments cochés).
@@ -38,11 +45,17 @@ export function Backup({ home }: { home: string }) {
     try {
       const stagedPlan = await api.backupStage(archive)
       const targetDirs = new Set(stagedPlan.targets.map((target) => target.dir))
-      const matchingProjectItems = stagedPlan.items.filter(isProject).filter((item) => targetDirs.has(item.label))
+      const matchingProjectItems = stagedPlan.items
+        .filter(isProject)
+        .filter((item) => targetDirs.has(item.label))
       setPlan(stagedPlan)
       setPicks({})
       setResults(null)
-      setTargets(Object.fromEntries(matchingProjectItems.map((item) => [item.label, item.label])))
+      setTargets(
+        Object.fromEntries(
+          matchingProjectItems.map((item) => [item.label, item.label])
+        )
+      )
     } catch (error) {
       setError(errMsg(error))
     }
@@ -63,34 +76,52 @@ export function Backup({ home }: { home: string }) {
     setBusy(true)
     setError("")
     try {
-      const pickedItems = Object.entries(picks).map(([id, mode]) => ({ id, mode }))
+      const pickedItems = Object.entries(picks).map(([id, mode]) => ({
+        id,
+        mode,
+      }))
       const applyResponse = await api.backupApply(plan.id, pickedItems, targets)
       setResults(applyResponse.results)
     } catch (error) {
       setError(errMsg(error))
-      const isPlanGone = error instanceof ApiError && error.status === HTTP_NOT_FOUND
+      const isPlanGone =
+        error instanceof ApiError && error.status === HTTP_NOT_FOUND
       if (isPlanGone) reset()
     }
     setBusy(false)
   }
   const count = Object.keys(picks).length
-  const label = (id: string) => plan?.items.find((item) => item.id === id)?.label ?? id
-  const toggleCategory = (category: string, checked: boolean | "indeterminate") =>
+  const label = (id: string) =>
+    plan?.items.find((item) => item.id === id)?.label ?? id
+  const toggleCategory = (
+    category: string,
+    checked: boolean | "indeterminate"
+  ) =>
     setCats((selectedCategories) => {
       if (checked === true) return [...selectedCategories, category]
-      return selectedCategories.filter((selectedCategory) => selectedCategory !== category)
+      return selectedCategories.filter(
+        (selectedCategory) => selectedCategory !== category
+      )
     })
 
   return (
     <div className="mx-auto w-full max-w-page space-y-8 overflow-y-auto px-4 py-6">
       <section className="space-y-3">
         <h2 className="text-base font-medium">{t("backup.export")}</h2>
-        <p className="text-sm text-muted-foreground">{t("backup.exportHint")}</p>
-        <p className="text-sm text-muted-foreground">{t("backup.secretsHint")}</p>
+        <p className="text-sm text-muted-foreground">
+          {t("backup.exportHint")}
+        </p>
+        <p className="text-sm text-muted-foreground">
+          {t("backup.secretsHint")}
+        </p>
         <div className="flex flex-wrap gap-4">
           {CATS.map((category) => (
             <label key={category} className="flex items-center gap-2 text-sm">
-              <Checkbox checked={cats.includes(category)} onCheckedChange={(checked) => toggleCategory(category, checked)} aria-label={t(`backup.cat.${category}`)} />
+              <Checkbox
+                checked={cats.includes(category)}
+                onCheckedChange={(checked) => toggleCategory(category, checked)}
+                aria-label={t(`backup.cat.${category}`)}
+              />
               {t(`backup.cat.${category}`)}
             </label>
           ))}
@@ -112,18 +143,42 @@ export function Backup({ home }: { home: string }) {
         <h2 className="text-base font-medium">{t("backup.import")}</h2>
         {!plan && (
           <>
-            <p className="text-sm text-muted-foreground">{t("backup.importHint")}</p>
-            <Button variant="outline" onClick={() => fileInput.current?.click()} disabled={busy}>
+            <p className="text-sm text-muted-foreground">
+              {t("backup.importHint")}
+            </p>
+            <Button
+              variant="outline"
+              onClick={() => fileInput.current?.click()}
+              disabled={busy}
+            >
               <Upload /> {busy ? t("backup.staging") : t("backup.choose")}
             </Button>
           </>
         )}
-        <input ref={fileInput} type="file" accept=".zip" className="hidden" onChange={(changeEvent) => stage(changeEvent.target.files?.[0])} />
-        {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+        <input
+          ref={fileInput}
+          type="file"
+          accept=".zip"
+          className="hidden"
+          onChange={(changeEvent) => stage(changeEvent.target.files?.[0])}
+        />
+        {error && (
+          <p role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+        )}
         {plan && !results && (
           <div className="space-y-4">
-            {plan.items.length === 0 && <p className="text-sm text-muted-foreground">{t("backup.none")}</p>}
-            {plan.skipped.length > 0 && <p className="text-xs text-muted-foreground">{t("backup.skipped", { list: plan.skipped.join(", ") })}</p>}
+            {plan.items.length === 0 && (
+              <p className="text-sm text-muted-foreground">
+                {t("backup.none")}
+              </p>
+            )}
+            {plan.skipped.length > 0 && (
+              <p className="text-xs text-muted-foreground">
+                {t("backup.skipped", { list: plan.skipped.join(", ") })}
+              </p>
+            )}
             <SyncItems
               items={plan.items}
               picks={picks}
@@ -141,8 +196,16 @@ export function Backup({ home }: { home: string }) {
                       <Choose
                         size="xs"
                         value={targets[item.label] ?? ""}
-                        onChange={(targetDir) => setTargets((previousTargets) => ({ ...previousTargets, [item.label]: targetDir }))}
-                        options={plan.targets.map((target) => [target.dir, tilde(target.project, home)] as const)}
+                        onChange={(targetDir) =>
+                          setTargets((previousTargets) => ({
+                            ...previousTargets,
+                            [item.label]: targetDir,
+                          }))
+                        }
+                        options={plan.targets.map(
+                          (target) =>
+                            [target.dir, tilde(target.project, home)] as const
+                        )}
                         label={t("backup.project")}
                         className="max-w-xs"
                       />
@@ -167,8 +230,15 @@ export function Backup({ home }: { home: string }) {
             <ul className="space-y-1 text-sm">
               {results.map((result) => (
                 <li key={result.id}>
-                  <code className="text-xs">{label(result.id)}</code> <span className={cn("text-xs", TONE[result.status])}>{t(`backup.status.${result.status}`)}</span>
-                  {result.message && <p className="text-xs text-muted-foreground">{result.message}</p>}
+                  <code className="text-xs">{label(result.id)}</code>{" "}
+                  <span className={cn("text-xs", TONE[result.status])}>
+                    {t(`backup.status.${result.status}`)}
+                  </span>
+                  {result.message && (
+                    <p className="text-xs text-muted-foreground">
+                      {result.message}
+                    </p>
+                  )}
                 </li>
               ))}
             </ul>
@@ -182,4 +252,5 @@ export function Backup({ home }: { home: string }) {
   )
 }
 
-const isProject = (item: { kind: string }) => item.kind === "projmem" || item.kind === "projcmd"
+const isProject = (item: { kind: string }) =>
+  item.kind === "projmem" || item.kind === "projcmd"

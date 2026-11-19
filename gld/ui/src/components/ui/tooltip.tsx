@@ -54,7 +54,13 @@ function TooltipContent({
 }
 
 // Bouton icône seul : l'infobulle remplace l'attribut title (invisible au clavier et au toucher).
-function Tip({ label, children }: { label: React.ReactNode; children: React.ReactNode }) {
+function Tip({
+  label,
+  children,
+}: {
+  label: React.ReactNode
+  children: React.ReactNode
+}) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>{children}</TooltipTrigger>

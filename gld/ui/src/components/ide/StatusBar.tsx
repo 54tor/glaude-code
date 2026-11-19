@@ -11,8 +11,14 @@ import type { WatchState } from "./useWatch"
 
 // Statut rattaché à la poignée qui l'a émis : après un changement d'onglet, rien de l'ancien éditeur ne s'affiche.
 export function useEditorStatus(editor: EditorHandle | null) {
-  const [emitted, setEmitted] = useState<{ handle: EditorHandle; status: EditorStatus } | null>(null)
-  useEffect(() => editor?.subscribe((status) => setEmitted({ handle: editor, status })), [editor])
+  const [emitted, setEmitted] = useState<{
+    handle: EditorHandle
+    status: EditorStatus
+  } | null>(null)
+  useEffect(
+    () => editor?.subscribe((status) => setEmitted({ handle: editor, status })),
+    [editor]
+  )
   if (!emitted || emitted.handle !== editor) return null
   return emitted.status
 }
@@ -38,7 +44,8 @@ type Props = {
 const watchLabel = (watch: WatchState, t: TFunction) => {
   if (watch.state === "open") return t("ide.status.watch.open")
   if (watch.state === "browserRetry") return t("ide.status.watch.closed")
-  if (watch.state === "waiting") return t("ide.status.watch.retry", { n: watch.retryIn })
+  if (watch.state === "waiting")
+    return t("ide.status.watch.retry", { n: watch.retryIn })
   return t("ide.status.watch.connecting")
 }
 
@@ -48,16 +55,30 @@ const watchLabel = (watch: WatchState, t: TFunction) => {
 export function StatusBar({ editor, watch, index, branch, dirty }: Props) {
   const { t } = useTranslation()
   const status = useEditorStatus(editor)
-  const indent = status?.indent.startsWith("tabs:") ? t("ide.status.tabs") : status && t("ide.status.spaces", { n: status.indent.split(":")[1] })
+  const indent = status?.indent.startsWith("tabs:")
+    ? t("ide.status.tabs")
+    : status && t("ide.status.spaces", { n: status.indent.split(":")[1] })
   const flux = watchLabel(watch, t)
   return (
-    <div aria-label={t("ide.status.label")} role="group" className="safe-b flex shrink-0 flex-wrap items-center gap-x-3 border-t px-2 text-xs text-muted-foreground">
+    <div
+      aria-label={t("ide.status.label")}
+      role="group"
+      className="safe-b flex shrink-0 flex-wrap items-center gap-x-3 border-t px-2 text-xs text-muted-foreground"
+    >
       {status && (
         <>
-          <span>{t("ide.status.pos", { line: status.line, col: status.col })}</span>
-          {status.selected > 0 && <span>{t("ide.status.selected", { count: status.selected })}</span>}
+          <span>
+            {t("ide.status.pos", { line: status.line, col: status.col })}
+          </span>
+          {status.selected > 0 && (
+            <span>{t("ide.status.selected", { count: status.selected })}</span>
+          )}
           <span>{status.eol}</span>
-          {status.readOnly && <span className="rounded border px-1">{t("ide.status.readOnly")}</span>}
+          {status.readOnly && (
+            <span className="rounded border px-1">
+              {t("ide.status.readOnly")}
+            </span>
+          )}
           <span>{status.language}</span>
           <span className="hidden sm:inline">{indent}</span>
         </>
@@ -80,7 +101,25 @@ export function StatusBar({ editor, watch, index, branch, dirty }: Props) {
 }
 
 // Barre de l'espace : branche, onglets modifiés tirés du contexte des commandes.
-export function WorkspaceStatus({ dir, ctx, watch, index }: { dir: string; ctx: CmdCtx; watch: WatchState; index: IndexState }) {
+export function WorkspaceStatus({
+  dir,
+  ctx,
+  watch,
+  index,
+}: {
+  dir: string
+  ctx: CmdCtx
+  watch: WatchState
+  index: IndexState
+}) {
   const repos = useGit()
-  return <StatusBar editor={ctx.editor} watch={watch} index={index} branch={branchOf(dir, repos.status)} dirty={ctx.tabs.filter(isDirty).length} />
+  return (
+    <StatusBar
+      editor={ctx.editor}
+      watch={watch}
+      index={index}
+      branch={branchOf(dir, repos.status)}
+      dirty={ctx.tabs.filter(isDirty).length}
+    />
+  )
 }

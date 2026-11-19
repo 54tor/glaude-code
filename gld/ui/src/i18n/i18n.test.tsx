@@ -6,10 +6,21 @@ import { ago, size } from "@/lib/format"
 import { catalogFiles, i18n, resolveFront, setLang } from "./index"
 
 const flat = (object: object, path = ""): string[] =>
-  Object.entries(object).flatMap(([key, value]) => (typeof value === "object" && value ? flat(value, path + key + ".") : [path + key]))
-const leaves = (object: object): string[] => Object.values(object).flatMap((value) => (typeof value === "object" && value ? leaves(value) : [String(value)]))
-const names = (lookup: Record<string, unknown>) => Object.keys(lookup).map((path) => path.split("/").pop()).sort()
-const bundle = (lang: string) => i18n.getResourceBundle(lang, "translation") as object
+  Object.entries(object).flatMap(([key, value]) =>
+    typeof value === "object" && value
+      ? flat(value, path + key + ".")
+      : [path + key]
+  )
+const leaves = (object: object): string[] =>
+  Object.values(object).flatMap((value) =>
+    typeof value === "object" && value ? leaves(value) : [String(value)]
+  )
+const names = (lookup: Record<string, unknown>) =>
+  Object.keys(lookup)
+    .map((path) => path.split("/").pop())
+    .sort()
+const bundle = (lang: string) =>
+  i18n.getResourceBundle(lang, "translation") as object
 
 afterEach(() => {
   cleanup()
@@ -30,13 +41,16 @@ describe("catalogues", () => {
   it("ont les mêmes fichiers, les mêmes clés et aucune valeur vide", () => {
     expect(names(catalogFiles.en)).toEqual(names(catalogFiles.fr))
     expect(flat(bundle("en")).sort()).toEqual(flat(bundle("fr")).sort())
-    for (const value of [...leaves(bundle("fr")), ...leaves(bundle("en"))]) expect(value.trim()).not.toBe("")
+    for (const value of [...leaves(bundle("fr")), ...leaves(bundle("en"))])
+      expect(value.trim()).not.toBe("")
   })
   it("le premier niveau de chaque fichier porte son nom", async () => {
     for (const lang of ["fr", "en"] as const)
       for (const [path, load] of Object.entries(catalogFiles[lang])) {
         const value = typeof load === "function" ? await load() : load
-        expect(Object.keys(value.default)).toEqual([path.split("/").pop()!.replace(".json", "")])
+        expect(Object.keys(value.default)).toEqual([
+          path.split("/").pop()!.replace(".json", ""),
+        ])
       }
   })
 })

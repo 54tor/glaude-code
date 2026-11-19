@@ -4,7 +4,11 @@ import { toast } from "sonner"
 import type { MemFile, MemProject, MemTarget } from "@/lib/api"
 import { copyText } from "@/lib/utils"
 
-export type List = { global: MemFile[]; projects: MemProject[]; targets: MemTarget[] }
+export type List = {
+  global: MemFile[]
+  projects: MemProject[]
+  targets: MemTarget[]
+}
 
 // Tri des fichiers de mémoire : critère et sens propres à chaque dossier (section), retenus dans le navigateur.
 export const SORTS = [
@@ -14,17 +18,20 @@ export const SORTS = [
 ] as const
 export type Sort = { by: string; dir: string }
 export const DEFAULT_SORT: Sort = { by: "date", dir: "desc" }
-export const byName = (firstName: string, secondName: string) => firstName.localeCompare(secondName, loc(), { numeric: true })
+export const byName = (firstName: string, secondName: string) =>
+  firstName.localeCompare(secondName, loc(), { numeric: true })
 // Comparateur de fichiers ; à égalité (la taille est en Ko arrondis), le nom départage.
-export const cmpFiles = (by: string, dir: string) => (firstFile: MemFile, secondFile: MemFile) => {
-  const compareByCriterion = () => {
-    if (by === "name") return byName(firstFile.name, secondFile.name)
-    if (by === "size") return firstFile.kb - secondFile.kb
-    return firstFile.mtime - secondFile.mtime
+export const cmpFiles =
+  (by: string, dir: string) => (firstFile: MemFile, secondFile: MemFile) => {
+    const compareByCriterion = () => {
+      if (by === "name") return byName(firstFile.name, secondFile.name)
+      if (by === "size") return firstFile.kb - secondFile.kb
+      return firstFile.mtime - secondFile.mtime
+    }
+    const ascendingOrder =
+      compareByCriterion() || byName(firstFile.name, secondFile.name)
+    return dir === "asc" ? ascendingOrder : -ascendingOrder
   }
-  const ascendingOrder = compareByCriterion() || byName(firstFile.name, secondFile.name)
-  return dir === "asc" ? ascendingOrder : -ascendingOrder
-}
 
 // En-tête YAML (--- … ---) des entrées de mémoire : affiché à part, en petit.
 export function split(text: string): [string, string] {
@@ -34,13 +41,16 @@ export function split(text: string): [string, string] {
 }
 
 // Seules les entrées de mémoire de projet et les règles (globales ou de projet) changent de place (pas les CLAUDE.md).
-export const movable = (key: string) => key.startsWith("m/") || key.startsWith("g/rules/") || key.startsWith("r/")
+export const movable = (key: string) =>
+  key.startsWith("m/") || key.startsWith("g/rules/") || key.startsWith("r/")
 // Dossier d'une clé : celui du projet (« m/<dossier>/… », « r/<dossier>/… »), sinon « global ».
-export const home = (key: string) => (key.startsWith("m/") || key.startsWith("r/") ? key.split("/")[1] : "global")
+export const home = (key: string) =>
+  key.startsWith("m/") || key.startsWith("r/") ? key.split("/")[1] : "global"
 // Destinations d'un fichier : une règle de projet va aux règles globales ou à celles d'un autre projet ; une entrée de mémoire, aux
 // règles globales ou à la mémoire d'un autre projet ; une règle globale, aux règles ou à la mémoire d'un projet.
 // Dans onChoose, « r:<dossier> » désigne les règles d'un projet, « <dossier> » sa mémoire, « global » les règles globales.
-export const toRules = (key: string) => key.startsWith("r/") || key.startsWith("g/rules/")
+export const toRules = (key: string) =>
+  key.startsWith("r/") || key.startsWith("g/rules/")
 export const toMemory = (key: string) => !key.startsWith("r/")
 
 // done : clé de catalogue du message de succès.
@@ -52,7 +62,10 @@ export const copy = (text: string, done: string) =>
 
 // Clé d'une nouvelle entrée : le nom du front matter (ou le premier titre), simplifié en nom de fichier, sans écraser un fichier existant.
 export function newKey(all: MemFile[], scope: string, text: string): string {
-  const name = /^name:\s*["']?([^"'\n]+)/m.exec(text)?.[1] ?? /^#\s+(.+)$/m.exec(text)?.[1] ?? "entree"
+  const name =
+    /^name:\s*["']?([^"'\n]+)/m.exec(text)?.[1] ??
+    /^#\s+(.+)$/m.exec(text)?.[1] ??
+    "entree"
   const slug =
     name
       .normalize("NFD")
@@ -66,12 +79,15 @@ export function newKey(all: MemFile[], scope: string, text: string): string {
     return `m/${scope}/`
   }
   const base = keyPrefixOf()
-  const isTaken = (candidateKey: string) => all.some((existingFile) => existingFile.key === candidateKey)
+  const isTaken = (candidateKey: string) =>
+    all.some((existingFile) => existingFile.key === candidateKey)
   let key = base + slug + ".md"
-  for (let suffixNumber = 2; isTaken(key); suffixNumber++) key = `${base}${slug}-${suffixNumber}.md`
+  for (let suffixNumber = 2; isTaken(key); suffixNumber++)
+    key = `${base}${slug}-${suffixNumber}.md`
   return key
 }
 
 // Modèles d'une entrée écrite à la main (règle globale : un titre ; mémoire de projet : un front matter).
 export const blankRule = () => i18n.t("memory.lib.blankRule") + "\n\n"
-export const BLANK_ENTRY = "---\nname: nouvelle-entree\ndescription: \nmetadata:\n  type: project\n---\n\n"
+export const BLANK_ENTRY =
+  "---\nname: nouvelle-entree\ndescription: \nmetadata:\n  type: project\n---\n\n"

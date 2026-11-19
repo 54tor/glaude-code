@@ -6,6 +6,8 @@ describe("sameLabel", () => {
     expect(sameLabel("Testeur", " testeur ")).toBe(true)
   })
   it("keeps a different description", () => {
-    expect(sameLabel("Développement backend", "développeuse backend")).toBe(false)
+    expect(sameLabel("Développement backend", "développeuse backend")).toBe(
+      false
+    )
   })
 })

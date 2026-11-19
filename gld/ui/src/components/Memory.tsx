@@ -15,7 +15,17 @@ import { Skeleton } from "@/components/ui/skeleton"
 import type { Ask } from "./Confirm"
 import type { ComposeAsk } from "./Compose"
 import { Markdown } from "./Message"
-import { BLANK_ENTRY, blankRule, cmpFiles, copy, DEFAULT_SORT, home, newKey, split, type Sort } from "./memoryLib"
+import {
+  BLANK_ENTRY,
+  blankRule,
+  cmpFiles,
+  copy,
+  DEFAULT_SORT,
+  home,
+  newKey,
+  split,
+  type Sort,
+} from "./memoryLib"
 import { downloadPack, packDir, projectLabel } from "@/lib/memoryPack"
 import { MemoryImport } from "./MemoryImport"
 import { Toolbar, SelectionBar } from "./MemoryBars"
@@ -75,7 +85,11 @@ export function Memory({
       return nextPicked
     })
 
-  const [loaded, setLoaded] = useState<{ key: string; text: string; error?: string } | null>(null)
+  const [loaded, setLoaded] = useState<{
+    key: string
+    text: string
+    error?: string
+  } | null>(null)
   const [draft, setDraft] = useEditorDraft("memory")
   const editNext = useRef("") // « Modifier » depuis le clic droit : passe en édition dès le chargement
   // Une erreur de lecture reste à part : elle ne devient jamais le texte du fichier, donc jamais modifiable ni enregistrable.
@@ -84,7 +98,9 @@ export function Memory({
   const editing = draft?.key === sel ? draft : null
   useLeaveGuard(!!draft && !(draft.key === sel && draft.text === text))
   // Corbeille : sel vaut « corbeille/<id> » pour afficher une version.
-  const inTrash = sel.startsWith(TRASH_PREFIX) ? sel.slice(TRASH_PREFIX.length) : ""
+  const inTrash = sel.startsWith(TRASH_PREFIX)
+    ? sel.slice(TRASH_PREFIX.length)
+    : ""
 
   // Liste, corbeille et santé, relues en continu ; le fichier ouvert l'est aussi (sauf une version de la corbeille).
   const { list, trash, issues, loads, refresh } = useMemoryData(() => {
@@ -93,8 +109,12 @@ export function Memory({
         // l'utilisateur a pu ouvrir un autre fichier pendant la lecture : on ne rafraîchit que celui qui est encore affiché
         (fileResponse) =>
           setLoaded((previousLoaded) => {
-            const isOtherFileOrUnchanged = previousLoaded?.key !== sel || previousLoaded.text === fileResponse.text
-            return isOtherFileOrUnchanged ? previousLoaded : { key: sel, text: fileResponse.text }
+            const isOtherFileOrUnchanged =
+              previousLoaded?.key !== sel ||
+              previousLoaded.text === fileResponse.text
+            return isOtherFileOrUnchanged
+              ? previousLoaded
+              : { key: sel, text: fileResponse.text }
           }),
         () => {}
       )
@@ -102,28 +122,39 @@ export function Memory({
   useEffect(() => {
     if (!sel) return
     let isStillMounted = true
-    const fileRequest: Promise<{ text?: string; error?: string }> = inTrash ? api.trashFile(inTrash) : api.memoryFile(sel)
+    const fileRequest: Promise<{ text?: string; error?: string }> = inTrash
+      ? api.trashFile(inTrash)
+      : api.memoryFile(sel)
     fileRequest.then(
       (fileResponse) => {
         if (!isStillMounted) return
-        if (fileResponse.text === undefined) setLoaded({ key: sel, text: "", error: fileResponse.error ?? "" })
+        if (fileResponse.text === undefined)
+          setLoaded({ key: sel, text: "", error: fileResponse.error ?? "" })
         else setLoaded({ key: sel, text: fileResponse.text })
-        if (editNext.current === sel && fileResponse.text !== undefined) setDraft({ key: sel, text: fileResponse.text })
+        if (editNext.current === sel && fileResponse.text !== undefined)
+          setDraft({ key: sel, text: fileResponse.text })
         editNext.current = ""
       },
-      (error) => isStillMounted && setLoaded({ key: sel, text: "", error: errMsg(error) }) // sinon la vue reste sur « chargement »
+      (error) =>
+        isStillMounted &&
+        setLoaded({ key: sel, text: "", error: errMsg(error) }) // sinon la vue reste sur « chargement »
     )
     return () => {
       isStillMounted = false
     }
   }, [sel, inTrash, setDraft])
 
-  const all = list ? [...list.global, ...list.projects.flatMap((project) => project.files)] : []
+  const all = list
+    ? [...list.global, ...list.projects.flatMap((project) => project.files)]
+    : []
   const file = all.find((memFile) => memFile.key === sel)
 
   // Filtre : nom, ou contenu des fichiers (recherche côté serveur, après une courte pause de frappe), et type.
   const [typeFilter, setTypeFilter] = useState("")
-  const [hits, setHits] = useState<{ q: string; keys: Set<string> }>({ q: "", keys: new Set() })
+  const [hits, setHits] = useState<{ q: string; keys: Set<string> }>({
+    q: "",
+    keys: new Set(),
+  })
   useEffect(() => {
     const trimmedQuery = query.trim()
     if (trimmedQuery.length < MIN_SEARCH_LENGTH) return
@@ -131,7 +162,12 @@ export function Memory({
     const searchTimer = setTimeout(
       () =>
         api.memorySearch(trimmedQuery).then(
-          (searchResponse) => isStillMounted && setHits({ q: trimmedQuery, keys: new Set(Object.keys(searchResponse.hits)) }),
+          (searchResponse) =>
+            isStillMounted &&
+            setHits({
+              q: trimmedQuery,
+              keys: new Set(Object.keys(searchResponse.hits)),
+            }),
           () => {}
         ),
       SEARCH_DEBOUNCE_MS
@@ -153,7 +189,8 @@ export function Memory({
     return matchesName || matchesScope || matchesContent
   }
   const issueKeys = new Map<string, number>()
-  for (const issue of issues) issueKeys.set(issue.key, (issueKeys.get(issue.key) ?? 0) + 1)
+  for (const issue of issues)
+    issueKeys.set(issue.key, (issueKeys.get(issue.key) ?? 0) + 1)
   const [healthOpen, setHealthOpen] = useState(false)
   const [typeHelp, setTypeHelp] = useState(false)
 
@@ -167,7 +204,10 @@ export function Memory({
       if (parentPath[0] === "r") return "r:" + parentPath.slice(2)
       return parentPath.slice(2)
     }
-    const key = !file && newEntryMatch ? newKey(all, scopeOf(newEntryMatch[1]), editing.text) : sel
+    const key =
+      !file && newEntryMatch
+        ? newKey(all, scopeOf(newEntryMatch[1]), editing.text)
+        : sel
     if (await reportAction(() => api.memorySave(key, editing.text, !file))) {
       setLoaded({ key, text: editing.text })
       setDraft(null)
@@ -184,22 +224,35 @@ export function Memory({
   const consolidate = (scope: string, label: string, target = "CLAUDE.md") => {
     const isGlobal = scope === "global"
     const refs = isGlobal
-      ? (list?.global ?? []).filter((memFile) => memFile.key.startsWith("g/rules/"))
+      ? (list?.global ?? []).filter((memFile) =>
+          memFile.key.startsWith("g/rules/")
+        )
       : all.filter((memFile) => memFile.key.startsWith(`m/${scope}/`))
     setWriter({
       kind: "rewrite",
       key: isGlobal ? "g/CLAUDE.md" : `p/${scope}/${target}`,
-      name: isGlobal ? "~/.claude/CLAUDE.md" : t("memory.main.consolidateName", { target, label }),
+      name: isGlobal
+        ? "~/.claude/CLAUDE.md"
+        : t("memory.main.consolidateName", { target, label }),
       refs: refs.map((memFile) => memFile.key),
-      instruction: isGlobal ? t("memory.main.consolidateGlobal") : t("memory.main.consolidateProject", { target }),
+      instruction: isGlobal
+        ? t("memory.main.consolidateGlobal")
+        : t("memory.main.consolidateProject", { target }),
     })
   }
   const onDraft = async (writeTarget: WriteTarget, body: string) => {
-    const key = writeTarget.kind === "rewrite" ? writeTarget.key : newKey(all, writeTarget.scope, body)
+    const key =
+      writeTarget.kind === "rewrite"
+        ? writeTarget.key
+        : newKey(all, writeTarget.scope, body)
     if (writeTarget.kind === "rewrite") {
       // Un brouillon identique au fichier n'a rien à enregistrer : on le dit plutôt que d'ouvrir un éditeur sans changement.
-      const currentText = await api.memoryFile(key).then((fileResponse) => fileResponse.text, () => undefined)
-      const isSameAsFile = currentText !== undefined && currentText.trimEnd() === body.trimEnd()
+      const currentText = await api.memoryFile(key).then(
+        (fileResponse) => fileResponse.text,
+        () => undefined
+      )
+      const isSameAsFile =
+        currentText !== undefined && currentText.trimEnd() === body.trimEnd()
       if (isSameAsFile) return void toast.info(t("memory.main.haikuSame"))
     }
     setDraft({ key, text: body })
@@ -208,7 +261,10 @@ export function Memory({
   // Entrée écrite à la main : un modèle prérempli, la clé se fixe à l'enregistrement d'après le nom.
   const blank = (scope: string) => {
     const isRuleScope = scope === "global" || scope.startsWith("r:")
-    return onDraft({ kind: "new", scope, label: "" }, isRuleScope ? blankRule() : BLANK_ENTRY)
+    return onDraft(
+      { kind: "new", scope, label: "" },
+      isRuleScope ? blankRule() : BLANK_ENTRY
+    )
   }
   const edit = (key: string) => {
     if (key === sel && text !== null) return setDraft({ key, text })
@@ -266,7 +322,14 @@ export function Memory({
   const setType = async (key: string, type: string) => {
     if (await reportAction(() => api.memoryType(key, type))) {
       await refresh()
-      if (key === sel) setLoaded({ key, text: await api.memoryFile(key).then((fileResponse) => fileResponse.text, () => "") })
+      if (key === sel)
+        setLoaded({
+          key,
+          text: await api.memoryFile(key).then(
+            (fileResponse) => fileResponse.text,
+            () => ""
+          ),
+        })
     }
   }
   const fix = async (keys: string[]) => {
@@ -281,7 +344,13 @@ export function Memory({
       }
     }
     if (failures.length)
-      toast.error(t("memory.main.fixPartial", { done: t("memory.main.fixedCount", { count: fixedCount }), failed: t("memory.main.failCount", { count: failures.length }), first: failures[0] }))
+      toast.error(
+        t("memory.main.fixPartial", {
+          done: t("memory.main.fixedCount", { count: fixedCount }),
+          failed: t("memory.main.failCount", { count: failures.length }),
+          first: failures[0],
+        })
+      )
     else toast.success(t("memory.main.fixOk", { count: fixedCount }))
     refresh()
   }
@@ -292,7 +361,9 @@ export function Memory({
   const remove = (memFile: MemFile) =>
     onAsk({
       title: t("memory.main.deleteTitle", { name: memFile.name }),
-      body: memFile.key.startsWith("m/") ? t("memory.main.deleteBodyMemory") : t("memory.main.deleteBodyFile"),
+      body: memFile.key.startsWith("m/")
+        ? t("memory.main.deleteBodyMemory")
+        : t("memory.main.deleteBodyFile"),
       confirm: t("common.delete"),
       run: async () => {
         if (await reportAction(() => api.memoryRemove([memFile.key]))) {
@@ -319,8 +390,15 @@ export function Memory({
           }
         }
         if (failures.length)
-          toast.error(t("memory.main.fixPartial", { done: t("memory.main.removedCount", { count: removedCount }), failed: t("memory.main.failCount", { count: failures.length }), first: failures[0] }))
-        else toast.success(t("memory.main.trashedFiles", { count: removedCount }))
+          toast.error(
+            t("memory.main.fixPartial", {
+              done: t("memory.main.removedCount", { count: removedCount }),
+              failed: t("memory.main.failCount", { count: failures.length }),
+              first: failures[0],
+            })
+          )
+        else
+          toast.success(t("memory.main.trashedFiles", { count: removedCount }))
         setPicked(new Set())
         if (keys.includes(sel)) onPick("")
         refresh()
@@ -328,7 +406,10 @@ export function Memory({
     })
   const downloadFile = async (memFile: MemFile) => {
     try {
-      downloadText(memFile.name.replace(/^rules\//, ""), (await api.memoryFile(memFile.key)).text)
+      downloadText(
+        memFile.name.replace(/^rules\//, ""),
+        (await api.memoryFile(memFile.key)).text
+      )
     } catch (error) {
       toast.error(errMsg(error))
     }
@@ -344,9 +425,16 @@ export function Memory({
   // Export : les fichiers cochés (mémoire, règles, CLAUDE.md), hors index, en zip ; un avertissement précède le téléchargement.
   const [importing, setImporting] = useState(false)
   const exportKeys = (keys: string[]) => {
-    const files = all.filter((memFile) => keys.includes(memFile.key) && memFile.name !== "MEMORY.md" && /\.md$/.test(memFile.name))
+    const files = all.filter(
+      (memFile) =>
+        keys.includes(memFile.key) &&
+        memFile.name !== "MEMORY.md" &&
+        /\.md$/.test(memFile.name)
+    )
     if (!files.length) return void toast.info(t("memory.pack.none"))
-    const projectNameOf = (fileKey: string) => list?.projects.find((project) => project.dir === home(fileKey))?.project ?? ""
+    const projectNameOf = (fileKey: string) =>
+      list?.projects.find((project) => project.dir === home(fileKey))
+        ?.project ?? ""
     onAsk({
       title: t("memory.pack.exportTitle", { count: files.length }),
       body: t("memory.pack.warn"),
@@ -355,7 +443,10 @@ export function Memory({
         try {
           const entries = await Promise.all(
             files.map(async (memFile) => ({
-              project: packDir(memFile.key, projectLabel(projectNameOf(memFile.key))),
+              project: packDir(
+                memFile.key,
+                projectLabel(projectNameOf(memFile.key))
+              ),
               name: memFile.name.replace(/^rules\//, ""),
               text: (await api.memoryFile(memFile.key)).text,
             }))
@@ -370,25 +461,46 @@ export function Memory({
   }
   const merge = async (launch: boolean) => {
     const keys = [...picked]
-    const draftMergePrompt = (out?: string) => api.memoryMerge({ keys, out, launch: false })
+    const draftMergePrompt = (out?: string) =>
+      api.memoryMerge({ keys, out, launch: false })
     let mergeDraft
     try {
       mergeDraft = await draftMergePrompt()
     } catch (error) {
       return void toast.error(errMsg(error).trim() || t("memory.main.failed"))
     }
-    if (!launch) return void copy(mergeDraft.prompt, "memory.lib.copiedMergePrompt")
-    const projectDirs = [...new Set(keys.map((key) => /^[mpr]\/([^/]+)\//.exec(key)?.[1]).filter((projectDir): projectDir is string => !!projectDir))]
-    const projectLabelOf = (projectDir: string) => tilde(list?.projects.find((project) => project.dir === projectDir)?.project ?? projectDir, homeDir)
+    if (!launch)
+      return void copy(mergeDraft.prompt, "memory.lib.copiedMergePrompt")
+    const projectDirs = [
+      ...new Set(
+        keys
+          .map((key) => /^[mpr]\/([^/]+)\//.exec(key)?.[1])
+          .filter((projectDir): projectDir is string => !!projectDir)
+      ),
+    ]
+    const projectLabelOf = (projectDir: string) =>
+      tilde(
+        list?.projects.find((project) => project.dir === projectDir)?.project ??
+          projectDir,
+        homeDir
+      )
     const outputs = [
-      ...keys.map((key) => ({ key, label: all.find((memFile) => memFile.key === key)?.name ?? key })),
+      ...keys.map((key) => ({
+        key,
+        label: all.find((memFile) => memFile.key === key)?.name ?? key,
+      })),
       { key: "g/CLAUDE.md", label: "~/.claude/CLAUDE.md" },
       ...projectDirs.flatMap((projectDir) =>
-        ["CLAUDE.md", "AGENTS.md"].map((fileName) => ({ key: `p/${projectDir}/${fileName}`, label: `${projectLabelOf(projectDir)}/${fileName}` }))
+        ["CLAUDE.md", "AGENTS.md"].map((fileName) => ({
+          key: `p/${projectDir}/${fileName}`,
+          label: `${projectLabelOf(projectDir)}/${fileName}`,
+        }))
       ),
     ]
     const uniqueOutputs = outputs.filter(
-      (output, outputIndex) => outputs.findIndex((otherOutput) => otherOutput.key === output.key) === outputIndex
+      (output, outputIndex) =>
+        outputs.findIndex((otherOutput) => otherOutput.key === output.key) ===
+        outputIndex
     )
     onCompose({
       id: "merge:" + keys.join(","),
@@ -403,13 +515,23 @@ export function Memory({
         try {
           return (await draftMergePrompt(out)).prompt
         } catch (error) {
-          return void toast.error(errMsg(error).trim() || t("memory.main.failed"))
+          return void toast.error(
+            errMsg(error).trim() || t("memory.main.failed")
+          )
         }
       },
       run: async (text, modelChoice, _unused, out) => {
         try {
-          const mergeResponse = await api.memoryMerge({ keys, out, launch: true, prompt: text, args: withChoice(args, modelChoice) })
-          toast.success(mergeResponse.message.trim() || t("memory.main.mergeStarted"))
+          const mergeResponse = await api.memoryMerge({
+            keys,
+            out,
+            launch: true,
+            prompt: text,
+            args: withChoice(args, modelChoice),
+          })
+          toast.success(
+            mergeResponse.message.trim() || t("memory.main.mergeStarted")
+          )
           void watchTrust(homeDir)
           setPicked(new Set())
           return true
@@ -423,12 +545,20 @@ export function Memory({
   // Décompte réel des tokens par Haiku (tokens.go), quelques fichiers à la fois ; la liste se rafraîchit à chaque lot.
   const countTokens = async (keys: string[]) => {
     if (!keys.length) return void toast.info(t("memory.main.alreadyCounted"))
-    const toastId = toast.loading(t("memory.main.counting", { count: keys.length }))
+    const toastId = toast.loading(
+      t("memory.main.counting", { count: keys.length })
+    )
     let cost = 0
     let firstFailure = ""
-    for (let batchStart = 0; batchStart < keys.length; batchStart += TOKEN_COUNT_BATCH_SIZE) {
+    for (
+      let batchStart = 0;
+      batchStart < keys.length;
+      batchStart += TOKEN_COUNT_BATCH_SIZE
+    ) {
       try {
-        const tokensResponse = await api.memoryTokens(keys.slice(batchStart, batchStart + TOKEN_COUNT_BATCH_SIZE))
+        const tokensResponse = await api.memoryTokens(
+          keys.slice(batchStart, batchStart + TOKEN_COUNT_BATCH_SIZE)
+        )
         cost += tokensResponse.cost
         firstFailure ||= Object.values(tokensResponse.errors)[0] ?? ""
       } catch (error) {
@@ -436,17 +566,35 @@ export function Memory({
       }
       await refresh()
     }
-    if (firstFailure) toast.error(t("memory.main.countFailed", { error: firstFailure }), { id: toastId })
-    else toast.success(t("memory.main.counted", { cost: cost.toFixed(4) }), { id: toastId })
+    if (firstFailure)
+      toast.error(t("memory.main.countFailed", { error: firstFailure }), {
+        id: toastId,
+      })
+    else
+      toast.success(t("memory.main.counted", { cost: cost.toFixed(4) }), {
+        id: toastId,
+      })
   }
   const haikuFromSelection = () => {
-    const projectDir = [...picked].find((key) => key.startsWith("m/"))?.split("/")[1]
+    const projectDir = [...picked]
+      .find((key) => key.startsWith("m/"))
+      ?.split("/")[1]
     if (!projectDir) {
-      setWriter({ kind: "new", scope: "global", label: t("memory.main.globalRules") })
+      setWriter({
+        kind: "new",
+        scope: "global",
+        label: t("memory.main.globalRules"),
+      })
       return
     }
-    const project = list?.projects.find((candidate) => candidate.dir === projectDir)
-    setWriter({ kind: "new", scope: projectDir, label: tilde(project?.project ?? projectDir, homeDir) })
+    const project = list?.projects.find(
+      (candidate) => candidate.dir === projectDir
+    )
+    setWriter({
+      kind: "new",
+      scope: projectDir,
+      label: tilde(project?.project ?? projectDir, homeDir),
+    })
   }
 
   // --- corbeille ----------------------------------------------------------------------------------------------
@@ -465,7 +613,9 @@ export function Memory({
   }
   const purge = (item?: Trashed) =>
     onAsk({
-      title: item ? t("memory.main.purgeOne") : t("memory.main.purgeAll", { n: trash.length }),
+      title: item
+        ? t("memory.main.purgeOne")
+        : t("memory.main.purgeAll", { n: trash.length }),
       body: t("memory.main.purgeBody"),
       confirm: item ? t("common.delete") : t("memory.trash.empty"),
       run: async () => {
@@ -479,8 +629,11 @@ export function Memory({
   // --- liste de gauche ----------------------------------------------------------------------------------------
   // Projets dont le dossier a disparu : leur mémoire n'est plus utilisée par personne.
   const gone = list?.projects.filter((project) => project.missing) ?? []
-  const orphans = gone.flatMap((project) => project.files.map((memFile) => memFile.key))
-  const targets = (key: string) => (list?.targets ?? []).filter((target) => target.dir !== home(key))
+  const orphans = gone.flatMap((project) =>
+    project.files.map((memFile) => memFile.key)
+  )
+  const targets = (key: string) =>
+    (list?.targets ?? []).filter((target) => target.dir !== home(key))
   const menu = (memFile: MemFile) => (
     <FileMenu
       x={memFile}
@@ -490,7 +643,12 @@ export function Memory({
       a={{
         open: onPick,
         edit,
-        rewrite: (fileToRewrite) => setWriter({ kind: "rewrite", key: fileToRewrite.key, name: fileToRewrite.name }),
+        rewrite: (fileToRewrite) =>
+          setWriter({
+            kind: "rewrite",
+            key: fileToRewrite.key,
+            name: fileToRewrite.name,
+          }),
         rename,
         copyContent,
         toggle,
@@ -503,7 +661,15 @@ export function Memory({
       }}
     />
   )
-  const section = (key: string, icon: typeof Globe, title: string, files: MemFile[], onWrite?: () => void, onConsolidate?: (file: string) => void, onNewRule?: () => void) => {
+  const section = (
+    key: string,
+    icon: typeof Globe,
+    title: string,
+    files: MemFile[],
+    onWrite?: () => void,
+    onConsolidate?: (file: string) => void,
+    onNewRule?: () => void
+  ) => {
     const alwaysLoadedFiles = files.filter((memFile) => memFile.always)
     return (
       <Section
@@ -515,19 +681,34 @@ export function Memory({
         onPick={onPick}
         picked={picked}
         onToggle={toggle}
-        onPickAll={(keys) => setPicked((previousPicked) => new Set([...previousPicked, ...keys]))}
+        onPickAll={(keys) =>
+          setPicked((previousPicked) => new Set([...previousPicked, ...keys]))
+        }
         onNew={() => blank(key)}
         onNewRule={onNewRule}
         onWrite={onWrite}
         onConsolidate={onConsolidate}
         agents={key !== "global"}
-        onRemoveAll={(keys) => removeMany(keys, t("memory.main.sectionOf", { title }))}
+        onRemoveAll={(keys) =>
+          removeMany(keys, t("memory.main.sectionOf", { title }))
+        }
         menu={menu}
         sort={sortOf(key)}
-        onSort={(sort) => setSortsRaw(JSON.stringify({ ...sorts, [key]: sort }))}
-        budget={alwaysLoadedFiles.reduce((tokenTotal, memFile) => tokenTotal + memFile.tokens, 0)}
+        onSort={(sort) =>
+          setSortsRaw(JSON.stringify({ ...sorts, [key]: sort }))
+        }
+        budget={alwaysLoadedFiles.reduce(
+          (tokenTotal, memFile) => tokenTotal + memFile.tokens,
+          0
+        )}
         exact={alwaysLoadedFiles.every((memFile) => memFile.exact)}
-        onCount={() => countTokens(alwaysLoadedFiles.filter((memFile) => !memFile.exact).map((memFile) => memFile.key))}
+        onCount={() =>
+          countTokens(
+            alwaysLoadedFiles
+              .filter((memFile) => !memFile.exact)
+              .map((memFile) => memFile.key)
+          )
+        }
         issues={issueKeys}
       />
     )
@@ -536,34 +717,55 @@ export function Memory({
   const [frontMatter, body] = split(text ?? "")
   const globalLabel = t("memory.main.global")
   const gldRulesLabel = t("memory.main.gldRules")
-  const isGlobalFile = (memFile: MemFile) => !memFile.gld && match(memFile, globalLabel)
-  const isGldRuleFile = (memFile: MemFile) => memFile.gld && match(memFile, gldRulesLabel)
+  const isGlobalFile = (memFile: MemFile) =>
+    !memFile.gld && match(memFile, globalLabel)
+  const isGldRuleFile = (memFile: MemFile) =>
+    memFile.gld && match(memFile, gldRulesLabel)
   const hasNoMatch =
     !!list &&
     !list.global.some((memFile) => match(memFile, globalLabel)) &&
-    !list.projects.some((project) => project.files.some((memFile) => match(memFile, project.project)))
-  const renderProjectSection = (project: NonNullable<typeof list>["projects"][number]) => {
-    const files = project.files.filter((memFile) => match(memFile, project.project))
+    !list.projects.some((project) =>
+      project.files.some((memFile) => match(memFile, project.project))
+    )
+  const renderProjectSection = (
+    project: NonNullable<typeof list>["projects"][number]
+  ) => {
+    const files = project.files.filter((memFile) =>
+      match(memFile, project.project)
+    )
     if (!files.length) return null
     const label = tilde(project.project, homeDir)
     // un CLAUDE.md de projet s'écrit dans son dossier : impossible s'il a disparu, inutile sans mémoire
-    const canConsolidate = !project.missing && project.files.some((memFile) => memFile.key.startsWith("m/"))
+    const canConsolidate =
+      !project.missing &&
+      project.files.some((memFile) => memFile.key.startsWith("m/"))
     return section(
       project.dir,
       Brain,
       project.missing ? t("memory.main.projectMissing", { label }) : label,
       files,
       () => setWriter({ kind: "new", scope: project.dir, label }),
-      canConsolidate ? (target) => consolidate(project.dir, label, target) : undefined,
+      canConsolidate
+        ? (target) => consolidate(project.dir, label, target)
+        : undefined,
       !project.missing ? () => blank("r:" + project.dir) : undefined
     )
   }
   const renderReader = () => {
-    if (failed !== undefined) return <p className="text-destructive">{failed || t("memory.main.unreadable")}</p>
+    if (failed !== undefined)
+      return (
+        <p className="text-destructive">
+          {failed || t("memory.main.unreadable")}
+        </p>
+      )
     if (text === null) return <Skeleton className="h-32 w-full" />
     return (
       <>
-        {frontMatter && <pre className="mb-4 rounded-lg border bg-muted/40 px-3 py-2 text-xs whitespace-pre-wrap text-muted-foreground">{frontMatter}</pre>}
+        {frontMatter && (
+          <pre className="mb-4 rounded-lg border bg-muted/40 px-3 py-2 text-xs whitespace-pre-wrap text-muted-foreground">
+            {frontMatter}
+          </pre>
+        )}
         <Markdown t={body} onLink={openSiblingMarkdown} />
       </>
     )
@@ -578,11 +780,18 @@ export function Memory({
     setLoaded({ key: sel, text: (await api.memoryFile(sel)).text ?? "" })
   }
   const memoryScopes = (list?.projects ?? [])
-    .filter((project) => project.files.some((memFile) => memFile.key.startsWith("m/")))
+    .filter((project) =>
+      project.files.some((memFile) => memFile.key.startsWith("m/"))
+    )
     .map((project) => [project.dir, tilde(project.project, homeDir)] as const)
   return (
     <div className="relative flex min-h-0 flex-1 flex-col lg:flex-row">
-      <ScrollArea className={cn("shrink-0 border-b bg-muted/30 lg:block lg:max-h-none lg:w-[28rem] lg:flex-none lg:border-r lg:border-b-0", sel ? "hidden" : "min-h-0 flex-1")}>
+      <ScrollArea
+        className={cn(
+          "shrink-0 border-b bg-muted/30 lg:block lg:max-h-none lg:w-[28rem] lg:flex-none lg:border-r lg:border-b-0",
+          sel ? "hidden" : "min-h-0 flex-1"
+        )}
+      >
         <nav className="p-2">
           {!list && <Skeleton className="m-2 h-24" />}
           {list && (
@@ -594,8 +803,19 @@ export function Memory({
               onHealth={() => setHealthOpen(true)}
               onType={setTypeFilter}
               onTypeHelp={() => setTypeHelp(true)}
-              onCleanOrphans={() => removeMany(orphans, t("memory.main.orphansOf", { count: gone.length }))}
-              onExportAll={() => exportKeys(all.filter((memFile) => memFile.key.startsWith("m/")).map((memFile) => memFile.key))}
+              onCleanOrphans={() =>
+                removeMany(
+                  orphans,
+                  t("memory.main.orphansOf", { count: gone.length })
+                )
+              }
+              onExportAll={() =>
+                exportKeys(
+                  all
+                    .filter((memFile) => memFile.key.startsWith("m/"))
+                    .map((memFile) => memFile.key)
+                )
+              }
               onImport={() => setImporting(true)}
             />
           )}
@@ -606,15 +826,36 @@ export function Memory({
               Globe,
               globalLabel,
               list.global.filter(isGlobalFile),
-              () => setWriter({ kind: "new", scope: "global", label: t("memory.main.globalRules") }),
+              () =>
+                setWriter({
+                  kind: "new",
+                  scope: "global",
+                  label: t("memory.main.globalRules"),
+                }),
               () => consolidate("global", "")
             )}
-          {list && list.global.some(isGldRuleFile) && section("gld", Globe, gldRulesLabel, list.global.filter(isGldRuleFile))}
+          {list &&
+            list.global.some(isGldRuleFile) &&
+            section(
+              "gld",
+              Globe,
+              gldRulesLabel,
+              list.global.filter(isGldRuleFile)
+            )}
           {list?.projects.map(renderProjectSection)}
           {hasNoMatch && (
-            <p className="px-2 py-6 text-center text-sm text-muted-foreground">{all.length ? t("memory.main.noMatch") : t("memory.main.empty")}</p>
+            <p className="px-2 py-6 text-center text-sm text-muted-foreground">
+              {all.length ? t("memory.main.noMatch") : t("memory.main.empty")}
+            </p>
           )}
-          {trash.length > 0 && <TrashList trash={trash} current={inTrash} onPick={onPick} onPurgeAll={() => purge()} />}
+          {trash.length > 0 && (
+            <TrashList
+              trash={trash}
+              current={inTrash}
+              onPick={onPick}
+              onPurgeAll={() => purge()}
+            />
+          )}
         </nav>
       </ScrollArea>
       {picked.size > 0 && (
@@ -628,7 +869,12 @@ export function Memory({
           onClear={() => setPicked(new Set())}
         />
       )}
-      <div className={cn("min-h-0 min-w-0 flex-1 flex-col lg:flex", sel ? "flex" : "hidden")}>
+      <div
+        className={cn(
+          "min-h-0 min-w-0 flex-1 flex-col lg:flex",
+          sel ? "flex" : "hidden"
+        )}
+      >
         {sel && (
           <div className="border-b px-2 py-1.5 lg:hidden">
             <Button variant="ghost" size="sm" onClick={() => onPick("")}>
@@ -642,12 +888,18 @@ export function Memory({
             trashed={trashed}
             text={text}
             homeDir={homeDir}
-            exists={!!trashed && all.some((memFile) => memFile.key === trashed.key)}
+            exists={
+              !!trashed && all.some((memFile) => memFile.key === trashed.key)
+            }
             onPurge={() => trashed && purge(trashed)}
             onRestore={() => trashed && restore(trashed)}
           />
         )}
-        {!inTrash && !sel && <p className="px-6 py-20 text-center text-sm text-muted-foreground">{t("memory.main.pickFile")}</p>}
+        {!inTrash && !sel && (
+          <p className="px-6 py-20 text-center text-sm text-muted-foreground">
+            {t("memory.main.pickFile")}
+          </p>
+        )}
         {!inTrash && !!sel && (
           <>
             <FileBar
@@ -665,22 +917,36 @@ export function Memory({
               onType={(type) => file && setType(file.key, type)}
               onToggleRule={() => file && toggleRule(file.key)}
               onRemove={() => file && remove(file)}
-              loads={loads.hook ? (loads.files[file?.path ?? ""] ?? { sessions: 0, last: 0 }) : undefined}
-              onRewrite={() => file && setWriter({ kind: "rewrite", key: file.key, name: file.name })}
+              loads={
+                loads.hook
+                  ? (loads.files[file?.path ?? ""] ?? { sessions: 0, last: 0 })
+                  : undefined
+              }
+              onRewrite={() =>
+                file &&
+                setWriter({ kind: "rewrite", key: file.key, name: file.name })
+              }
             />
-            {file && !editing && sel.startsWith("g/rules/") && !file.off && list && (
-              <ScopeBar
-                key={file.key + (file.paths ?? []).join("|")}
-                file={file}
-                projects={list.projects}
-                home={homeDir}
-                onSaved={saveScope}
-              />
-            )}
+            {file &&
+              !editing &&
+              sel.startsWith("g/rules/") &&
+              !file.off &&
+              list && (
+                <ScopeBar
+                  key={file.key + (file.paths ?? []).join("|")}
+                  file={file}
+                  projects={list.projects}
+                  home={homeDir}
+                  onSaved={saveScope}
+                />
+              )}
             {file?.off && sel.startsWith("g/rules/") && (
               <p className="border-b bg-muted/30 px-6 py-2 text-xs text-muted-foreground">
                 {t("memory.main.ruleOff")}{" "}
-                <button className="text-primary underline underline-offset-2 hover:decoration-2" onClick={() => toggleRule(file.key)}>
+                <button
+                  className="text-primary underline underline-offset-2 hover:decoration-2"
+                  onClick={() => toggleRule(file.key)}
+                >
                   {t("memory.main.reactivate")}
                 </button>
               </p>
@@ -688,9 +954,13 @@ export function Memory({
             {editing ? (
               <textarea
                 value={editing.text}
-                onChange={(changeEvent) => setDraft({ key: sel, text: changeEvent.target.value })}
+                onChange={(changeEvent) =>
+                  setDraft({ key: sel, text: changeEvent.target.value })
+                }
                 onKeyDown={(keyEvent) => {
-                  const isSaveShortcut = (keyEvent.ctrlKey || keyEvent.metaKey) && keyEvent.key === "s"
+                  const isSaveShortcut =
+                    (keyEvent.ctrlKey || keyEvent.metaKey) &&
+                    keyEvent.key === "s"
                   if (!isSaveShortcut) return
                   keyEvent.preventDefault()
                   save()
@@ -727,9 +997,22 @@ export function Memory({
           }
         }}
       />
-      {list && <MemoryImport open={importing} list={list} homeDir={homeDir} onClose={() => setImporting(false)} onDone={refresh} />}
+      {list && (
+        <MemoryImport
+          open={importing}
+          list={list}
+          homeDir={homeDir}
+          onClose={() => setImporting(false)}
+          onDone={refresh}
+        />
+      )}
       <Prompt ask={prompt} onClose={() => setPrompt(null)} />
-      <MemoryWriter target={writer} refs={writeRefs} onClose={() => setWriter(null)} onDraft={onDraft} />
+      <MemoryWriter
+        target={writer}
+        refs={writeRefs}
+        onClose={() => setWriter(null)}
+        onDraft={onDraft}
+      />
     </div>
   )
 }

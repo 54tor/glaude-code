@@ -166,12 +166,18 @@ describe("TeamEditor", () => {
         onSaved={onSaved}
       />
     )
-    expect(screen.queryByRole("checkbox", { name: /Chef de projet/ })).toBeNull()
+    expect(
+      screen.queryByRole("checkbox", { name: /Chef de projet/ })
+    ).toBeNull()
     expect(screen.queryByRole("button", { name: "Supprimer" })).toBeNull()
     expect(name().value).not.toBe("Fonctionnalité")
-    fireEvent.click(screen.getByRole("checkbox", { name: /Développement backend/ }))
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: /Développement backend/ })
+    )
     expect(saveBtn().disabled).toBe(true)
-    fireEvent.click(screen.getByRole("checkbox", { name: /Développement backend/ }))
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: /Développement backend/ })
+    )
     fireEvent.click(saveBtn())
     await waitFor(() => expect(teams.teamsTeamSave).toHaveBeenCalled())
     expect(vi.mocked(teams.teamsTeamSave).mock.calls[0][0]).toMatchObject({
@@ -227,7 +233,9 @@ describe("TeamsPage", () => {
   it("liste des agents, Nouvel agent, agents chef non modifiables", async () => {
     render(<TeamsPage home="/h" />)
     await screen.findByText("perso")
-    expect(screen.queryByRole("button", { name: "Modifier Chef de projet" })).toBeNull()
+    expect(
+      screen.queryByRole("button", { name: "Modifier Chef de projet" })
+    ).toBeNull()
     expect(screen.getByRole("button", { name: "Nouvelle team" })).toBeTruthy()
     fireEvent.click(screen.getByRole("button", { name: "Nouvel agent" }))
     expect(await screen.findByLabelText("Nom")).toBeTruthy()

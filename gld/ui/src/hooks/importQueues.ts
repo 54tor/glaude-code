@@ -3,7 +3,13 @@ import { i18n } from "@/i18n"
 import { api } from "@/lib/api"
 import { ApiError } from "@/lib/apiError"
 import { withoutFollowUps } from "@/lib/queue"
-import { draftOf, legacyQueues, saveDrafts, SEND_TIMEOUT, setDraft } from "./useDraft"
+import {
+  draftOf,
+  legacyQueues,
+  saveDrafts,
+  SEND_TIMEOUT,
+  setDraft,
+} from "./useDraft"
 
 // Reprise unique des files locales : chaque texte part dans l'ordre vers la file du serveur, et le stockage local est réécrit
 // après chaque envoi (une reprise après échec ne duplique rien). Un texte que le serveur refuse, ou dont l'envoi local est
@@ -21,15 +27,22 @@ const truncateForPreview = (text: string) => {
 const restoreToDraft = (sessionId: string, text: string) => {
   const currentDraft = draftOf(sessionId)
   const draftHasText = currentDraft.text.trim() !== ""
-  setDraft(sessionId, { text: draftHasText ? `${currentDraft.text}\n${text}` : text })
-  toast.error(i18n.t("conversation.composer.importRestored", { text: truncateForPreview(text) }))
+  setDraft(sessionId, {
+    text: draftHasText ? `${currentDraft.text}\n${text}` : text,
+  })
+  toast.error(
+    i18n.t("conversation.composer.importRestored", {
+      text: truncateForPreview(text),
+    })
+  )
 }
 
 async function importQueuesUnderLock(): Promise<void> {
   if (localStorage.getItem(IMPORT_DONE_KEY)) return // relu sous le verrou : un autre onglet a pu finir entre-temps
   for (const [sessionId, legacyQueue] of [...legacyQueues]) {
     const sendingSince = legacyQueue.sending
-    const sendIsStale = sendingSince !== undefined && Date.now() - sendingSince > SEND_TIMEOUT
+    const sendIsStale =
+      sendingSince !== undefined && Date.now() - sendingSince > SEND_TIMEOUT
     if (sendIsStale && legacyQueue.queue.length > 0) {
       const [staleText, ...remainingTexts] = legacyQueue.queue
       legacyQueue.queue = remainingTexts
@@ -42,7 +55,9 @@ async function importQueuesUnderLock(): Promise<void> {
       try {
         await api.queueAdd(sessionId, text)
       } catch (error) {
-        const serverGaveNoJsonAnswer = error instanceof ApiError && (error.net || error.code.startsWith("http_"))
+        const serverGaveNoJsonAnswer =
+          error instanceof ApiError &&
+          (error.net || error.code.startsWith("http_"))
         if (serverGaveNoJsonAnswer) return // la reprise rejouera
         refused = true
       }
@@ -58,7 +73,8 @@ async function importQueuesUnderLock(): Promise<void> {
 }
 
 const startImport = (): Promise<void> => {
-  if (navigator.locks) return navigator.locks.request(IMPORT_DONE_KEY, importQueuesUnderLock)
+  if (navigator.locks)
+    return navigator.locks.request(IMPORT_DONE_KEY, importQueuesUnderLock)
   return importQueuesUnderLock()
 }
 

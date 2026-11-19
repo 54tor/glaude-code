@@ -8,7 +8,10 @@ beforeEach(() => localStorage.clear())
 describe("useViewPrefs", () => {
   it("défauts sans stockage", () => {
     const { result } = renderHook(useViewPrefs)
-    expect(result.current).toEqual({ ...DEFAULT_PREFS, set: expect.any(Function) })
+    expect(result.current).toEqual({
+      ...DEFAULT_PREFS,
+      set: expect.any(Function),
+    })
     expect(DEFAULT_PREFS).toEqual({
       wordWrap: false,
       minimap: false,
@@ -42,12 +45,12 @@ describe("useViewPrefs", () => {
     localStorage.setItem("gld.ide.view.showStatus", "nimporte")
     localStorage.setItem("gld.ide.view.fontSize", "999")
     const viewPrefs = renderHook(useViewPrefs).result.current
-    expect([viewPrefs.wordWrap, viewPrefs.minimap, viewPrefs.showStatus, viewPrefs.fontSize]).toEqual([
-      false,
-      false,
-      true,
-      28,
-    ])
+    expect([
+      viewPrefs.wordWrap,
+      viewPrefs.minimap,
+      viewPrefs.showStatus,
+      viewPrefs.fontSize,
+    ]).toEqual([false, false, true, 28])
     for (const [text, value] of [
       ["3", 10],
       ["abc", 13],

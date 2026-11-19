@@ -9,7 +9,11 @@ import { Checkbox } from "@/components/ui/checkbox"
 export type Mode = "merge" | "replace"
 export type Picks = Record<string, Mode>
 
-const STATUS = { new: "text-success", diff: "text-warning", same: "text-muted-foreground" } as const
+const STATUS = {
+  new: "text-success",
+  diff: "text-warning",
+  same: "text-muted-foreground",
+} as const
 const KINDS = ["setting", "perm", "file", "skill"]
 const CATS = ["skills", "plugins", "settings", "memory", "mcp"]
 
@@ -44,7 +48,8 @@ export function SyncItems({
       return nextOpen
     })
   const sectionKeys = groupBy === "cat" ? CATS : KINDS
-  const sectionKeyOf = (item: SyncItem) => (groupBy === "cat" ? item.cat ?? "" : item.kind)
+  const sectionKeyOf = (item: SyncItem) =>
+    groupBy === "cat" ? (item.cat ?? "") : item.kind
   return (
     <>
       {sectionKeys.map((kind) => {
@@ -52,33 +57,85 @@ export function SyncItems({
         if (rows.length === 0) return null
         return (
           <section key={kind}>
-            <h3 className="text-sm font-medium">{groupBy === "cat" ? t(`backup.cat.${kind}`) : t(`config.sync.kind.${kind}`)}</h3>
+            <h3 className="text-sm font-medium">
+              {groupBy === "cat"
+                ? t(`backup.cat.${kind}`)
+                : t(`config.sync.kind.${kind}`)}
+            </h3>
             <ul className="mt-1 space-y-px">
               {rows.map((item) => {
                 const label = t(`config.sync.status.${item.status}`)
                 const tone = STATUS[item.status]
                 const isOpen = open.has(item.id)
                 const isPicked = item.id in picks
-                const canChooseMode = isPicked && item.merge && item.status === "diff"
+                const canChooseMode =
+                  isPicked && item.merge && item.status === "diff"
                 return (
-                  <li key={item.id} className="rounded-md px-2 py-1 text-sm hover:bg-muted">
+                  <li
+                    key={item.id}
+                    className="rounded-md px-2 py-1 text-sm hover:bg-muted"
+                  >
                     <div className="flex flex-wrap items-center gap-2">
-                      <Checkbox checked={isPicked} disabled={item.status === "same"} onCheckedChange={(checkedState) => togglePick(item, checkedState === true)} aria-label={t("config.sync.copyItem", { label: item.label })} />
-                      <button className="flex min-w-0 flex-1 items-center gap-1 text-left" onClick={() => toggleExpanded(item.id)} aria-expanded={isOpen}>
-                        <ChevronRight className={cn("size-3.5 shrink-0 transition-transform", isOpen && "rotate-90")} />
+                      <Checkbox
+                        checked={isPicked}
+                        disabled={item.status === "same"}
+                        onCheckedChange={(checkedState) =>
+                          togglePick(item, checkedState === true)
+                        }
+                        aria-label={t("config.sync.copyItem", {
+                          label: item.label,
+                        })}
+                      />
+                      <button
+                        className="flex min-w-0 flex-1 items-center gap-1 text-left"
+                        onClick={() => toggleExpanded(item.id)}
+                        aria-expanded={isOpen}
+                      >
+                        <ChevronRight
+                          className={cn(
+                            "size-3.5 shrink-0 transition-transform",
+                            isOpen && "rotate-90"
+                          )}
+                        />
                         <code className="truncate text-xs">{item.label}</code>
                       </button>
                       {item.risk === "exec" && (
-                        <span className="flex items-center gap-1 text-xs text-warning" title={t("config.sync.riskTitle")}>
-                          <TriangleAlert className="size-3.5" /> {t("config.sync.risk")}
+                        <span
+                          className="flex items-center gap-1 text-xs text-warning"
+                          title={t("config.sync.riskTitle")}
+                        >
+                          <TriangleAlert className="size-3.5" />{" "}
+                          {t("config.sync.risk")}
                         </span>
                       )}
-                      <span className={cn("shrink-0 text-xs", tone)}>{label}</span>
+                      <span className={cn("shrink-0 text-xs", tone)}>
+                        {label}
+                      </span>
                       {canChooseMode && (
-                        <span className="flex shrink-0 gap-1" role="radiogroup" aria-label={t("config.sync.modeAria")}>
+                        <span
+                          className="flex shrink-0 gap-1"
+                          role="radiogroup"
+                          aria-label={t("config.sync.modeAria")}
+                        >
                           {(["merge", "replace"] as const).map((mode) => (
-                            <Button key={mode} size="xs" variant={picks[item.id] === mode ? "secondary" : "ghost"} role="radio" aria-checked={picks[item.id] === mode} onClick={() => setPicks((previousPicks) => ({ ...previousPicks, [item.id]: mode }))}>
-                              {mode === "merge" ? t("config.shared.merge") : t("config.shared.replace")}
+                            <Button
+                              key={mode}
+                              size="xs"
+                              variant={
+                                picks[item.id] === mode ? "secondary" : "ghost"
+                              }
+                              role="radio"
+                              aria-checked={picks[item.id] === mode}
+                              onClick={() =>
+                                setPicks((previousPicks) => ({
+                                  ...previousPicks,
+                                  [item.id]: mode,
+                                }))
+                              }
+                            >
+                              {mode === "merge"
+                                ? t("config.shared.merge")
+                                : t("config.shared.replace")}
                             </Button>
                           ))}
                         </span>
@@ -92,8 +149,12 @@ export function SyncItems({
                           ["target", item.to],
                         ].map(([side, text]) => (
                           <div key={side}>
-                            <p className="text-xs text-muted-foreground">{t(`config.sync.${side}`)}</p>
-                            <pre className="max-h-56 overflow-auto rounded-md border bg-background p-2 font-mono text-xs whitespace-pre-wrap">{text || t("config.sync.absent")}</pre>
+                            <p className="text-xs text-muted-foreground">
+                              {t(`config.sync.${side}`)}
+                            </p>
+                            <pre className="max-h-56 overflow-auto rounded-md border bg-background p-2 font-mono text-xs whitespace-pre-wrap">
+                              {text || t("config.sync.absent")}
+                            </pre>
                           </div>
                         ))}
                       </div>

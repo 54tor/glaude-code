@@ -4,13 +4,17 @@ import { api } from "@/lib/api"
 
 // État git des dossiers de projet, partagé par tous les composants qui l'affichent : une seule relecture périodique (30 s, onglet
 // visible, et au retour sur l'onglet) tant qu'au moins un composant l'utilise.
-export type Git = { status: Record<string, GitState>; repos: Record<string, string[]> } // repos : dossier de sessions → ses dépôts
+export type Git = {
+  status: Record<string, GitState>
+  repos: Record<string, string[]>
+} // repos : dossier de sessions → ses dépôts
 const REFRESH_INTERVAL_MS = 30_000
 let state: Git = { status: {}, repos: {} }
 const subscribers = new Set<() => void>()
 let refreshTimer: ReturnType<typeof setInterval> | undefined
 
-const notifySubscribers = () => subscribers.forEach((subscriber) => subscriber())
+const notifySubscribers = () =>
+  subscribers.forEach((subscriber) => subscriber())
 
 const load = () =>
   document.visibilityState === "visible" &&

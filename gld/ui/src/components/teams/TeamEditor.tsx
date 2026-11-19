@@ -39,7 +39,8 @@ export function TeamEditor({
   }
 
   const run = async (
-    pendingRequest: ReturnType<typeof teamsTeamSave> | ReturnType<typeof teamsTeamRm>
+    pendingRequest:
+      ReturnType<typeof teamsTeamSave> | ReturnType<typeof teamsTeamRm>
   ) => {
     setBusy(true)
     setErr("")
@@ -79,7 +80,10 @@ export function TeamEditor({
         onClose={onClose}
       >
         <Field label={t("teams.edit.name")}>
-          <Input value={name} onChange={(event) => setName(event.target.value)} />
+          <Input
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+          />
         </Field>
         <fieldset className="space-y-1 text-sm">
           <legend className="mb-1 font-medium">

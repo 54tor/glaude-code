@@ -2,7 +2,14 @@ import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { focusRow } from "@/lib/focusRow"
 
@@ -22,15 +29,28 @@ export type Ask = {
 const MAX_VALUE_LENGTH = 200
 
 // Saisie d'un nom (renommer une session, créer ou renommer un groupe).
-export function Prompt({ ask, onClose }: { ask: Ask | null; onClose: () => void }) {
+export function Prompt({
+  ask,
+  onClose,
+}: {
+  ask: Ask | null
+  onClose: () => void
+}) {
   const last = useRef<Ask | null>(null) // à la fermeture, ask vaut déjà null
   useEffect(() => {
     if (ask) last.current = ask
   }, [ask])
   return (
     <Dialog open={!!ask} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <DialogContent className="sm:max-w-md" onCloseAutoFocus={(event) => focusRow(last.current?.row) && event.preventDefault()}>
-        {ask && <Form key={ask.title + ask.value} ask={ask} onClose={onClose} />}
+      <DialogContent
+        className="sm:max-w-md"
+        onCloseAutoFocus={(event) =>
+          focusRow(last.current?.row) && event.preventDefault()
+        }
+      >
+        {ask && (
+          <Form key={ask.title + ask.value} ask={ask} onClose={onClose} />
+        )}
       </DialogContent>
     </Dialog>
   )
@@ -57,7 +77,9 @@ function Form({ ask, onClose }: { ask: Ask; onClose: () => void }) {
     <form onSubmit={submit} className="grid gap-4">
       <DialogHeader>
         <DialogTitle>{ask.title}</DialogTitle>
-        <DialogDescription className="sr-only">{t("conversation.prompt.description")}</DialogDescription>
+        <DialogDescription className="sr-only">
+          {t("conversation.prompt.description")}
+        </DialogDescription>
       </DialogHeader>
       <Input
         value={value}

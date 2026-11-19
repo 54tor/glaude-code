@@ -13,8 +13,13 @@ export function InvitesButton() {
   const [, setParams] = useSearchParams()
   if (!shares?.length) return null
   const invites = shares.flatMap((share) => share.invites)
-  const connected = invites.filter((invite) => invite.state === "connected").length
-  const pending = invites.reduce((pendingCount, invite) => pendingCount + invite.queue.length, 0)
+  const connected = invites.filter(
+    (invite) => invite.state === "connected"
+  ).length
+  const pending = invites.reduce(
+    (pendingCount, invite) => pendingCount + invite.queue.length,
+    0
+  )
   const badge = connected + pending
   const openShares = shares.filter((share) => share.open).length
   const openSession = (sessionId: string) => {
@@ -32,15 +37,29 @@ export function InvitesButton() {
         className="flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-sm text-sidebar-foreground/85 transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
       >
         <Share2 className="size-4 shrink-0 text-muted-foreground" />
-        <span className="flex-1 truncate text-left">{t("shell.invites.title")}</span>
+        <span className="flex-1 truncate text-left">
+          {t("shell.invites.title")}
+        </span>
         {openShares > 0 && (
-          <span className="text-xs text-success tabular-nums" title={t("shell.invites.openShares", { count: openShares })}>
+          <span
+            className="text-xs text-success tabular-nums"
+            title={t("shell.invites.openShares", { count: openShares })}
+          >
             {t("shell.invites.openShares", { count: openShares })}
           </span>
         )}
-        {badge > 0 && <span className="text-xs text-muted-foreground tabular-nums">{badge}</span>}
+        {badge > 0 && (
+          <span className="text-xs text-muted-foreground tabular-nums">
+            {badge}
+          </span>
+        )}
       </button>
-      {open && <InvitesOverlay onClose={() => setOpen(false)} onOpenSession={openSession} />}
+      {open && (
+        <InvitesOverlay
+          onClose={() => setOpen(false)}
+          onOpenSession={openSession}
+        />
+      )}
     </>
   )
 }

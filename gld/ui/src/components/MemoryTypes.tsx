@@ -1,14 +1,33 @@
-import { BookMarked, FolderKanban, MessageSquareQuote, User, type LucideIcon } from "lucide-react"
+import {
+  BookMarked,
+  FolderKanban,
+  MessageSquareQuote,
+  User,
+  type LucideIcon,
+} from "lucide-react"
 import { useTranslation } from "react-i18next"
 import { i18n } from "@/i18n"
 import { cn } from "@/lib/utils"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 // --- types d'entrée -------------------------------------------------------------------------------------
 
 // Les quatre types de mémoire prévus par Claude Code : valeur du champ metadata.type, icône et aide.
 // Les textes sont lus à l'affichage (accesseurs) : la langue peut changer après le chargement du module.
-export const TYPES: readonly { key: string; label: string; icon: LucideIcon; color: string; what: string; example: string }[] = [
+export const TYPES: readonly {
+  key: string
+  label: string
+  icon: LucideIcon
+  color: string
+  what: string
+  example: string
+}[] = [
   {
     key: "user",
     get label() {
@@ -67,9 +86,16 @@ export const TYPES: readonly { key: string; label: string; icon: LucideIcon; col
   },
 ]
 
-export const typeOf = (typeKey?: string) => TYPES.find((memoryType) => memoryType.key === typeKey)
+export const typeOf = (typeKey?: string) =>
+  TYPES.find((memoryType) => memoryType.key === typeKey)
 
-export function TypeHelp({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function TypeHelp({
+  open,
+  onClose,
+}: {
+  open: boolean
+  onClose: () => void
+}) {
   const { t } = useTranslation()
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
@@ -77,24 +103,34 @@ export function TypeHelp({ open, onClose }: { open: boolean; onClose: () => void
         <DialogHeader>
           <DialogTitle>{t("memory.typeHelp.title")}</DialogTitle>
           <DialogDescription>
-            {t("memory.typeHelp.descBefore")} <code>metadata.type</code> {t("memory.typeHelp.descAfter")}
+            {t("memory.typeHelp.descBefore")} <code>metadata.type</code>{" "}
+            {t("memory.typeHelp.descAfter")}
           </DialogDescription>
         </DialogHeader>
         <ul className="space-y-3">
           {TYPES.map((memoryType) => (
             <li key={memoryType.key} className="flex gap-3">
-              <memoryType.icon className={cn("mt-0.5 size-5 shrink-0", memoryType.color)} />
+              <memoryType.icon
+                className={cn("mt-0.5 size-5 shrink-0", memoryType.color)}
+              />
               <div className="min-w-0 text-sm">
                 <p className="font-medium">
-                  {memoryType.label} <code className="text-xs font-normal text-muted-foreground">{memoryType.key}</code>
+                  {memoryType.label}{" "}
+                  <code className="text-xs font-normal text-muted-foreground">
+                    {memoryType.key}
+                  </code>
                 </p>
                 <p>{memoryType.what}</p>
-                <p className="text-xs text-muted-foreground">{t("memory.typeHelp.example", { text: memoryType.example })}</p>
+                <p className="text-xs text-muted-foreground">
+                  {t("memory.typeHelp.example", { text: memoryType.example })}
+                </p>
               </div>
             </li>
           ))}
         </ul>
-        <p className="text-xs text-muted-foreground">{t("memory.typeHelp.footer")}</p>
+        <p className="text-xs text-muted-foreground">
+          {t("memory.typeHelp.footer")}
+        </p>
       </DialogContent>
     </Dialog>
   )

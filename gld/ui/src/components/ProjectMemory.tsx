@@ -1,7 +1,19 @@
 import { i18n, loc } from "@/i18n"
 import { useTranslation } from "react-i18next"
 import { useEffect, useRef, useState } from "react"
-import { BookOpen, Brain, ChevronRight, Copy, FileText, Globe, ExternalLink, Pencil, ScrollText, Tag, Trash2 } from "lucide-react"
+import {
+  BookOpen,
+  Brain,
+  ChevronRight,
+  Copy,
+  FileText,
+  Globe,
+  ExternalLink,
+  Pencil,
+  ScrollText,
+  Tag,
+  Trash2,
+} from "lucide-react"
 import { useLocation } from "wouter"
 import { toast } from "sonner"
 import { api, type MemFile } from "@/lib/api"
@@ -9,9 +21,35 @@ import { errMsg } from "@/lib/apiError"
 import { href } from "@/lib/route"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
-import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuLabel, ContextMenuSeparator, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger, ContextMenuTrigger } from "@/components/ui/context-menu"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuLabel,
+  ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { TYPES, typeOf } from "./MemoryTypes"
 import { Markdown } from "./Message"
 import { copy, movable, split } from "./memoryLib"
@@ -26,7 +64,17 @@ function icon(key: string) {
 }
 
 // Édition d'un fichier sur place : le texte brut, enregistré tel quel (comme dans la page Mémoire).
-function EditDialog({ file, edit, onClose, onSaved }: { file: MemFile; edit: boolean; onClose: () => void; onSaved: () => void }) {
+function EditDialog({
+  file,
+  edit,
+  onClose,
+  onSaved,
+}: {
+  file: MemFile
+  edit: boolean
+  onClose: () => void
+  onSaved: () => void
+}) {
   const { t } = useTranslation()
   const [text, setText] = useState<string | null>(null)
   const [editing, setEditing] = useState(edit) // d'abord l'aperçu mis en forme ; « Modifier » passe au texte brut
@@ -64,14 +112,17 @@ function EditDialog({ file, edit, onClose, onSaved }: { file: MemFile; edit: boo
       <DialogContent className="flex max-h-[90vh] flex-col gap-3 sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle className="truncate">{file.name}</DialogTitle>
-          <DialogDescription className="truncate font-mono text-xs">{file.path}</DialogDescription>
+          <DialogDescription className="truncate font-mono text-xs">
+            {file.path}
+          </DialogDescription>
         </DialogHeader>
         {editing ? (
           <textarea
             value={text ?? ""}
             onChange={(event) => setText(event.target.value)}
             onKeyDown={(event) => {
-              const isSaveShortcut = (event.ctrlKey || event.metaKey) && event.key === "Enter"
+              const isSaveShortcut =
+                (event.ctrlKey || event.metaKey) && event.key === "Enter"
               if (!isSaveShortcut) return
               event.preventDefault()
               save()
@@ -88,7 +139,11 @@ function EditDialog({ file, edit, onClose, onSaved }: { file: MemFile; edit: boo
               <p className="text-muted-foreground">{t("common.loading")}</p>
             ) : (
               <>
-                {frontMatter && <pre className="mb-3 rounded-lg border bg-muted/40 px-3 py-2 text-xs whitespace-pre-wrap text-muted-foreground">{frontMatter}</pre>}
+                {frontMatter && (
+                  <pre className="mb-3 rounded-lg border bg-muted/40 px-3 py-2 text-xs whitespace-pre-wrap text-muted-foreground">
+                    {frontMatter}
+                  </pre>
+                )}
                 <Markdown t={body} />
               </>
             )}
@@ -100,7 +155,11 @@ function EditDialog({ file, edit, onClose, onSaved }: { file: MemFile; edit: boo
               <Button variant="ghost" onClick={() => setEditing(false)}>
                 {t("memory.project.preview")}
               </Button>
-              <Button onClick={save} disabled={text === null || busy} title={t("memory.project.shortcut")}>
+              <Button
+                onClick={save}
+                disabled={text === null || busy}
+                title={t("memory.project.shortcut")}
+              >
                 {t("common.save")}
               </Button>
             </>
@@ -127,19 +186,27 @@ export function ProjectMemory({ dir }: { dir: string }) {
   const { t } = useTranslation()
   const [files, setFiles] = useState<MemFile[] | null>(null)
   const [open, setOpen] = useState(false)
-  const [shown, setShown] = useState<{ file: MemFile; edit: boolean } | null>(null)
+  const [shown, setShown] = useState<{ file: MemFile; edit: boolean } | null>(
+    null
+  )
   const [removing, setRemoving] = useState<MemFile | null>(null)
   const [, go] = useLocation()
   const [tick, setTick] = useState(0)
   useEffect(() => {
     let isMounted = true
     const load = () =>
-      api.memory().then((memory) => {
-        if (!isMounted) return
-        setFiles(memory.projects.find((project) => project.dir === dir)?.files ?? [])
-      }, () => {})
+      api.memory().then(
+        (memory) => {
+          if (!isMounted) return
+          setFiles(
+            memory.projects.find((project) => project.dir === dir)?.files ?? []
+          )
+        },
+        () => {}
+      )
     load()
-    const onVisibilityChange = () => document.visibilityState === "visible" && load()
+    const onVisibilityChange = () =>
+      document.visibilityState === "visible" && load()
     document.addEventListener("visibilitychange", onVisibilityChange)
     return () => {
       isMounted = false
@@ -148,15 +215,20 @@ export function ProjectMemory({ dir }: { dir: string }) {
   }, [dir, tick])
   const refresh = () => setTick((currentTick) => currentTick + 1)
   if (!files || files.length === 0) return null
-  const tokens = files.filter((file) => file.always).reduce((total, file) => total + file.tokens, 0)
-  const alwaysLoadedFirstThenByName = (left: MemFile, right: MemFile) => +!!right.always - +!!left.always || left.name.localeCompare(right.name, loc())
+  const tokens = files
+    .filter((file) => file.always)
+    .reduce((total, file) => total + file.tokens, 0)
+  const alwaysLoadedFirstThenByName = (left: MemFile, right: MemFile) =>
+    +!!right.always - +!!left.always ||
+    left.name.localeCompare(right.name, loc())
   const sorted = [...files].sort(alwaysLoadedFirstThenByName)
 
   const setType = async (file: MemFile, type: string) => {
     if (await reportAction(() => api.memoryType(file.key, type))) refresh()
   }
   const toGlobal = async (file: MemFile, copyIt: boolean) => {
-    if (await reportAction(() => api.memoryMove(file.key, "global", copyIt))) refresh()
+    if (await reportAction(() => api.memoryMove(file.key, "global", copyIt)))
+      refresh()
   }
   const copyContent = async (file: MemFile) => {
     try {
@@ -169,7 +241,8 @@ export function ProjectMemory({ dir }: { dir: string }) {
     const fileToRemove = removing
     setRemoving(null)
     if (!fileToRemove) return
-    if (await reportAction(() => api.memoryRemove([fileToRemove.key]))) refresh()
+    if (await reportAction(() => api.memoryRemove([fileToRemove.key])))
+      refresh()
   }
   const isIndex = (file: MemFile) => file.key.endsWith(MEMORY_INDEX_SUFFIX)
   const canType = (file: MemFile) => file.key.startsWith("m/") && !isIndex(file)
@@ -178,13 +251,25 @@ export function ProjectMemory({ dir }: { dir: string }) {
 
   return (
     <section className="mb-4 rounded-lg border">
-      <button onClick={() => setOpen(!open)} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm" aria-expanded={open}>
-        <ChevronRight className={cn("size-4 shrink-0 transition-transform", open && "rotate-90")} />
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm"
+        aria-expanded={open}
+      >
+        <ChevronRight
+          className={cn(
+            "size-4 shrink-0 transition-transform",
+            open && "rotate-90"
+          )}
+        />
         <Brain className="size-4 shrink-0 text-muted-foreground" />
         <span className="font-medium">{t("memory.project.title")}</span>
         <span className="text-xs text-muted-foreground">
           {t("memory.project.files", { count: files.length })}
-          {tokens > 0 && t("memory.project.tokensLoaded", { tokens: tokens.toLocaleString(loc()) })}
+          {tokens > 0 &&
+            t("memory.project.tokensLoaded", {
+              tokens: tokens.toLocaleString(loc()),
+            })}
         </span>
       </button>
       {open && (
@@ -197,31 +282,85 @@ export function ProjectMemory({ dir }: { dir: string }) {
                 <ContextMenu>
                   <ContextMenuTrigger asChild>
                     <div className="group/row flex items-center rounded-md hover:bg-muted">
-                      <button onClick={() => setShown({ file, edit: false })} className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1 text-left text-sm" title={file.path}>
-                        <Icon className={cn("size-3.5 shrink-0", fileType?.color ?? "text-muted-foreground")} />
-                        <span className={cn("min-w-0 flex-1 truncate", file.off && "line-through opacity-60")}>{file.name}</span>
-                        {fileType && <span className={cn("shrink-0 rounded-sm bg-muted px-1.5 text-2xs", fileType.color)}>{fileType.label}</span>}
-                        {file.paths && <span className="shrink-0 text-2xs text-muted-foreground">{t("memory.project.scoped")}</span>}
-                        {file.always && <span className="shrink-0 text-2xs tabular-nums text-muted-foreground">{t("memory.project.tokens", { n: file.tokens })}</span>}
+                      <button
+                        onClick={() => setShown({ file, edit: false })}
+                        className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1 text-left text-sm"
+                        title={file.path}
+                      >
+                        <Icon
+                          className={cn(
+                            "size-3.5 shrink-0",
+                            fileType?.color ?? "text-muted-foreground"
+                          )}
+                        />
+                        <span
+                          className={cn(
+                            "min-w-0 flex-1 truncate",
+                            file.off && "line-through opacity-60"
+                          )}
+                        >
+                          {file.name}
+                        </span>
+                        {fileType && (
+                          <span
+                            className={cn(
+                              "shrink-0 rounded-sm bg-muted px-1.5 text-2xs",
+                              fileType.color
+                            )}
+                          >
+                            {fileType.label}
+                          </span>
+                        )}
+                        {file.paths && (
+                          <span className="shrink-0 text-2xs text-muted-foreground">
+                            {t("memory.project.scoped")}
+                          </span>
+                        )}
+                        {file.always && (
+                          <span className="shrink-0 text-2xs text-muted-foreground tabular-nums">
+                            {t("memory.project.tokens", { n: file.tokens })}
+                          </span>
+                        )}
                       </button>
-                      <Button size="icon-xs" variant="ghost" className="mr-1 shrink-0 md:opacity-0 md:group-focus-within/row:opacity-100 md:group-hover/row:opacity-100" onClick={() => go(href({ kind: "memory", key: file.key }))} aria-label={t("memory.project.openAria", { name: file.name })} title={t("memory.project.openTitle")}>
+                      <Button
+                        size="icon-xs"
+                        variant="ghost"
+                        className="mr-1 shrink-0 md:opacity-0 md:group-focus-within/row:opacity-100 md:group-hover/row:opacity-100"
+                        onClick={() =>
+                          go(href({ kind: "memory", key: file.key }))
+                        }
+                        aria-label={t("memory.project.openAria", {
+                          name: file.name,
+                        })}
+                        title={t("memory.project.openTitle")}
+                      >
                         <ExternalLink />
                       </Button>
                     </div>
                   </ContextMenuTrigger>
                   <ContextMenuContent className="w-60">
-                    <ContextMenuLabel className="truncate">{file.name}</ContextMenuLabel>
-                    <ContextMenuItem onSelect={() => setShown({ file, edit: false })}>
+                    <ContextMenuLabel className="truncate">
+                      {file.name}
+                    </ContextMenuLabel>
+                    <ContextMenuItem
+                      onSelect={() => setShown({ file, edit: false })}
+                    >
                       <BookOpen /> {t("memory.project.show")}
                     </ContextMenuItem>
-                    <ContextMenuItem onSelect={() => go(href({ kind: "memory", key: file.key }))}>
+                    <ContextMenuItem
+                      onSelect={() =>
+                        go(href({ kind: "memory", key: file.key }))
+                      }
+                    >
                       <ExternalLink /> {t("memory.project.openPage")}
                     </ContextMenuItem>
                     <ContextMenuSeparator />
                     <ContextMenuItem onSelect={() => copyContent(file)}>
                       <Copy /> {t("memory.project.copyContent")}
                     </ContextMenuItem>
-                    <ContextMenuItem onSelect={() => copy(file.path, "memory.lib.copiedPath")}>
+                    <ContextMenuItem
+                      onSelect={() => copy(file.path, "memory.lib.copiedPath")}
+                    >
                       <Copy /> {t("memory.project.copyPath")}
                     </ContextMenuItem>
                     {canMoveToGlobal(file) && (
@@ -230,7 +369,9 @@ export function ProjectMemory({ dir }: { dir: string }) {
                       </ContextMenuItem>
                     )}
                     <ContextMenuSeparator />
-                    <ContextMenuItem onSelect={() => setShown({ file, edit: true })}>
+                    <ContextMenuItem
+                      onSelect={() => setShown({ file, edit: true })}
+                    >
                       <Pencil /> {t("memory.project.editHere")}
                     </ContextMenuItem>
                     {canType(file) && (
@@ -240,12 +381,22 @@ export function ProjectMemory({ dir }: { dir: string }) {
                         </ContextMenuSubTrigger>
                         <ContextMenuSubContent>
                           {TYPES.map((memoryType) => (
-                            <ContextMenuItem key={memoryType.key} onSelect={() => setType(file, memoryType.key)}>
-                              <memoryType.icon /> {memoryType.key} <span className="text-xs text-muted-foreground">({memoryType.label}){file.type === memoryType.key && " ✓"}</span>
+                            <ContextMenuItem
+                              key={memoryType.key}
+                              onSelect={() => setType(file, memoryType.key)}
+                            >
+                              <memoryType.icon /> {memoryType.key}{" "}
+                              <span className="text-xs text-muted-foreground">
+                                ({memoryType.label})
+                                {file.type === memoryType.key && " ✓"}
+                              </span>
                             </ContextMenuItem>
                           ))}
                           <ContextMenuSeparator />
-                          <ContextMenuItem onSelect={() => setType(file, "")}>{t("memory.project.noType")}{!file.type && " ✓"}</ContextMenuItem>
+                          <ContextMenuItem onSelect={() => setType(file, "")}>
+                            {t("memory.project.noType")}
+                            {!file.type && " ✓"}
+                          </ContextMenuItem>
                         </ContextMenuSubContent>
                       </ContextMenuSub>
                     )}
@@ -255,7 +406,10 @@ export function ProjectMemory({ dir }: { dir: string }) {
                       </ContextMenuItem>
                     )}
                     <ContextMenuSeparator />
-                    <ContextMenuItem variant="destructive" onSelect={() => setRemoving(file)}>
+                    <ContextMenuItem
+                      variant="destructive"
+                      onSelect={() => setRemoving(file)}
+                    >
                       <Trash2 /> {t("memory.project.remove")}
                     </ContextMenuItem>
                   </ContextMenuContent>
@@ -265,13 +419,28 @@ export function ProjectMemory({ dir }: { dir: string }) {
           })}
         </ul>
       )}
-      {shown && <EditDialog key={shown.file.key} file={shown.file} edit={shown.edit} onClose={() => setShown(null)} onSaved={refresh} />}
-      <AlertDialog open={!!removing} onOpenChange={(isOpen) => !isOpen && setRemoving(null)}>
+      {shown && (
+        <EditDialog
+          key={shown.file.key}
+          file={shown.file}
+          edit={shown.edit}
+          onClose={() => setShown(null)}
+          onSaved={refresh}
+        />
+      )}
+      <AlertDialog
+        open={!!removing}
+        onOpenChange={(isOpen) => !isOpen && setRemoving(null)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{t("memory.project.deleteTitle", { name: removing?.name ?? "" })}</AlertDialogTitle>
+            <AlertDialogTitle>
+              {t("memory.project.deleteTitle", { name: removing?.name ?? "" })}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              {removing?.key.startsWith("m/") ? t("memory.project.deleteBodyMemory") : t("memory.project.deleteBodyFile")}
+              {removing?.key.startsWith("m/")
+                ? t("memory.project.deleteBodyMemory")
+                : t("memory.project.deleteBodyFile")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

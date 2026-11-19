@@ -5,7 +5,13 @@ import { Confirm, type Ask } from "@/components/Confirm"
 import { Button } from "@/components/ui/button"
 import { useCan } from "@/lib/auth"
 import { errMsg } from "@/lib/apiError"
-import { teamClose, teamGet, teamKey, teamScreen, type TeamView } from "@/lib/teams"
+import {
+  teamClose,
+  teamGet,
+  teamKey,
+  teamScreen,
+  type TeamView,
+} from "@/lib/teams"
 import { AgentList, agentLabel } from "./AgentList"
 import { MessageBox } from "./MessageBox"
 
@@ -50,7 +56,10 @@ function Messages({ view, who }: { view: TeamView; who?: string }) {
   const visibleMessages = [...teamMessages, ...directMessages]
     .filter(involvesFilteredAgent)
     .sort((earlierMessage, laterMessage) => earlierMessage.at - laterMessage.at)
-  if (!visibleMessages.length) return <p className="p-3 text-sm text-muted-foreground">{t("teams.none")}</p>
+  if (!visibleMessages.length)
+    return (
+      <p className="p-3 text-sm text-muted-foreground">{t("teams.none")}</p>
+    )
   return (
     <ul className="divide-y text-sm">
       {visibleMessages.map((message) => (
@@ -58,7 +67,7 @@ function Messages({ view, who }: { view: TeamView; who?: string }) {
           <div className="text-xs text-muted-foreground">
             <b>{displayName(message.from)}</b> → {displayName(message.to)}
           </div>
-          <div className="whitespace-pre-wrap break-words">{message.text}</div>
+          <div className="break-words whitespace-pre-wrap">{message.text}</div>
         </li>
       ))}
     </ul>
@@ -67,7 +76,10 @@ function Messages({ view, who }: { view: TeamView; who?: string }) {
 
 function Tasks({ view }: { view: TeamView }) {
   const { t } = useTranslation()
-  if (!view.Tasks.length) return <p className="p-3 text-sm text-muted-foreground">{t("teams.none")}</p>
+  if (!view.Tasks.length)
+    return (
+      <p className="p-3 text-sm text-muted-foreground">{t("teams.none")}</p>
+    )
   return (
     <ul className="divide-y text-sm">
       {view.Tasks.map((task) => (
@@ -80,9 +92,20 @@ function Tasks({ view }: { view: TeamView }) {
   )
 }
 
-const Col = ({ label, children }: { label: string; children: React.ReactNode }) => (
-  <section aria-label={label} className="min-w-0 overflow-y-auto rounded-lg border">
-    <h3 className="border-b px-3 py-2 text-xs font-semibold uppercase text-muted-foreground">{label}</h3>
+const Col = ({
+  label,
+  children,
+}: {
+  label: string
+  children: React.ReactNode
+}) => (
+  <section
+    aria-label={label}
+    className="min-w-0 overflow-y-auto rounded-lg border"
+  >
+    <h3 className="border-b px-3 py-2 text-xs font-semibold text-muted-foreground uppercase">
+      {label}
+    </h3>
     {children}
   </section>
 )
@@ -136,7 +159,8 @@ export function TeamRun({ name }: { name: string }) {
       }
       setView(polledView)
       setErr("")
-      const startedAfterLastKey = generationAtStart === gen.current && !keyBusy.current
+      const startedAfterLastKey =
+        generationAtStart === gen.current && !keyBusy.current
       if (startedAfterLastKey) setStale(false)
     }
     pollRef.current = poll
@@ -197,23 +221,43 @@ export function TeamRun({ name }: { name: string }) {
   }
 
   const leadState = leadAgent?.State ?? ""
-  const isLeadWaitingInTerminal = live && ["waiting", "unknown"].includes(leadState)
+  const isLeadWaitingInTerminal =
+    live && ["waiting", "unknown"].includes(leadState)
   const renderPermission = () => {
     if (!view?.Permission) {
       if (!isLeadWaitingInTerminal) return null
-      return <p className="text-sm text-muted-foreground">{t("teams.permTerminal")}</p>
+      return (
+        <p className="text-sm text-muted-foreground">
+          {t("teams.permTerminal")}
+        </p>
+      )
     }
     return (
       <div className="space-y-2 rounded-lg border border-amber-500/60 p-3">
-        <div className="text-xs font-semibold uppercase text-muted-foreground">{t("teams.permission")}</div>
-        <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words text-xs">{view.Permission}</pre>
-        {view.PermissionTruncated && <p className="text-xs text-destructive">{t("teams.permTruncated")}</p>}
+        <div className="text-xs font-semibold text-muted-foreground uppercase">
+          {t("teams.permission")}
+        </div>
+        <pre className="max-h-48 overflow-auto text-xs break-words whitespace-pre-wrap">
+          {view.Permission}
+        </pre>
+        {view.PermissionTruncated && (
+          <p className="text-xs text-destructive">{t("teams.permTruncated")}</p>
+        )}
         {exec && (
           <div className="flex gap-2">
-            <Button size="sm" disabled={!live || stale || view.PermissionTruncated} onClick={() => void sendPermissionKey("1")}>
+            <Button
+              size="sm"
+              disabled={!live || stale || view.PermissionTruncated}
+              onClick={() => void sendPermissionKey("1")}
+            >
               {t("teams.yes")}
             </Button>
-            <Button size="sm" variant="outline" disabled={!live || stale} onClick={() => void sendPermissionKey("Escape")}>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!live || stale}
+              onClick={() => void sendPermissionKey("Escape")}
+            >
               {t("teams.no")}
             </Button>
           </div>
@@ -223,11 +267,23 @@ export function TeamRun({ name }: { name: string }) {
   }
   const perm = renderPermission()
 
-  if (!view) return <div ref={root}>{err && <p className="p-4 text-sm text-destructive">{err}</p>}</div>
+  if (!view)
+    return (
+      <div ref={root}>
+        {err && <p className="p-4 text-sm text-destructive">{err}</p>}
+      </div>
+    )
   const wide = width >= WIDE
   const mate = view.Agents.find((agent) => agent.Name === sel)
   const box = exec && (
-    <MessageBox name={name} agents={view.Agents} to={recipient} setTo={setTo} queued={view.Queued} disabled={!act} />
+    <MessageBox
+      name={name}
+      agents={view.Agents}
+      to={recipient}
+      setTo={setTo}
+      queued={view.Queued}
+      disabled={!act}
+    />
   )
   const askCloseTeam = () =>
     setAsk({
@@ -242,7 +298,12 @@ export function TeamRun({ name }: { name: string }) {
     })
   const renderMateDetail = (mateName: string) => {
     if (mode === "tasks") return <Tasks view={view} />
-    if (mode === "screen") return <pre className="max-h-64 overflow-auto whitespace-pre-wrap p-3 text-xs">{screen}</pre>
+    if (mode === "screen")
+      return (
+        <pre className="max-h-64 overflow-auto p-3 text-xs whitespace-pre-wrap">
+          {screen}
+        </pre>
+      )
     const messageFilter = mode === "all" ? undefined : mateName
     return <Messages view={view} who={messageFilter} />
   }
@@ -250,14 +311,23 @@ export function TeamRun({ name }: { name: string }) {
   return (
     <div ref={root} className="flex h-full flex-col gap-3 p-4">
       <div className="flex items-center gap-3">
-        <Link href="/equipes" className="text-sm text-muted-foreground hover:underline">
+        <Link
+          href="/equipes"
+          className="text-sm text-muted-foreground hover:underline"
+        >
           ← {t("teams.back")}
         </Link>
         <h2 className="font-semibold">{view.Name}</h2>
-        {!live && <span className="text-xs text-muted-foreground">{t("teams.finished")}</span>}
+        {!live && (
+          <span className="text-xs text-muted-foreground">
+            {t("teams.finished")}
+          </span>
+        )}
         {view.Unknown.length > 0 && (
           <details className="text-xs">
-            <summary className="cursor-pointer">{t("teams.unknownFormat")}</summary>
+            <summary className="cursor-pointer">
+              {t("teams.unknownFormat")}
+            </summary>
             <pre className="whitespace-pre-wrap">{view.Unknown.join("\n")}</pre>
           </details>
         )}
@@ -272,7 +342,9 @@ export function TeamRun({ name }: { name: string }) {
           </Button>
         )}
       </div>
-      {(actErr || err) && <p className="text-sm text-destructive">{actErr || err}</p>}
+      {(actErr || err) && (
+        <p className="text-sm text-destructive">{actErr || err}</p>
+      )}
       {perm}
       {wide ? (
         <div className="grid min-h-0 flex-1 grid-cols-3 gap-3">
@@ -294,21 +366,36 @@ export function TeamRun({ name }: { name: string }) {
           {mate && (
             <div className="rounded-lg border">
               <div className="flex flex-wrap gap-2 border-b p-2">
-                <span className="mr-auto px-1 text-sm">
-                  {agentLabel(mate)}
-                </span>
+                <span className="mr-auto px-1 text-sm">{agentLabel(mate)}</span>
                 {act && (
-                  <Button size="sm" variant="outline" onClick={() => setTo(mate.Name)}>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setTo(mate.Name)}
+                  >
                     {t("teams.writeTo")}
                   </Button>
                 )}
-                <Button size="sm" variant="outline" onClick={() => setMode("tasks")}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setMode("tasks")}
+                >
                   {t("teams.tasks")}
                 </Button>
-                <Button size="sm" variant="outline" onClick={() => setMode("all")}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setMode("all")}
+                >
                   {t("teams.allMessages")}
                 </Button>
-                <Button size="sm" variant="outline" disabled={!live} onClick={() => void showScreen(mate.Name)}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={!live}
+                  onClick={() => void showScreen(mate.Name)}
+                >
                   {t("teams.screen")}
                 </Button>
               </div>

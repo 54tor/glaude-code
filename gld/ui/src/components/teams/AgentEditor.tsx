@@ -47,7 +47,8 @@ export function AgentEditor({
   }
 
   const run = async (
-    pendingRequest: ReturnType<typeof teamsAgentSave> | ReturnType<typeof teamsAgentRm>
+    pendingRequest:
+      ReturnType<typeof teamsAgentSave> | ReturnType<typeof teamsAgentRm>
   ) => {
     setBusy(true)
     setErr("")
@@ -83,20 +84,32 @@ export function AgentEditor({
         onClose={onClose}
       >
         <Field label={t("teams.edit.name")}>
-          <Input value={name} onChange={(event) => setName(event.target.value)} />
+          <Input
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+          />
         </Field>
         <Field label={t("teams.edit.role")}>
-          <Input value={role} onChange={(event) => setRole(event.target.value)} />
+          <Input
+            value={role}
+            onChange={(event) => setRole(event.target.value)}
+          />
         </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label={t("teams.edit.access")}>
-            <Select value={access} onChange={(event) => setAccess(event.target.value)}>
+            <Select
+              value={access}
+              onChange={(event) => setAccess(event.target.value)}
+            >
               <option value="read">{t("teams.edit.read")}</option>
               <option value="write">{t("teams.edit.write")}</option>
             </Select>
           </Field>
           <Field label={t("teams.edit.model")}>
-            <Select value={model} onChange={(event) => setModel(event.target.value)}>
+            <Select
+              value={model}
+              onChange={(event) => setModel(event.target.value)}
+            >
               {models().map(([modelValue, modelLabel]) => (
                 <option key={modelValue} value={modelValue}>
                   {modelLabel}

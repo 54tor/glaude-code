@@ -1,5 +1,14 @@
 import { createContext, useContext } from "react"
-import type { Caps, Group, Hit, Item, Project, Session, Snippet, VGroup } from "@/lib/api"
+import type {
+  Caps,
+  Group,
+  Hit,
+  Item,
+  Project,
+  Session,
+  Snippet,
+  VGroup,
+} from "@/lib/api"
 import type { Choice } from "@/lib/models"
 
 export type Row = { s: Session; g: Group }
@@ -69,7 +78,11 @@ export type Actions = {
   caps: (s: Session) => Caps // ce que sait faire le fournisseur de cette session
   snippets: Snippet[] // commandes personnelles et de projets, à insérer dans un prompt
   defaultChoice: Choice // modèle et effort des réglages de l'interface
-  startSession: (project: string, prompt: string, choice: Choice) => Promise<boolean> // lance tout de suite, sans fenêtre intermédiaire
+  startSession: (
+    project: string,
+    prompt: string,
+    choice: Choice
+  ) => Promise<boolean> // lance tout de suite, sans fenêtre intermédiaire
   newSession: (project: string, initial?: string, onSent?: () => void) => void // nouvelle session dans ce dossier de travail
   copy: (s: Session) => void
   rename: (s: Session) => void
