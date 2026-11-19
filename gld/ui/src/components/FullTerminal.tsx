@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next"
 import { i18n } from "@/i18n"
 import { api } from "@/lib/api"
 import { errMsg, v1 } from "@/lib/apiError"
+import { blockModifiedClicks } from "@/lib/blockModifiedClicks"
 import { Button } from "@/components/ui/button"
 
 // Terminal complet de la session (tmux) : lecture seule tant qu'on ne « prend pas la main » ; le serveur ignore toute frappe avant.
@@ -35,6 +36,7 @@ export default function FullTerminal({
     let isDisposed = false
     let terminal: Terminal | null = null
     let resizeObserver: ResizeObserver | null = null
+    let releaseModifiedClicks = () => {}
     api.termOpen(id).then(
       (openResponse) => {
         if (isDisposed) return
@@ -50,6 +52,7 @@ export default function FullTerminal({
         terminal.loadAddon(fitAddon)
         terminalRef.current = terminal
         terminal.open(containerRef.current)
+        releaseModifiedClicks = blockModifiedClicks(containerRef.current)
         fitAddon.fit()
         const sendSize = () => {
           const mayImposeSize = takeHand || writableRef.current
@@ -99,6 +102,7 @@ export default function FullTerminal({
     )
     return () => {
       isDisposed = true
+      releaseModifiedClicks()
       resizeObserver?.disconnect()
       socketRef.current?.close()
       terminal?.dispose()
