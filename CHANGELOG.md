@@ -4,6 +4,8 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ## [Non publié]
 
+## [0.16.0] - 2026-11-19
+
 ### Ajouté
 - Envoyer à Claude l'échec d'une poussée joint désormais la sortie complète (hook compris) en fichier `.txt`, au lieu des 120 dernières lignes dans le message ; la consigne demande de corriger, commiter, puis repousser la même branche vers le même remote.
 - Dans la conversation, un fichier joint qui n'est pas une image (`@~/.claude/gld-web-images/….md`) s'affiche en pastille « Pièce jointe (MD) » au lieu du chemin brut ; pour un `.md` ou `.txt` dont le contenu est vraiment du texte UTF-8 (1 Mio max), la pastille ouvre le fichier dans une modale (`GET /v1/sessions/{id}/conversation/uploads/{up}/text`).
@@ -795,7 +797,8 @@ Première version : `gld`, interface web locale pour parcourir, piloter et confi
 - Terminal intégré désactivé par défaut ; lecture bornée des fichiers de commandes.
 - Refus d'agir quand les sessions ouvertes sont indéterminées.
 
-[Non publié]: https://github.com/54tor/glaude-code/compare/v0.15.1...HEAD
+[Non publié]: https://github.com/54tor/glaude-code/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/54tor/glaude-code/compare/v0.15.1...v0.16.0
 [0.15.1]: https://github.com/54tor/glaude-code/compare/v0.15.0...v0.15.1
 [0.15.0]: https://github.com/54tor/glaude-code/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/54tor/glaude-code/compare/v0.13.0...v0.14.0
