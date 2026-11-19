@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -352,7 +353,8 @@ func TestFollowPrefixMatchesUI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(data), "FOLLOW_PREFIX = "+strconv.Quote(followPrefix)) {
+	declaration := regexp.MustCompile(`FOLLOW_PREFIX =\s*` + regexp.QuoteMeta(strconv.Quote(followPrefix)))
+	if !declaration.Match(data) {
 		t.Fatal("followPrefix diffère de FOLLOW_PREFIX")
 	}
 }

@@ -34,6 +34,7 @@ func TestRunPushSessionPushesRemotesInOrderAndRecordsStatus(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	t.Chdir(scratch) // runPushSession change de dossier courant : le nettoyage de t.Chdir rétablit celui du test
 	if exitCode := runPushSession(runID); exitCode != 0 {
 		t.Fatalf("code de sortie %d", exitCode)
 	}
