@@ -36,7 +36,7 @@
     "radix-ui": "^1.8.1",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
-    "react-i18next": "^17.1.9",
+    "react-i18next": "^18.0.1",
     "react-markdown": "^10.1.0",
     "react-qr-code": "^2.2.0",
     "remark-gfm": "^4.0.1",
