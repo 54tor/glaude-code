@@ -19,7 +19,7 @@ const compareStrings = (left: string, right: string) => {
 const byDepthThenName = (left: string, right: string) =>
   depth(left) - depth(right) || compareStrings(left, right)
 // Au-delà du plafond du serveur, les dossiers les moins profonds d'abord : ce sont les plus visibles.
-export const capDirs = (dirs: string[]) =>
+const capDirs = (dirs: string[]) =>
   [...new Set(dirs)].sort(byDepthThenName).slice(0, MAX_DIRS)
 
 const isWatchEvent = (candidate: unknown): candidate is WatchEvent => {

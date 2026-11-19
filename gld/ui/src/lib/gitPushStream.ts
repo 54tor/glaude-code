@@ -4,7 +4,7 @@ import { http, qs, seg } from "@/lib/http"
 
 // Les poussées tournent côté serveur, dans leur propre session tmux : le navigateur (ou gld) peut s'arrêter sans les interrompre.
 // Ici : les créer, les relister après un rechargement, et suivre leur sortie par sondage du journal.
-export type PushRemoteState = {
+type PushRemoteState = {
   name: string
   state: "pending" | "running" | "succeeded" | "failed"
   exit?: number
@@ -40,11 +40,11 @@ export const deletePushRun = (runId: string) =>
   http.del(`/git/push-runs/${seg(runId)}`)
 
 // Premier code de retour non nul des remotes, 0 si tous ont réussi.
-export const exitCodeOfRun = (run: PushRunInfo) =>
+const exitCodeOfRun = (run: PushRunInfo) =>
   run.remotes.find((remote) => remote.exit !== undefined && remote.exit !== 0)
     ?.exit ?? 0
 
-export async function createPushRun(
+async function createPushRun(
   dir: string,
   remotes: string[]
 ): Promise<PushRunInfo> {

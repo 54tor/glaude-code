@@ -1,6 +1,6 @@
 // Balayages tactiles : un seul doigt, horizontal franc (au moins 60 px, plus large que haut), sans bibliothèque.
 // handlers() se pose sur l'élément (onTouchStart/onTouchEnd) ; edge limite le départ à une bande de 24 px du bord gauche.
-export const SWIPE = 60
+const SWIPE = 60
 export const EDGE = 24
 
 type TouchStart = { x: number; y: number; edge: boolean }

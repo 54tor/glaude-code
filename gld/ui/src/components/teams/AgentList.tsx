@@ -10,7 +10,7 @@ const SYM: Record<string, string> = {
   unknown: "–",
 }
 
-export function stateKey(agentState: string) {
+function stateKey(agentState: string) {
   return agentState in SYM ? agentState : "unknown"
 }
 

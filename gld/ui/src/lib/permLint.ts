@@ -4,8 +4,8 @@
 
 import { i18n } from "@/i18n"
 
-export const KINDS = ["allow", "ask", "deny", "additionalDirectories"] as const
-export type Kind = (typeof KINDS)[number]
+const KINDS = ["allow", "ask", "deny", "additionalDirectories"] as const
+type Kind = (typeof KINDS)[number]
 export type RawPerms = Record<Kind, string[]>
 export type Lint = { line: number; level: "error" | "warn"; msg: string }
 

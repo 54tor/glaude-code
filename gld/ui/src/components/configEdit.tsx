@@ -19,11 +19,7 @@ import { DiffView, lineDiff } from "./MemoryDiff"
 // Après une écriture : ce que les sessions ouvertes en voient. Claude Code surveille ses fichiers de réglages et les recharge
 // seul (permissions, hooks, variables d'environnement…) : rien à pousser. Quelques clés ne sont lues qu'au démarrage d'une
 // session ou passent par une commande : on dit lesquelles, d'après les lignes qui ont changé.
-export function liveNotice(
-  before: string,
-  after: string,
-  sessions: number
-): string {
+function liveNotice(before: string, after: string, sessions: number): string {
   const changed = lineDiff(before, after)
     .filter((diffLine) => diffLine.op !== " ")
     .map((diffLine) => diffLine.t)

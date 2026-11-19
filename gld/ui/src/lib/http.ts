@@ -2,10 +2,10 @@ import { authFetch } from "@/lib/auth"
 import { netError, readResponse, v1 } from "@/lib/apiError"
 
 export { ApiError, qs, seg, v1 } from "@/lib/apiError"
-export type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE"
+type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE"
 
 // Appel JSON de l'API /v1 : chemin sans préfixe (« /sessions/x/process »), corps JSON optionnel. Lève ApiError.
-export async function request<T = void>(
+async function request<T = void>(
   method: Method,
   path: string,
   body?: unknown,

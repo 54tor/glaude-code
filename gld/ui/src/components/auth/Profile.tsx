@@ -111,7 +111,7 @@ type Pending = {
   key?: number
 }
 
-export function ProfileDialog({
+function ProfileDialog({
   open,
   onClose,
 }: {

@@ -106,7 +106,7 @@ export function usePluginRun(projects: Project[], after: () => unknown) {
 }
 
 // Installés puis disponibles sur le même panneau (dans la fenêtre ouverte depuis l'éditeur de skills).
-export function PluginsPanel({
+function PluginsPanel({
   projects,
   home,
   onChange,

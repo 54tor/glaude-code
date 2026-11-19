@@ -45,8 +45,8 @@ export type AgentView = {
   State: string
   Lead: boolean
 }
-export type TeamTask = { ID: string; Title: string; Status: string }
-export type InboxMsg = {
+type TeamTask = { ID: string; Title: string; Status: string }
+type InboxMsg = {
   ID: string
   From: string
   To: string
@@ -56,7 +56,7 @@ export type InboxMsg = {
   At: number
   Read: boolean
 }
-export type DirectMsg = { Author: string; To: string; Text: string; At: number }
+type DirectMsg = { Author: string; To: string; Text: string; At: number }
 export type TeamView = {
   Name: string
   LeadSessionID: string

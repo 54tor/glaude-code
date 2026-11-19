@@ -1,0 +1,5 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": ["scripts/gen-commonpw.mjs", "public/sw.js"],
+  "ignore": ["src/components/ui/**"]
+}

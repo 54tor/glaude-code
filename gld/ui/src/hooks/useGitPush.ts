@@ -14,7 +14,7 @@ import { refreshGit } from "@/hooks/useGit"
 // changer de page ne les interrompt pas, et leur sortie reste relisible. Chaque push tourne côté serveur dans sa propre session
 // tmux : ni un rechargement de la page ni un redémarrage de gld ne l'arrête, et resumeGitPushes() les retrouve. Le serveur
 // refuse un second push d'un dépôt dont un push tourne encore.
-export type GitPushStatus = "running" | "succeeded" | "failed" | "error"
+type GitPushStatus = "running" | "succeeded" | "failed" | "error"
 export type GitPushRun = {
   id: number
   serverId?: string

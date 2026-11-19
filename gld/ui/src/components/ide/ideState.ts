@@ -1,5 +1,5 @@
 // notice : raison d'une lecture seule imposée ; tooBig et binary (413, 415) arrivent sans contenu.
-export type Notice = "tooBig" | "binary" | "mixedEol"
+type Notice = "tooBig" | "binary" | "mixedEol"
 export type Tab = {
   path: string
   content: string

@@ -12,7 +12,7 @@ const MAX_TEXT = 1 << 20
 const MAX_PROJECT_LENGTH = 200
 const MARKDOWN_EXTENSION_LENGTH = ".md".length
 const OBJECT_URL_LIFETIME_MS = 1000
-export const MAX_PACK = 1000
+const MAX_PACK = 1000
 
 // Dossier du zip : « global » ou le projet ; les règles dans un sous-dossier « rules ».
 export const packDir = (key: string, label: string) => {

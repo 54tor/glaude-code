@@ -18,7 +18,7 @@ export const SORTS = [
 ] as const
 export type Sort = { by: string; dir: string }
 export const DEFAULT_SORT: Sort = { by: "date", dir: "desc" }
-export const byName = (firstName: string, secondName: string) =>
+const byName = (firstName: string, secondName: string) =>
   firstName.localeCompare(secondName, loc(), { numeric: true })
 // Comparateur de fichiers ; à égalité (la taille est en Ko arrondis), le nom départage.
 export const cmpFiles =

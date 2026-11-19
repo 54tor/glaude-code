@@ -36,7 +36,7 @@ export const FONTS = {
   },
 } as const
 
-export type FontId = keyof typeof FONTS
+type FontId = keyof typeof FONTS
 export const SIZES = ["13", "14", "15", "16", "17"]
 
 const DEFAULT_SIZE = "15"

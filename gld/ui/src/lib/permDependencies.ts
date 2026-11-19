@@ -49,7 +49,7 @@ export function projectsAddingDirectory(
 
 const TOOL_NAME_BEFORE_ARGUMENTS = /^([^(\s]+)/
 
-export const toolOfRule = (rule: string) =>
+const toolOfRule = (rule: string) =>
   TOOL_NAME_BEFORE_ARGUMENTS.exec(rule)?.[1] ?? ""
 
 function matcherCoversTool(matcher: string, tool: string): boolean {

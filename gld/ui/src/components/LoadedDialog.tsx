@@ -20,7 +20,7 @@ const REASONS: Record<string, string> = {
   compact: "conversation.loaded.reasons.compact",
 }
 
-export const HOOK_SNIPPET = `"hooks": {
+const HOOK_SNIPPET = `"hooks": {
   "InstructionsLoaded": [
     { "hooks": [{ "type": "command", "command": "[ -x \\"$HOME/.local/bin/gld\\" ] && \\"$HOME/.local/bin/gld\\" _loaded; exit 0" }] }
   ]

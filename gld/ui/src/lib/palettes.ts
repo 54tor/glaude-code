@@ -2,7 +2,7 @@
 // "defaut" ne pose rien : ce sont les couleurs de index.css.
 import { i18n } from "@/i18n"
 
-export type Tone = {
+type Tone = {
   bg: string
   fg: string
   surface: string
@@ -351,7 +351,7 @@ const STATES = {
   },
 }
 
-export function paletteVars(
+function paletteVars(
   tone: Tone,
   mode: "light" | "dark"
 ): Record<string, string> {

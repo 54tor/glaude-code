@@ -38,7 +38,7 @@ const copy = (text: string, successMessage: string) =>
     () => {}
   )
 
-export function CodeInput({
+function CodeInput({
   id,
   label,
   value,
@@ -373,7 +373,7 @@ export function ReauthForm({
 }
 
 // Échec d'une action protégée : vérification (401, ou 403 sans réauth) et pannes en message générique, sinon le message du serveur.
-export const outOf = (failure: unknown, generic: string) => {
+const outOf = (failure: unknown, generic: string) => {
   if (!(failure instanceof ApiError)) return generic
   const isClientOrServerError = failure.status >= HTTP_CLIENT_ERROR_MIN
   const isVerificationFailure =
@@ -382,7 +382,7 @@ export const outOf = (failure: unknown, generic: string) => {
     return failure.message
   return generic
 }
-export const retryOf = (failure: unknown) =>
+const retryOf = (failure: unknown) =>
   failure instanceof ApiError ? failure.retry : 0
 
 // Enrôlement d'un facteur : obligatoire à la première connexion (session partielle), ou depuis le profil (reauth). Depuis le profil,

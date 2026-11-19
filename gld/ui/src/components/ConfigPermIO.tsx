@@ -25,7 +25,7 @@ const permissionsOf = (doc: Doc) =>
 
 // Le fragment de settings.json qui contient les règles : {"permissions": {"allow": […], "ask": […], "deny": […]}}.
 // Il peut être gardé, partagé, ou collé dans un autre fichier de réglages. defaultMode n'en fait pas partie.
-export function permsFragment(doc: Doc): string {
+function permsFragment(doc: Doc): string {
   const permissions = permissionsOf(doc)
   const rulesByList: Record<string, string[]> = {}
   for (const listName of RULE_LISTS) {
