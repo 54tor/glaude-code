@@ -31,11 +31,11 @@ jobs:
           # os/arch[/goarm] : linux 32 bits (386, armv6 compatible Pi 1+), 64 bits, windows x86/x64/arm64, macOS
           for t in linux/amd64 linux/386 linux/arm64 linux/arm/6 windows/amd64 windows/386 windows/arm64 darwin/arm64 darwin/amd64; do
             IFS=/ read -r os arch arm <<< "$t"
-            ext=; [ $os = windows ] && ext=.exe
-            name=gld-$os-$arch${arm:+v$arm}$ext
-            GOOS=$os GOARCH=$arch GOARM=$arm go build -ldflags "-s -w -X main.version=${GITHUB_REF_NAME}" -o ../out/$name .
+            ext=; [ "$os" = windows ] && ext=.exe
+            name="gld-$os-$arch${arm:+v$arm}$ext"
+            GOOS=$os GOARCH=$arch GOARM=$arm go build -ldflags "-s -w -X main.version=${GITHUB_REF_NAME}" -o "../out/$name" .
           done
-          cd ../out && sha256sum * > SHA256SUMS
+          cd ../out && sha256sum -- * > SHA256SUMS
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: binaires

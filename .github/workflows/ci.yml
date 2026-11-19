@@ -29,6 +29,11 @@ jobs:
       - run: cd gld && go vet ./...
       - run: make check-ui
       - run: test -z "$(gofmt -s -l gld)"
+      - run: cd gld && test -z "$(go run golang.org/x/tools/cmd/goimports@v0.38.0 -l .)"
+      - name: actionlint et shellcheck
+        run: |
+          go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+          shellcheck .githooks/pre-push
       - name: staticcheck (linux, windows, darwin)
         working-directory: gld
         run: |

@@ -47,11 +47,11 @@ fuzz:
 	cd gld && for f in $$(go test -list '^Fuzz' . | grep '^Fuzz'); do go test -run '^$$' -fuzz "^$$f$$" -fuzztime $(FUZZTIME) -parallel 4 . || exit 1; done
 
 check: ui check-ui
-	cd gld && go vet ./... && go test -race -count=1 .
+	cd gld && go vet ./... && test -z "$$(go run golang.org/x/tools/cmd/goimports@v0.38.0 -l .)" && go test -race -count=1 .
 
 # La partie interface de check (la CI la lance seule : les tests Go y passent déjà sous -race dans cover).
 check-ui: check-commonpw
-	cd gld/ui && { [ -d node_modules ] || npm ci; } && npx tsc -b && npx eslint . && npm test
+	cd gld/ui && { [ -d node_modules ] || npm ci; } && npx tsc -b && npx eslint . && npm run format:check && npx knip && npm test
 
 # La liste versionnée doit être celle que génère le paquet installé (rien n'est modifié).
 check-commonpw:
