@@ -1,9 +1,4 @@
 [[IgnoredVulns]]
-id = "GHSA-fc5q-39xc-vjpf"
-ignoreUntil = 2026-12-31
-reason = "advisory retiré (withdrawn) d'osv.dev, encore signalé sur picomatch jusqu'à 4.0.7 sans version corrigée ; picomatch est utilisé par les outils de build (vite, vitest, shadcn), absent du binaire"
-
-[[IgnoredVulns]]
 id = "GHSA-g3hv-75wg-m249"
 ignoreUntil = 2026-12-31
 reason = "minimatch 10.2.6 est une dépendance de dev (eslint, typescript-eslint, shadcn), absente du binaire ; la correction 11.0.1 est à reprendre avec la mise à jour de ces outils"
