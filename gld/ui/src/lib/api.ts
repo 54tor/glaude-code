@@ -203,7 +203,7 @@ export type HookInfo = {
   command: string
   missing?: string
 }
-export type CfgIssue = { file: string; kind: string; msg: string }
+export type CfgIssue = { file: string; kind: string; msg: string; dir?: string }
 export type EffRow = {
   path: string
   values: Record<string, string>

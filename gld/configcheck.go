@@ -245,7 +245,11 @@ type CfgIssue struct {
 	File string `json:"file"`
 	Kind string `json:"kind"` // json, hook, permission, plugin, secret
 	Msg  string `json:"msg"`
+	// Dir : dossier supplémentaire à retirer de permissions.additionalDirectories pour corriger le constat.
+	Dir string `json:"dir,omitempty"`
 }
+
+func newCfgIssue(file, kind, msg string) CfgIssue { return CfgIssue{File: file, Kind: kind, Msg: msg} }
 
 var broadRule = regexp.MustCompile(`^(\*|Bash|Bash\(\*\)|Bash\(:\*\)|Edit|Write|Read|WebFetch)$`)
 
@@ -271,12 +275,12 @@ func configHealth(files []ConfigFile, raw map[string]any) []CfgIssue {
 	var issues []CfgIssue
 	for _, configFile := range files {
 		if configFile.Error != "" {
-			issues = append(issues, CfgIssue{configFile.ID, "json", configFile.Label + " : " + configFile.Error})
+			issues = append(issues, newCfgIssue(configFile.ID, "json", configFile.Label+" : "+configFile.Error))
 		}
 	}
 	for _, hook := range hooksOf(raw) {
 		if hook.Missing != "" {
-			issues = append(issues, CfgIssue{hook.File, "hook", L("srv.configcheck.hookMissing", "A1", hook.Event, "A2", hook.Missing, "A3", cut(hook.Command, hookCommandPreviewLen))})
+			issues = append(issues, newCfgIssue(hook.File, "hook", L("srv.configcheck.hookMissing", "A1", hook.Event, "A2", hook.Missing, "A3", cut(hook.Command, hookCommandPreviewLen))))
 		}
 	}
 	plugins := installedPlugins()
@@ -292,11 +296,11 @@ func configHealth(files []ConfigFile, raw map[string]any) []CfgIssue {
 			seen := map[string]bool{}
 			for _, rule := range strList(rules) {
 				if seen[rule] {
-					issues = append(issues, CfgIssue{fileID, "permission", L("srv.configcheck.dupRule", "A1", kind, "A2", rule)})
+					issues = append(issues, newCfgIssue(fileID, "permission", L("srv.configcheck.dupRule", "A1", kind, "A2", rule)))
 				}
 				seen[rule] = true
 				if kind == "allow" && broadRule.MatchString(rule) {
-					issues = append(issues, CfgIssue{fileID, "permission", L("srv.configcheck.broadRule", "A1", rule)})
+					issues = append(issues, newCfgIssue(fileID, "permission", L("srv.configcheck.broadRule", "A1", rule)))
 				}
 			}
 		}
@@ -304,7 +308,9 @@ func configHealth(files []ConfigFile, raw map[string]any) []CfgIssue {
 			for _, dir := range strList(directories) {
 				if expanded := expandDir(dir, fileID); expanded != "" {
 					if dirInfo, err := os.Stat(expanded); err != nil || !dirInfo.IsDir() {
-						issues = append(issues, CfgIssue{fileID, "dossier", L("srv.configcheck.dirMissing", "A1", dir)})
+						missing := newCfgIssue(fileID, "dossier", L("srv.configcheck.dirMissing", "A1", dir))
+						missing.Dir = dir
+						issues = append(issues, missing)
 					}
 				}
 			}
@@ -317,14 +323,14 @@ func configHealth(files []ConfigFile, raw map[string]any) []CfgIssue {
 		}
 		for _, rule := range strList(allowRules) {
 			if denied[rule] {
-				issues = append(issues, CfgIssue{fileID, "permission", L("srv.configcheck.allowAndDeny", "A1", rule)})
+				issues = append(issues, newCfgIssue(fileID, "permission", L("srv.configcheck.allowAndDeny", "A1", rule)))
 			}
 		}
 		if enabledPlugins, found := lookup(doc, "enabledPlugins"); found && plugins != nil {
 			if enabledMap := asMap(enabledPlugins); enabledMap != nil {
 				for _, pluginID := range enabledMap.keys {
 					if enabled, _ := enabledMap.m[pluginID].(bool); enabled && !plugins[pluginID] {
-						issues = append(issues, CfgIssue{fileID, "plugin", L("srv.configcheck.pluginMissing", "A1", pluginID)})
+						issues = append(issues, newCfgIssue(fileID, "plugin", L("srv.configcheck.pluginMissing", "A1", pluginID)))
 					}
 				}
 			}
@@ -334,7 +340,7 @@ func configHealth(files []ConfigFile, raw map[string]any) []CfgIssue {
 				if envMap := asMap(envValue); envMap != nil {
 					for _, variableName := range envMap.keys {
 						if variableValue, _ := envMap.m[variableName].(string); secretKey.MatchString(variableName) && variableValue != "" {
-							issues = append(issues, CfgIssue{fileID, "secret", L("srv.configcheck.secretVar", "A1", variableName)})
+							issues = append(issues, newCfgIssue(fileID, "secret", L("srv.configcheck.secretVar", "A1", variableName)))
 						}
 					}
 				}

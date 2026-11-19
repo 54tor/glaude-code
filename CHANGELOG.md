@@ -5,6 +5,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 ## [Non publié]
 
 ### Ajouté
+- Configuration › Santé : un bouton « Retirer » supprime un dossier supplémentaire introuvable de `permissions.additionalDirectories` (aperçu et sauvegarde habituels).
 - Le dialogue « Pousser » propose les 30 tags locaux les plus récents (`GET /v1/git/tags`) : ceux qui sont cochés partent vers chaque remote choisi, après la branche (`tags` dans `POST /v1/git/push-runs`) ; une case « Forcer » écrase un tag déjà présent sur le remote (`forceTags`), jamais la branche.
 
 ### Corrigé

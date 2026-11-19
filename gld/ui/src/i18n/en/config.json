@@ -57,7 +57,8 @@
     "health": {
       "ok": "Nothing to report: valid JSON, hooks found, no duplicate rules and no missing plugins.",
       "fileProject": "project · {{dir}}",
-      "fileLocal": "local · {{dir}}"
+      "fileLocal": "local · {{dir}}",
+      "removeDir": "Remove"
     },
     "hooks": {
       "missing": "not found: {{path}}"

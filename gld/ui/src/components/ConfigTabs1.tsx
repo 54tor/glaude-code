@@ -2,10 +2,11 @@ import { useEffect, useState } from "react"
 import { AlertTriangle, CheckCircle2 } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import type { TFunction } from "i18next"
-import { api, type CfgIssue, type EffRow } from "@/lib/api"
+import { api, type CfgEdit, type CfgIssue, type EffRow } from "@/lib/api"
 import { describeKey } from "@/lib/configKeys"
 import { tilde } from "@/lib/format"
 import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Choose } from "./Choose"
@@ -33,10 +34,12 @@ export function HealthTab({
   issues,
   home,
   projects,
+  propose,
 }: {
   issues: CfgIssue[]
   home: string
   projects: { dir: string; project: string }[]
+  propose: (edit: CfgEdit) => Promise<unknown>
 }) {
   const { t } = useTranslation()
   if (!issues.length)
@@ -62,6 +65,23 @@ export function HealthTab({
             </span>
             <span className="break-words">{issue.msg}</span>
           </span>
+          {issue.dir && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="ml-auto shrink-0"
+              onClick={() =>
+                propose({
+                  file: issue.file,
+                  op: "remove",
+                  path: ["permissions", "additionalDirectories"],
+                  value: issue.dir,
+                })
+              }
+            >
+              {t("config.health.removeDir")}
+            </Button>
+          )}
         </li>
       ))}
     </ul>

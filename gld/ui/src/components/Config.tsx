@@ -252,6 +252,7 @@ export function Config({
               issues={overview.issues}
               home={home}
               projects={overview.projects}
+              propose={propose}
             />
           </TabsContent>
           <TabsContent value="projets">
