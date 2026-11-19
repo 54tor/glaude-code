@@ -215,7 +215,7 @@ func termWS(responseWriter http.ResponseWriter, request *http.Request) {
 			continue
 		}
 		if writable {
-			ptyFile.Write(data)
+			ptyFile.Write(dropCtrlMouseReports(data))
 		}
 	}
 }
