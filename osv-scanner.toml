@@ -1,7 +1,7 @@
 [[IgnoredVulns]]
-id = "GHSA-gcqx-w48m-w2h4"
+id = "GHSA-fc5q-39xc-vjpf"
 ignoreUntil = 2026-12-31
-reason = "deepmerge 4.3.1 est une dépendance de dev (shadcn) sans correctif publié ; absente du binaire et de l'interface livrée"
+reason = "advisory retiré (withdrawn) d'osv.dev, encore signalé sur picomatch jusqu'à 4.0.7 sans version corrigée ; picomatch est utilisé par les outils de build (vite, vitest, shadcn), absent du binaire"
 
 [[IgnoredVulns]]
 id = "GHSA-g3hv-75wg-m249"
