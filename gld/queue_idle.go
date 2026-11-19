@@ -66,9 +66,34 @@ func idleByScreen(sessionID string, now time.Time) bool {
 	return now.Sub(firstSeen) >= idleScreenSettle
 }
 
+// hasActiveTeammate : un coéquipier d'agent-teams est un processus à part, sans SubagentStart ; Claude Code tient son état dans isActive.
+func hasActiveTeammate(sessionID string) bool {
+	if len(sessionID) < teamShortIDLength {
+		return false
+	}
+	configContent, err := readTrusted(filepath.Join(cfgDir(), "teams", "session-"+sessionID[:teamShortIDLength], "config.json"))
+	var team struct {
+		Members []struct {
+			IsActive bool `json:"isActive"`
+		} `json:"members"`
+	}
+	if err != nil || json.Unmarshal(configContent, &team) != nil {
+		return false
+	}
+	for _, member := range team.Members {
+		if member.IsActive {
+			return true
+		}
+	}
+	return false
+}
+
 // hasRunningSubagent : les hooks de Claude Code d'abord ; à défaut (session ouverte avant leur installation), les fichiers
 // du sous-agent (meta.json + transcript), plus stables que le texte de l'écran.
 var hasRunningSubagent = func(sessionID string) bool {
+	if hasActiveTeammate(sessionID) {
+		return true
+	}
 	if running, known := subagentsFromEvents(readStateEvents(), sessionID); known {
 		return running
 	}

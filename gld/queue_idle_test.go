@@ -151,3 +151,38 @@ func TestIdleSessionWithRunningSubagentIsBusyAndNotWaiting(t *testing.T) {
 		t.Fatalf("statut attendu idle sans sous-agent, obtenu %q", status)
 	}
 }
+
+func writeTeamConfig(t *testing.T, sessionID, membersJSON string) {
+	t.Helper()
+	put(t, filepath.Join(cfgDir(), "teams", "session-"+sessionID[:teamShortIDLength], "config.json"), `{"members":`+membersJSON+`}`, old)
+}
+
+func TestShownStatusStaysBusyWhileATeammateIsActive(t *testing.T) {
+	use(t.TempDir())
+	put(t, filepath.Join(cfgDir(), "sessions", "1.json"), fmt.Sprintf(`{"pid":%d,"sessionId":%q,"status":"busy"}`, os.Getpid(), id1), old)
+	writeTeamConfig(t, id1, `[{"name":"team-lead"},{"name":"impl","isActive":true},{"name":"relecteur","isActive":false}]`)
+	screenFn = func(string) (string, error) { return "❯ \n", nil }
+	defer func() { screenFn = sessionScreen }()
+	idleSeenMu.Lock()
+	idleSeenAt[id1] = time.Now().Add(-idleScreenSettle)
+	idleSeenMu.Unlock()
+	statutAttendu, statutObtenu := "busy", ""
+	statutObtenu, _ = shownStatus(id1)
+	if statutObtenu != statutAttendu {
+		t.Fatalf("statutAttendu=%q statutObtenu=%q : coéquipier actif ignoré", statutAttendu, statutObtenu)
+	}
+}
+
+func TestShownStatusIsIdleWhenAllTeammatesAreInactive(t *testing.T) {
+	use(t.TempDir())
+	put(t, filepath.Join(cfgDir(), "sessions", "1.json"), fmt.Sprintf(`{"pid":%d,"sessionId":%q,"status":"busy"}`, os.Getpid(), id1), old)
+	writeTeamConfig(t, id1, `[{"name":"team-lead"},{"name":"impl","isActive":false}]`)
+	screenFn = func(string) (string, error) { return "❯ \n", nil }
+	defer func() { screenFn = sessionScreen }()
+	idleSeenMu.Lock()
+	idleSeenAt[id1] = time.Now().Add(-idleScreenSettle)
+	idleSeenMu.Unlock()
+	if statutObtenu, _ := shownStatus(id1); statutObtenu != "idle" {
+		t.Fatalf("statutAttendu=idle statutObtenu=%q", statutObtenu)
+	}
+}
