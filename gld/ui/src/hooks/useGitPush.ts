@@ -117,7 +117,8 @@ export function startGitPushes(
   dir: string,
   remotes: string[],
   branch: string,
-  tags: string[] = []
+  tags: string[] = [],
+  forceTags = false
 ) {
   if (isGitPushRunning(dir)) return
   const runId = openRun(dir, remotes, branch)
@@ -127,7 +128,8 @@ export function startGitPushes(
       remotes,
       onOutput,
       (serverId) => updateRun(runId, { serverId }),
-      tags
+      tags,
+      forceTags
     )
   )
 }

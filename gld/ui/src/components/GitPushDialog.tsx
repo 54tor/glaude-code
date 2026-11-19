@@ -27,6 +27,7 @@ export function GitPushDialog({ dir, branch, onOpenChange }: Props) {
   const [unpushed, setUnpushed] = useState<RemoteUnpushed[] | null>(null)
   const [hasPreviewFailed, setHasPreviewFailed] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [isForceTags, setIsForceTags] = useState(false)
   const [tags, setTags] = useState<string[]>([])
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set())
 
@@ -85,7 +86,8 @@ export function GitPushDialog({ dir, branch, onOpenChange }: Props) {
       dir,
       names,
       branch,
-      tags.filter((tag) => selectedTags.has(tag))
+      tags.filter((tag) => selectedTags.has(tag)),
+      isForceTags
     )
   }
 
@@ -196,6 +198,17 @@ export function GitPushDialog({ dir, branch, onOpenChange }: Props) {
                   </li>
                 ))}
               </ul>
+              {selectedTags.size > 0 && (
+                <label className="mt-2 flex cursor-pointer items-center gap-2 text-xs text-destructive">
+                  <Checkbox
+                    checked={isForceTags}
+                    onCheckedChange={(isChecked) =>
+                      setIsForceTags(isChecked === true)
+                    }
+                  />
+                  {t("conversation.gitPush.forceTags")}
+                </label>
+              )}
             </div>
           )}
         </div>

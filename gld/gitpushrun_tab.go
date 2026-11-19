@@ -36,7 +36,7 @@ func runPushSession(id string) int {
 	for remoteIndex := range status.Remotes {
 		status.Remotes[remoteIndex].State = pushStateRunning
 		writePushStatus(status)
-		exitCode := pushRemoteAndTags(status.Dir, status.Remotes[remoteIndex].Name, status.Tags, output)
+		exitCode := pushRemoteAndTags(status.Dir, status.Remotes[remoteIndex].Name, status.Tags, status.ForceTags, output)
 		status.Remotes[remoteIndex].Exit = &exitCode
 		status.Remotes[remoteIndex].State = pushStateSucceeded
 		if exitCode != 0 {
@@ -49,11 +49,16 @@ func runPushSession(id string) int {
 	return 0
 }
 
-// pushRemoteAndTags pousse la branche, puis les tags cochés (refs/tags/<nom>, jamais forcés) ; le premier code non nul est rendu.
-func pushRemoteAndTags(dir, remote string, tags []string, output io.Writer) int {
+// pushRemoteAndTags pousse la branche, puis les tags cochés (refs/tags/<nom>, forcés seulement sur demande explicite) ; le premier
+// code non nul est rendu.
+func pushRemoteAndTags(dir, remote string, tags []string, forceTags bool, output io.Writer) int {
+	tagArgs := []string{"push"}
+	if forceTags {
+		tagArgs = append(tagArgs, "--force")
+	}
 	exitCode := pushToRemoteOnTerminal(dir, remote, output)
 	for _, tag := range tags {
-		tagExitCode := pushRefOnTerminal(dir, []string{"push"}, remote, "refs/tags/"+tag, output)
+		tagExitCode := pushRefOnTerminal(dir, tagArgs, remote, "refs/tags/"+tag, output)
 		if exitCode == 0 {
 			exitCode = tagExitCode
 		}

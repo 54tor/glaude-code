@@ -1784,6 +1784,8 @@ paths:
                   type: array
                   items:
                     type: string
+                forceTags:
+                  type: boolean
       x-gld-right: exec
       responses:
         '201':

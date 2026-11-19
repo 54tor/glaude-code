@@ -48,6 +48,7 @@ type PushRunStatus struct {
 	Branch      string            `json:"branch"`
 	Remotes     []PushRemoteState `json:"remotes"`
 	Tags        []string          `json:"tags,omitempty"`
+	ForceTags   bool              `json:"forceTags,omitempty"`
 	Done        bool              `json:"done"`
 	Interrupted bool              `json:"interrupted,omitempty"` // calculé à la lecture, jamais écrit
 	Started     int64             `json:"started"`
@@ -129,12 +130,12 @@ func hasActivePushRun(dir string) bool {
 var errPushNoTmux = terr("srv.gitpushrun.noTmux")
 
 // startPushRun écrit l'état initial puis lance la session tmux qui pousse vers chaque remote, l'un après l'autre.
-func startPushRun(dir string, remotes, tags []string) (PushRunStatus, error) {
+func startPushRun(dir string, remotes, tags []string, forceTags bool) (PushRunStatus, error) {
 	branch, _ := gitOut1(dir, "symbolic-ref", "--short", "-q", "HEAD")
 	if !onPath("tmux") {
 		return PushRunStatus{}, errPushNoTmux
 	}
-	status := PushRunStatus{ID: newPushRunID(), Dir: dir, Branch: branch, Tags: tags, Started: time.Now().UnixMilli()}
+	status := PushRunStatus{ID: newPushRunID(), Dir: dir, Branch: branch, Tags: tags, ForceTags: forceTags, Started: time.Now().UnixMilli()}
 	for _, remote := range remotes {
 		status.Remotes = append(status.Remotes, PushRemoteState{Name: remote, State: pushStatePending})
 	}
@@ -187,7 +188,8 @@ func routesGitPushRuns(mux *http.ServeMux) {
 		var payload struct {
 			Dir     string
 			Remotes []string
-			Tags    []string
+			Tags      []string
+			ForceTags bool
 		}
 		if !decodeBody(responseWriter, request, &payload, pushRunBodyMax) {
 			return
@@ -215,7 +217,7 @@ func routesGitPushRuns(mux *http.ServeMux) {
 			writeErr(responseWriter, http.StatusConflict, "conflict", L("srv.gitpushrun.alreadyRunning"))
 			return
 		}
-		status, err := startPushRun(payload.Dir, payload.Remotes, payload.Tags)
+		status, err := startPushRun(payload.Dir, payload.Remotes, payload.Tags, payload.ForceTags)
 		if errors.Is(err, errPushNoTmux) {
 			writeErr(responseWriter, http.StatusNotImplemented, "not_implemented", err.Error())
 			return

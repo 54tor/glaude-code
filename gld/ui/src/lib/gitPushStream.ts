@@ -47,12 +47,14 @@ const exitCodeOfRun = (run: PushRunInfo) =>
 async function createPushRun(
   dir: string,
   remotes: string[],
-  tags: string[]
+  tags: string[],
+  forceTags: boolean
 ): Promise<PushRunInfo> {
   const response = await http.post<{ run: PushRunInfo }>("/git/push-runs", {
     dir,
     remotes,
     tags,
+    forceTags,
   })
   return response.run
 }
@@ -92,9 +94,10 @@ export async function streamGitPush(
   remotes: string[],
   onOutput: (chunk: Uint8Array) => void,
   onStarted?: (runId: string) => void,
-  tags: string[] = []
+  tags: string[] = [],
+  forceTags = false
 ): Promise<number> {
-  const run = await createPushRun(dir, remotes, tags)
+  const run = await createPushRun(dir, remotes, tags, forceTags)
   onStarted?.(run.id)
   return followGitPush(run.id, onOutput)
 }

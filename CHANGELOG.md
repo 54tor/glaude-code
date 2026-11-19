@@ -5,7 +5,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 ## [Non publié]
 
 ### Ajouté
-- Le dialogue « Pousser » propose les 30 tags locaux les plus récents (`GET /v1/git/tags`) : ceux qui sont cochés partent vers chaque remote choisi, après la branche, sans `--force` (`tags` dans `POST /v1/git/push-runs`).
+- Le dialogue « Pousser » propose les 30 tags locaux les plus récents (`GET /v1/git/tags`) : ceux qui sont cochés partent vers chaque remote choisi, après la branche (`tags` dans `POST /v1/git/push-runs`) ; une case « Forcer » écrase un tag déjà présent sur le remote (`forceTags`), jamais la branche.
 
 ## [0.16.0] - 2026-11-19
 
