@@ -41,6 +41,8 @@ jobs:
         working-directory: gld
         run: go run github.com/securego/gosec/v2/cmd/gosec@v2.30.0 -quiet -severity high -confidence medium ./...
       - name: osv-scanner
+        env:
+          GOTOOLCHAIN: auto # setup-go 7 fixe local ; osv-scanner exige un go plus récent que celui de gld
         run: go run github.com/google/osv-scanner/v2/cmd/osv-scanner@v2.7.0 scan source --config osv-scanner.toml -L gld/go.mod -L gld/ui/package-lock.json
       - name: gitleaks
         run: go run github.com/zricethezav/gitleaks/v8@v8.30.1 git --no-banner --redact .
