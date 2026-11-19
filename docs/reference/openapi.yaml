@@ -1747,6 +1747,125 @@ paths:
           $ref: '#/components/responses/Error'
         '403':
           $ref: '#/components/responses/Error'
+  /v1/git/push-runs:
+    get:
+      tags:
+      - git
+      operationId: getGitPushRuns
+      x-gld-right: exec
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+    post:
+      tags:
+      - git
+      operationId: postGitPushRuns
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                dir:
+                  type: string
+                remotes:
+                  type: array
+                  items:
+                    type: string
+      x-gld-right: exec
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/git/push-runs/{id}:
+    delete:
+      tags:
+      - git
+      operationId: deleteGitPushRunsId
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      x-gld-right: exec
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/git/push-runs/{id}/output:
+    get:
+      tags:
+      - git
+      operationId: getGitPushRunsIdOutput
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: string
+      x-gld-right: exec
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/git/unpushed:
+    get:
+      tags:
+      - git
+      operationId: getGitUnpushed
+      parameters:
+      - name: dir
+        in: query
+        required: false
+        schema:
+          type: string
+      x-gld-right: mem_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
   /v1/git/remotes:
     get:
       tags:
@@ -3571,6 +3690,34 @@ paths:
       - name: dir
         in: query
         required: false
+        schema:
+          type: string
+      x-gld-right: sessions_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/sessions/{id}/conversation/uploads/{up}/text:
+    get:
+      tags:
+      - sessions
+      operationId: getSessionsIdConversationUploadsUpText
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: up
+        in: path
+        required: true
         schema:
           type: string
       x-gld-right: sessions_read

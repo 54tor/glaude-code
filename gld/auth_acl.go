@@ -71,7 +71,7 @@ var routeRights = map[string]Right{
 	// Lecture du home et état d'interface par home.
 	"GET /v1/config": RightMemRead, "GET /v1/config/projects": RightMemRead, "GET /v1/config/effective": RightMemRead,
 	"GET /v1/config/mcp": RightMemRead, "GET /v1/config/output-styles": RightMemRead, "GET /v1/slash-commands": RightMemRead,
-	"GET /v1/git/status": RightMemRead, "GET /v1/git/changes": RightMemRead, "GET /v1/git/remotes": RightMemRead,
+	"GET /v1/git/status": RightMemRead, "GET /v1/git/changes": RightMemRead, "GET /v1/git/remotes": RightMemRead, "GET /v1/git/unpushed": RightMemRead,
 	"GET /v1/update": RightMemRead, "GET /v1/cleanup-warning": RightMemRead, "GET /v1/tabs": RightMemRead, "GET /v1/keepwarm": RightMemRead,
 	"GET /v1/builtin-rules": RightMemRead, "PUT /v1/builtin-rules": RightConfigWrite,
 	"GET /v1/session-hooks": RightMemRead, "PUT /v1/session-hooks": RightConfigWrite,
@@ -108,7 +108,7 @@ var routeRights = map[string]Right{
 	"PATCH /v1/fs/trash/{entry}": RightFsWrite, "DELETE /v1/fs/trash": RightFsWrite,
 	"GET /v1/terminal": RightExec, "POST /v1/terminal": RightExec, "GET /v1/terminal/ws": RightExec,
 	"POST /v1/sessions/{id}/messages": RightExec, "POST /v1/sessions/{id}/queue": RightExec, "DELETE /v1/sessions/{id}/queue/{qid}": RightExec, "PATCH /v1/sessions/{id}/queue/{qid}": RightExec, "POST /v1/invites": RightExec, "PUT /v1/invites/{invite}/token": RightExec, "PATCH /v1/invites/{invite}": RightExec, "DELETE /v1/invites/{invite}": RightExec, "DELETE /v1/shares/{share}": RightExec, "GET /v1/shares": RightExec, "POST /v1/sessions/{id}/keystrokes": RightExec, "DELETE /v1/sessions/{id}/process": RightExec,
-	"GET /v1/trust/pending": RightExec, "POST /v1/trust/answers": RightExec, "PUT /v1/sessions/{id}/process": RightExec, "PUT /v1/projects/{dir}/process": RightExec, "POST /v1/git/pushes": RightExec,
+	"GET /v1/trust/pending": RightExec, "POST /v1/trust/answers": RightExec, "PUT /v1/sessions/{id}/process": RightExec, "PUT /v1/projects/{dir}/process": RightExec, "POST /v1/git/pushes": RightExec, "POST /v1/git/push-runs": RightExec, "GET /v1/git/push-runs": RightExec, "GET /v1/git/push-runs/{id}/output": RightExec, "DELETE /v1/git/push-runs/{id}": RightExec,
 	"GET /v1/directories": RightExec, "POST /v1/directories": RightExec, "DELETE /v1/directories": RightExec, "POST /v1/uploads/images": RightExec, "POST /v1/uploads/files": RightExec,
 	// Agissent sur les sessions : fermeture, suppression de transcriptions, tours de modèle.
 	"DELETE /v1/sessions": RightExec, "DELETE /v1/sessions/{id}/conversation": RightExec, "PATCH /v1/sessions/{id}": RightExec, "PATCH /v1/sessions": RightExec, "PUT /v1/keepwarm": RightExec,
