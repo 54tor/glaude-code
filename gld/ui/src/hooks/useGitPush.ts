@@ -113,12 +113,21 @@ export function startGitPush(dir: string, remote: string, branch: string) {
 
 // Pousse vers plusieurs remotes l'un après l'autre : le serveur les enchaîne dans une seule session tmux, pour que les hooks
 // ne se marchent pas dessus et que la série aille au bout même si le navigateur se ferme.
-export function startGitPushes(dir: string, remotes: string[], branch: string) {
+export function startGitPushes(
+  dir: string,
+  remotes: string[],
+  branch: string,
+  tags: string[] = []
+) {
   if (isGitPushRunning(dir)) return
   const runId = openRun(dir, remotes, branch)
   followRun(runId, (onOutput) =>
-    streamGitPush(dir, remotes, onOutput, (serverId) =>
-      updateRun(runId, { serverId })
+    streamGitPush(
+      dir,
+      remotes,
+      onOutput,
+      (serverId) => updateRun(runId, { serverId }),
+      tags
     )
   )
 }

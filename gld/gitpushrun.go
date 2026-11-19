@@ -47,6 +47,7 @@ type PushRunStatus struct {
 	Dir         string            `json:"dir"`
 	Branch      string            `json:"branch"`
 	Remotes     []PushRemoteState `json:"remotes"`
+	Tags        []string          `json:"tags,omitempty"`
 	Done        bool              `json:"done"`
 	Interrupted bool              `json:"interrupted,omitempty"` // calculé à la lecture, jamais écrit
 	Started     int64             `json:"started"`
@@ -128,12 +129,12 @@ func hasActivePushRun(dir string) bool {
 var errPushNoTmux = terr("srv.gitpushrun.noTmux")
 
 // startPushRun écrit l'état initial puis lance la session tmux qui pousse vers chaque remote, l'un après l'autre.
-func startPushRun(dir string, remotes []string) (PushRunStatus, error) {
+func startPushRun(dir string, remotes, tags []string) (PushRunStatus, error) {
 	branch, _ := gitOut1(dir, "symbolic-ref", "--short", "-q", "HEAD")
 	if !onPath("tmux") {
 		return PushRunStatus{}, errPushNoTmux
 	}
-	status := PushRunStatus{ID: newPushRunID(), Dir: dir, Branch: branch, Started: time.Now().UnixMilli()}
+	status := PushRunStatus{ID: newPushRunID(), Dir: dir, Branch: branch, Tags: tags, Started: time.Now().UnixMilli()}
 	for _, remote := range remotes {
 		status.Remotes = append(status.Remotes, PushRemoteState{Name: remote, State: pushStatePending})
 	}
@@ -186,6 +187,7 @@ func routesGitPushRuns(mux *http.ServeMux) {
 		var payload struct {
 			Dir     string
 			Remotes []string
+			Tags    []string
 		}
 		if !decodeBody(responseWriter, request, &payload, pushRunBodyMax) {
 			return
@@ -200,6 +202,11 @@ func routesGitPushRuns(mux *http.ServeMux) {
 			writeErr(responseWriter, http.StatusBadRequest, "bad_request", L("srv.gitpushrun.badRemotes"))
 			return
 		}
+		knownTags := gitTagNames(payload.Dir)
+		if slices.ContainsFunc(payload.Tags, func(name string) bool { return !slices.Contains(knownTags, name) }) {
+			writeErr(responseWriter, http.StatusBadRequest, "bad_request", L("srv.gitpushrun.badTags"))
+			return
+		}
 		if branch, _ := gitOut1(payload.Dir, "symbolic-ref", "--short", "-q", "HEAD"); branch == "" {
 			writeErr(responseWriter, http.StatusConflict, "conflict", L("srv.gitpush.detached"))
 			return
@@ -208,7 +215,7 @@ func routesGitPushRuns(mux *http.ServeMux) {
 			writeErr(responseWriter, http.StatusConflict, "conflict", L("srv.gitpushrun.alreadyRunning"))
 			return
 		}
-		status, err := startPushRun(payload.Dir, payload.Remotes)
+		status, err := startPushRun(payload.Dir, payload.Remotes, payload.Tags)
 		if errors.Is(err, errPushNoTmux) {
 			writeErr(responseWriter, http.StatusNotImplemented, "not_implemented", err.Error())
 			return

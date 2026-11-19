@@ -639,6 +639,7 @@
       "position": "↑{{ahead}} ↓{{behind}}",
       "reading": "Lecture des remotes…",
       "none": "Aucun remote configuré",
+      "tagsTitle": "Tags à pousser aussi (sans --force)",
       "dialogTitle": "Pousser « {{branch}} »",
       "dialogHint": "Cochez les remotes à mettre à jour. Les commits listés sont ceux qui leur manquent.",
       "loadingCommits": "Lecture des commits…",

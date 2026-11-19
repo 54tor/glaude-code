@@ -27,6 +27,8 @@ export function GitPushDialog({ dir, branch, onOpenChange }: Props) {
   const [unpushed, setUnpushed] = useState<RemoteUnpushed[] | null>(null)
   const [hasPreviewFailed, setHasPreviewFailed] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [tags, setTags] = useState<string[]>([])
+  const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     let isCurrent = true
@@ -51,6 +53,10 @@ export function GitPushDialog({ dir, branch, onOpenChange }: Props) {
       },
       () => isCurrent && setHasPreviewFailed(true)
     )
+    api.gitTags(dir).then(
+      (response) => isCurrent && setTags(response.tags),
+      () => undefined
+    )
     return () => {
       isCurrent = false
     }
@@ -64,12 +70,23 @@ export function GitPushDialog({ dir, branch, onOpenChange }: Props) {
     else next.delete(name)
     setSelected(next)
   }
+  const toggleTag = (tag: string, isChecked: boolean) => {
+    const next = new Set(selectedTags)
+    if (isChecked) next.add(tag)
+    else next.delete(tag)
+    setSelectedTags(next)
+  }
   const pushSelected = () => {
     const names = (remotes ?? [])
       .map((remote) => remote.name)
       .filter((name) => selected.has(name))
     onOpenChange(false)
-    startGitPushes(dir, names, branch)
+    startGitPushes(
+      dir,
+      names,
+      branch,
+      tags.filter((tag) => selectedTags.has(tag))
+    )
   }
 
   return (
@@ -159,6 +176,28 @@ export function GitPushDialog({ dir, branch, onOpenChange }: Props) {
               </div>
             )
           })}
+          {tags.length > 0 && (
+            <div className="rounded-md border p-2">
+              <p className="mb-1 text-sm font-medium">
+                {t("conversation.gitPush.tagsTitle")}
+              </p>
+              <ul className="max-h-40 overflow-y-auto">
+                {tags.map((tag) => (
+                  <li key={tag}>
+                    <label className="flex cursor-pointer items-center gap-2 font-mono text-xs">
+                      <Checkbox
+                        checked={selectedTags.has(tag)}
+                        onCheckedChange={(isChecked) =>
+                          toggleTag(tag, isChecked === true)
+                        }
+                      />
+                      {tag}
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>

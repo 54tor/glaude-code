@@ -590,6 +590,7 @@
   "srv.backup_cmds.valeurRefusee": "value refused (starts with a dash): {{.A1}}",
   "srv.backup_cmds.mcpPasUnObjet": "MCP server {{.A1}} is not a JSON object",
   "srv.gitpushrun.noTmux": "tmux is required to push: the push must survive a gld restart",
+  "srv.gitpushrun.badTags": "Some selected tags do not exist in this repository",
   "srv.gitpushrun.badRemotes": "Pick at least one existing remote",
   "srv.gitpushrun.alreadyRunning": "A push of this repository is already running",
   "srv.gitpushrun.stillRunning": "This push is still running"

@@ -1780,6 +1780,10 @@ paths:
                   type: array
                   items:
                     type: string
+                tags:
+                  type: array
+                  items:
+                    type: string
       x-gld-right: exec
       responses:
         '201':
@@ -1832,6 +1836,29 @@ paths:
         schema:
           type: string
       x-gld-right: exec
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/git/tags:
+    get:
+      tags:
+      - git
+      operationId: getGitTags
+      parameters:
+      - name: dir
+        in: query
+        required: false
+        schema:
+          type: string
+      x-gld-right: mem_read
       responses:
         '200':
           description: OK

@@ -36,7 +36,7 @@ func runPushSession(id string) int {
 	for remoteIndex := range status.Remotes {
 		status.Remotes[remoteIndex].State = pushStateRunning
 		writePushStatus(status)
-		exitCode := pushToRemoteOnTerminal(status.Dir, status.Remotes[remoteIndex].Name, output)
+		exitCode := pushRemoteAndTags(status.Dir, status.Remotes[remoteIndex].Name, status.Tags, output)
 		status.Remotes[remoteIndex].Exit = &exitCode
 		status.Remotes[remoteIndex].State = pushStateSucceeded
 		if exitCode != 0 {
@@ -49,6 +49,18 @@ func runPushSession(id string) int {
 	return 0
 }
 
+// pushRemoteAndTags pousse la branche, puis les tags cochés (refs/tags/<nom>, jamais forcés) ; le premier code non nul est rendu.
+func pushRemoteAndTags(dir, remote string, tags []string, output io.Writer) int {
+	exitCode := pushToRemoteOnTerminal(dir, remote, output)
+	for _, tag := range tags {
+		tagExitCode := pushRefOnTerminal(dir, []string{"push"}, remote, "refs/tags/"+tag, output)
+		if exitCode == 0 {
+			exitCode = tagExitCode
+		}
+	}
+	return exitCode
+}
+
 // pushToRemoteOnTerminal pousse HEAD vers remote ; sans amont, la branche est liée à ce remote (-u). Jamais de --force ni d'invite :
 // un identifiant demandé fait échouer le push avec le message de git.
 func pushToRemoteOnTerminal(dir, remote string, output io.Writer) int {
@@ -56,9 +68,13 @@ func pushToRemoteOnTerminal(dir, remote string, output io.Writer) int {
 	if upstream, _ := gitOut1(dir, "rev-parse", "--abbrev-ref", "@{u}"); upstream == "" {
 		args = append(args, "-u")
 	}
+	return pushRefOnTerminal(dir, args, remote, "HEAD", output)
+}
+
+func pushRefOnTerminal(dir string, args []string, remote, ref string, output io.Writer) int {
 	commandContext, cancel := context.WithTimeout(context.Background(), gitPushTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(commandContext, "git", append(args, "--", remote, "HEAD")...) // #nosec G702 -- exécutable fixe, arguments en tableau, sans shell
+	cmd := exec.CommandContext(commandContext, "git", append(args, "--", remote, ref)...) // #nosec G702 -- exécutable fixe, arguments en tableau, sans shell
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
 	if os.Getenv("GIT_SSH_COMMAND") == "" {

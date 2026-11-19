@@ -744,6 +744,8 @@ export const api = {
   trustPending: () => http.get<{ dirs: string[] }>("/trust/pending"),
   gitRemotes: (dir: string) =>
     http.get<{ remotes: GitRemote[] }>(`/git/remotes${qs({ dir })}`),
+  gitTags: (dir: string) =>
+    http.get<{ tags: string[] }>(`/git/tags${qs({ dir })}`),
   gitUnpushed: (dir: string) =>
     http.get<{ remotes: RemoteUnpushed[] }>(`/git/unpushed${qs({ dir })}`),
   gitStatus: () =>

@@ -201,6 +201,7 @@
       "stopSent": "Stop requested from the session",
       "title": "Session background tasks (background commands, Monitor, workflows)",
       "count": "{{n}} task(s)",
+      "tagsTitle": "Also push these tags (never forced)",
       "dialogTitle": "Background tasks ({{n}})",
       "description": "Read from the session transcript; click one to see its output.",
       "open": "Show output",
