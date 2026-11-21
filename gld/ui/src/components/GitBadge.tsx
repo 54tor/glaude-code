@@ -80,7 +80,13 @@ export function SessionCount({
 }
 
 // Vue projet : branche, changements, avance et retard sur l'amont.
-export function GitBadge({ st }: { st: GitState | undefined }) {
+export function GitBadge({
+  st,
+  hideClean,
+}: {
+  st: GitState | undefined
+  hideClean?: boolean
+}) {
   const { t } = useTranslation()
   if (!st) return null
   const branch = st.detached ? t("conversation.git.detached") : st.branch
@@ -150,7 +156,7 @@ export function GitBadge({ st }: { st: GitState | undefined }) {
           })}
         </span>
       )}
-      {isClean && <span>{t("conversation.git.clean")}</span>}
+      {isClean && !hideClean && <span>{t("conversation.git.clean")}</span>}
     </span>
   )
 }

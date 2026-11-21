@@ -10,12 +10,14 @@ export function GitRepo({
   dir,
   st,
   chip,
+  hideClean,
 }: {
   dir: string
   st: GitState | undefined
   chip?: boolean
+  hideClean?: boolean
 }) {
-  const badge = <GitBadge st={st} />
+  const badge = <GitBadge st={st} hideClean={hideClean} />
   return (
     <>
       {chip ? <Chip>{badge}</Chip> : badge}
