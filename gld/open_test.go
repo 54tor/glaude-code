@@ -25,7 +25,7 @@ func TestSafeTitle(t *testing.T) {
 
 // Le titre d'une session (donnée non fiable) ne doit pas ajouter de propriété de profil Konsole (« ; » sépare les propriétés de -p).
 func TestLauncherCmdAssainitLeTitrePourKonsole(t *testing.T) {
-	commandeObtenue, launchErr := launcherCmd("konsole", "projet;Command=/bin/sh", []string{"claude"})
+	commandeObtenue, launchErr := launcherCmd("konsole", "projet;Command=/bin/sh", "", []string{"claude"})
 	if launchErr != nil {
 		t.Fatal(launchErr)
 	}

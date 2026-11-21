@@ -9,6 +9,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Le dialogue « Pousser » propose les 30 tags locaux les plus récents (`GET /v1/git/tags`) : ceux qui sont cochés partent vers chaque remote choisi, après la branche (`tags` dans `POST /v1/git/push-runs`) ; une case « Forcer » écrase un tag déjà présent sur le remote (`forceTags`), jamais la branche.
 
 ### Corrigé
+- Une session ouverte dans tmux depuis gld démarre dans le dossier de son projet : un nouvel onglet tmux ouvert à la main s'y place, au lieu du dossier de gld.
 - Une session dont un coéquipier d'agent-teams travaille encore reste « occupée » (au lieu de passer « attend votre message » quand l'écran semble au repos), et la file d'attente n'y envoie plus de message.
 
 ## [0.16.0] - 2026-11-19

@@ -212,20 +212,20 @@ func TestLauncherCmd(t *testing.T) {
 		"terminator":     `terminator --new-tab -T T -e '/b/gld' '_run' '/tmp/x it'\''s.json'`,
 	}
 	for name, want := range cases {
-		cmd, err := launcherCmd(name, "T", argv)
+		cmd, err := launcherCmd(name, "T", "", argv)
 		if err != nil || strings.Join(cmd.Args, " ") != want {
 			t.Errorf("%s : %v %q", name, err, strings.Join(cmd.Args, " "))
 		}
 	}
-	if cmd, _ := launcherCmd("tmux", "x #(touch /tmp/pwn) #{a}", argv); cmd.Args[3] != "x ##(touch /tmp/pwn) ##{a}" {
+	if cmd, _ := launcherCmd("tmux", "x #(touch /tmp/pwn) #{a}", "", argv); cmd.Args[3] != "x ##(touch /tmp/pwn) ##{a}" {
 		t.Errorf("tmux : titre non neutralisé : %q", cmd.Args[3])
 	}
 	t.Setenv("WSL_DISTRO_NAME", "Ubuntu")
-	localCmd, _ := launcherCmd("wt", "a;b\"c", argv)
+	localCmd, _ := launcherCmd("wt", "a;b\"c", "", argv)
 	if got := strings.Join(localCmd.Args, " "); !strings.HasPrefix(got, "wt.exe -w 0 new-tab --title a b c wsl.exe -d Ubuntu -- /b/gld _run") {
 		t.Errorf("wt : %q", got)
 	}
-	if _, err := launcherCmd("inconnu", "T", argv); err == nil {
+	if _, err := launcherCmd("inconnu", "T", "", argv); err == nil {
 		t.Error("lanceur inconnu accepté")
 	}
 	if got := claudeTabArgs([]string{"-x"}, "", "p"); strings.Join(got, "|") != "-x|--|p" {
@@ -276,7 +276,7 @@ func TestAliasDeProjet(t *testing.T) {
 }
 
 func TestLanceurEmulateurTmux(t *testing.T) {
-	cmd, err := launcherCmd("konsole+tmux", "T #(x)", []string{"/b/gld", "_run", "/tmp/a b.json"})
+	cmd, err := launcherCmd("konsole+tmux", "T #(x)", "", []string{"/b/gld", "_run", "/tmp/a b.json"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -287,7 +287,7 @@ func TestLanceurEmulateurTmux(t *testing.T) {
 }
 
 func TestLanceurTerminatorTmux(t *testing.T) {
-	cmd, err := launcherCmd("terminator-tmux", "Mon #(x) titre", []string{"/bin/gld", "_run", "/tmp/a b.json"})
+	cmd, err := launcherCmd("terminator-tmux", "Mon #(x) titre", "", []string{"/bin/gld", "_run", "/tmp/a b.json"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -313,5 +313,24 @@ func TestSauvegardeTabsIgnoreLesEquipiers(t *testing.T) {
 	got, err := readTabs([]byte(old))
 	if err != nil || len(got) != 1 || len(got[0].Sessions) != 1 || got[0].Sessions[0].ID != id1 {
 		t.Fatalf("readTabs : %v %v", got, err)
+	}
+}
+
+func TestLanceursTmuxPartentDuDossierDuProjet(t *testing.T) {
+	argv := []string{"/b/gld", "_run", "/tmp/x.json"}
+	cases := map[string]string{
+		"tmux":            "tmux new-window -c /p/projet -n T ",
+		"konsole+tmux":    "-e tmux new-session -c /p/projet -n T ",
+		"terminator-tmux": "tmux new-session -c '/p/projet' -n 'T' ",
+	}
+	for launcher, fragmentAttendu := range cases {
+		cmd, err := launcherCmd(launcher, "T", "/p/projet", argv)
+		if err != nil {
+			t.Fatal(err)
+		}
+		valeurObtenue := strings.Join(cmd.Args, " ")
+		if !strings.Contains(valeurObtenue, fragmentAttendu) {
+			t.Errorf("%s : valeurAttendue contient %q, valeurObtenue %q", launcher, fragmentAttendu, valeurObtenue)
+		}
 	}
 }

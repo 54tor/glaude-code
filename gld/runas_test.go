@@ -247,7 +247,7 @@ func TestRunAsUnsetIsNoop(t *testing.T) {
 	if extraCmd.Env != nil || extraCmd.SysProcAttr != nil {
 		t.Errorf("Env ou SysProcAttr créés sans GLD_RUN_AS : %v %+v", extraCmd.Env, extraCmd.SysProcAttr)
 	}
-	if cmd, _ := launcherCmd("tmux", "t", []string{"x"}); slices.Contains(cmd.Args, "-d") {
+	if cmd, _ := launcherCmd("tmux", "t", "", []string{"x"}); slices.Contains(cmd.Args, "-d") {
 		t.Errorf("lanceur tmux détaché sans GLD_RUN_AS : %v", cmd.Args)
 	}
 }
@@ -258,7 +258,7 @@ func TestRunAsLauncherIsDetachedTmux(t *testing.T) {
 	if launcherAvailable("kitty") || launcherAvailable("terminator-tmux") || tmuxLauncher() != "" {
 		t.Error("un émulateur de bureau est proposé sous GLD_RUN_AS")
 	}
-	cmd, err := launcherCmd("tmux", "a#b", []string{"/usr/bin/gld", "_run", "/tmp/x.json"})
+	cmd, err := launcherCmd("tmux", "a#b", "", []string{"/usr/bin/gld", "_run", "/tmp/x.json"})
 	if err != nil || !slices.Equal(cmd.Args[:9], []string{"tmux", "new-session", "-d", "-x", "160", "-y", "48", "-n", "a##b"}) {
 		t.Errorf("lanceur : %v %v", cmd, err)
 	}

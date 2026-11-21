@@ -88,12 +88,23 @@ func shJoin(argv []string) string {
 	return strings.Join(quoted, " ")
 }
 
-// launcherCmd : la commande qui ouvre un onglet intitulé title exécutant argv.
-func launcherCmd(name, title string, argv []string) (*exec.Cmd, error) {
+// tmuxCwd : « -c dossier » pour tmux, afin qu'un nouvel onglet ouvert à la main dans la session parte du dossier du projet
+// et non de celui de gld ; rien si le dossier est inconnu.
+func tmuxCwd(cwd string) []string {
+	if cwd == "" {
+		return nil
+	}
+	return []string{"-c", cwd}
+}
+
+// launcherCmd : la commande qui ouvre un onglet intitulé title, dans cwd pour les lanceurs tmux, exécutant argv.
+func launcherCmd(name, title, cwd string, argv []string) (*exec.Cmd, error) {
 	// « <émulateur>+tmux » : la session tourne dans tmux au sein de l'onglet, donc joignable par « Envoyer à la session ».
 	if base, hasTmuxSuffix := strings.CutSuffix(name, "+tmux"); hasTmuxSuffix {
-		return launcherCmd(base, title, []string{"tmux", "new-session", "-n", strings.ReplaceAll(title, "#", "##"), shJoin(argv),
-			";", "set-option", "set-titles", "on", ";", "set-option", "set-titles-string", "#T"})
+		tmuxArgv := append([]string{"tmux", "new-session"}, tmuxCwd(cwd)...)
+		tmuxArgv = append(tmuxArgv, "-n", strings.ReplaceAll(title, "#", "##"), shJoin(argv),
+			";", "set-option", "set-titles", "on", ";", "set-option", "set-titles-string", "#T")
+		return launcherCmd(base, title, cwd, tmuxArgv)
 	}
 	with := func(prefix ...string) *exec.Cmd {
 		return exec.Command(prefix[0], append(prefix[1:], argv...)...) // #nosec G702 -- exécutable fixe, arguments en tableau, sans shell
@@ -101,10 +112,12 @@ func launcherCmd(name, title string, argv []string) (*exec.Cmd, error) {
 	switch name {
 	case "tmux":
 		if tmuxDetached() {
-			return exec.Command("tmux", "new-session", "-d", "-x", "160", "-y", "48", "-n", strings.ReplaceAll(title, "#", "##"), shJoin(argv)), nil
+			detachedArgs := append([]string{"new-session", "-d", "-x", "160", "-y", "48"}, tmuxCwd(cwd)...)
+			return exec.Command("tmux", append(detachedArgs, "-n", strings.ReplaceAll(title, "#", "##"), shJoin(argv))...), nil
 		}
 		// -n passe par l'expansion de formats de tmux : « #(commande) » d'un titre s'exécuterait. « ## » est un « # » littéral.
-		return exec.Command("tmux", "new-window", "-n", strings.ReplaceAll(title, "#", "##"), shJoin(argv)), nil
+		windowArgs := append([]string{"new-window"}, tmuxCwd(cwd)...)
+		return exec.Command("tmux", append(windowArgs, "-n", strings.ReplaceAll(title, "#", "##"), shJoin(argv))...), nil
 	case "kitty":
 		return with("kitty", "@", "launch", "--type=tab", "--tab-title", title), nil
 	case "wezterm":
@@ -116,7 +129,11 @@ func launcherCmd(name, title string, argv []string) (*exec.Cmd, error) {
 		}
 		return with("wt.exe", "-w", "0", "new-tab", "--title", windowsTitle), nil
 	case "terminator-tmux":
-		return exec.Command("terminator", "--new-tab", "-T", title, "-e", "tmux new-session -n "+shq(strings.ReplaceAll(title, "#", "##"))+" "+shq(shJoin(argv))+
+		startDir := ""
+		if cwd != "" {
+			startDir = "-c " + shq(cwd) + " "
+		}
+		return exec.Command("terminator", "--new-tab", "-T", title, "-e", "tmux new-session "+startDir+"-n "+shq(strings.ReplaceAll(title, "#", "##"))+" "+shq(shJoin(argv))+
 			// le titre que Claude Code émet (OSC) devient celui de l'onglet Terminator
 			` \; set-option set-titles on \; set-option set-titles-string '#T'`), nil
 	case "terminator":
@@ -151,7 +168,7 @@ var openTab = func(launcher, title string, spec tabSpec) error {
 	if err != nil {
 		return err
 	}
-	command, err := launcherCmd(launcher, title, []string{self, "_run", specFile})
+	command, err := launcherCmd(launcher, title, spec.Cwd, []string{self, "_run", specFile})
 	if err == nil {
 		command.Env = environNoAuth()
 		applyRunAs(command)
