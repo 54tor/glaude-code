@@ -27,6 +27,7 @@ import {
   X,
   Ellipsis,
   Globe,
+  Plus,
 } from "lucide-react"
 import { tilde } from "@/lib/format"
 import { href, type Route } from "@/lib/route"
@@ -402,6 +403,7 @@ export type SidebarProps = {
   now: number
   ttl: number // durée du cache, en secondes
   snippets: number | null // null : bibliothèque non configurée
+  onNewSession: () => void
   auto: { n: number; purge: () => void; on: boolean }
   args: string // arguments de lancement des Réglages, rappelés en bas du menu
 }
@@ -647,6 +649,14 @@ export function Sidebar({ searchRef, ...props }: SidebarProps) {
             reload={props.reload}
           />
           <nav className="px-2 pb-3" aria-label={t("shell.sidebar.navigation")}>
+            {show(t("shell.sidebar.newSession")) && (
+              <NavItem
+                icon={Plus}
+                label={t("shell.sidebar.newSession")}
+                active={false}
+                onClick={props.onNewSession}
+              />
+            )}
             {show(t("shell.app.title.home")) && (
               <NavItem
                 icon={LayoutDashboard}

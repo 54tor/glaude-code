@@ -99,6 +99,7 @@ const buildActions = (overrides: ActionOverrides = {}) => {
 }
 
 const baseProps = (overrides: Partial<SidebarProps> = {}): SidebarProps => ({
+  onNewSession: vi.fn(),
   open: true,
   onClose: vi.fn(),
   loading: false,
@@ -222,6 +223,17 @@ describe("Sidebar — navigation", () => {
   it("snippets null : pas d'entrée", async () => {
     await mount({ snippets: null })
     expect(screen.queryByRole("link", { name: /Snippets/ })).toBeNull()
+  })
+
+  it("nouvelle session : premier item du menu, appelle onNewSession au clic", async () => {
+    const onNewSession = vi.fn()
+    await mount({ onNewSession })
+    const navButtons = within(screen.getByRole("navigation")).getAllByRole(
+      "button"
+    )
+    expect(navButtons[0].textContent).toContain("Nouvelle session")
+    fireEvent.click(navButtons[0])
+    expect(onNewSession).toHaveBeenCalledTimes(1)
   })
 
   it("carrousel : compte les sessions en attente et démarre au clic", async () => {

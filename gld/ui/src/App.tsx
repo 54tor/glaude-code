@@ -850,6 +850,10 @@ function Shell() {
             purge: purgeAuto,
             on: route.kind === "auto",
           }}
+          onNewSession={() => {
+            setNavOpen(false)
+            newSession(t("shell.sidebar.newSession"), "", targets())
+          }}
           args={args}
         />
 
