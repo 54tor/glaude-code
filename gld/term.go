@@ -89,12 +89,12 @@ func shJoin(argv []string) string {
 }
 
 // tmuxCwd : « -c dossier » pour tmux, afin qu'un nouvel onglet ouvert à la main dans la session parte du dossier du projet
-// et non de celui de gld ; rien si le dossier est inconnu.
+// et non de celui de gld ; rien si le dossier est inconnu. tmux étend les formats de -c : « # » est doublé comme pour -n.
 func tmuxCwd(cwd string) []string {
 	if cwd == "" {
 		return nil
 	}
-	return []string{"-c", cwd}
+	return []string{"-c", strings.ReplaceAll(cwd, "#", "##")}
 }
 
 // launcherCmd : la commande qui ouvre un onglet intitulé title, dans cwd pour les lanceurs tmux, exécutant argv.
@@ -131,7 +131,7 @@ func launcherCmd(name, title, cwd string, argv []string) (*exec.Cmd, error) {
 	case "terminator-tmux":
 		startDir := ""
 		if cwd != "" {
-			startDir = "-c " + shq(cwd) + " "
+			startDir = "-c " + shq(strings.ReplaceAll(cwd, "#", "##")) + " "
 		}
 		return exec.Command("terminator", "--new-tab", "-T", title, "-e", "tmux new-session "+startDir+"-n "+shq(strings.ReplaceAll(title, "#", "##"))+" "+shq(shJoin(argv))+
 			// le titre que Claude Code émet (OSC) devient celui de l'onglet Terminator

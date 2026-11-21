@@ -334,3 +334,14 @@ func TestLanceursTmuxPartentDuDossierDuProjet(t *testing.T) {
 		}
 	}
 }
+
+func TestLanceurTmuxEchappeLesFormatsDuDossier(t *testing.T) {
+	cmd, err := launcherCmd("tmux", "T", "/p/#(touch /tmp/pwn)", []string{"/b/gld"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	valeurAttendue := "/p/##(touch /tmp/pwn)"
+	if valeurObtenue := cmd.Args[3]; valeurObtenue != valeurAttendue {
+		t.Errorf("valeurAttendue %q, valeurObtenue %q", valeurAttendue, valeurObtenue)
+	}
+}
