@@ -54,7 +54,7 @@ export function GitRepos({
               <span className="truncate font-medium">
                 {repoDir.split("/").filter(Boolean).pop()}
               </span>
-              <Chip className="justify-self-start">
+              <Chip className="justify-self-end">
                 <GitBadge st={status[repoDir]} hideClean />
               </Chip>
               <span className="flex items-center justify-end gap-1.5">
