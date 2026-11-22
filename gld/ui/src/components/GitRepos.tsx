@@ -52,7 +52,7 @@ export function GitRepos({
               <span className="font-medium whitespace-nowrap">
                 {repoDir.split("/").filter(Boolean).pop()}
               </span>
-              <span className="flex flex-wrap items-center gap-1.5">
+              <span className="flex items-center gap-1.5 [&>:nth-child(2)]:ml-auto">
                 <GitRepo dir={repoDir} st={status[repoDir]} chip hideClean />
               </span>
             </li>
