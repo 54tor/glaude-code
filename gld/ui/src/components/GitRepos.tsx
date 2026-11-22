@@ -48,13 +48,16 @@ export function GitRepos({
         </Button>
       </PopoverTrigger>
       <PopoverContent>
-        <ul className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-3 gap-y-1.5 text-xs">
+        <ul className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 text-xs">
           {dirsToPushFirst.map((repoDir) => (
             <li key={repoDir} className="contents" title={repoDir}>
               <span className="truncate font-medium">
                 {repoDir.split("/").filter(Boolean).pop()}
               </span>
               <span className="flex items-center justify-end gap-1.5">
+                <Chip>
+                  <GitBadge st={status[repoDir]} hideClean />
+                </Chip>
                 <GitPush dir={repoDir} st={status[repoDir]} />
                 <GitChanges
                   dir={repoDir}
@@ -65,9 +68,6 @@ export function GitRepos({
                   }
                 />
               </span>
-              <Chip className="justify-self-end">
-                <GitBadge st={status[repoDir]} hideClean />
-              </Chip>
             </li>
           ))}
         </ul>
