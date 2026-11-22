@@ -206,6 +206,17 @@ func TestGuestReadOnlyCannotQueue(t *testing.T) {
 	}
 }
 
+func TestGuestWriterCannotStartBashMode(t *testing.T) {
+	handler := guestWeb(t, nil, modeTok)
+	content, csrf := guestIn(t, handler)
+	for _, text := range []string{"!ls", "  !rm x"} {
+		recorder := gReq{method: "POST", path: "/v1/sessions/" + id1 + "/queue", body: `{"text":"` + text + `"}`, cookie: content, csrf: csrf}.do(handler)
+		if recorder.Code != 403 {
+			t.Fatalf("texte %q : codeObtenu=%d, codeAttendu=403", text, recorder.Code)
+		}
+	}
+}
+
 func TestGuestCanRemoveOnlyOwnItems(t *testing.T) {
 	handler := guestWeb(t, nil, modeTok)
 	content, csrf := guestIn(t, handler)

@@ -503,6 +503,10 @@ func guestServe(mux *http.ServeMux, share Share, invitation Invite, secret, hand
 				guestDeny(responseWriter, 403, "srv.share_guest.lectureSeule")
 				return
 			}
+			if strings.HasPrefix(strings.TrimSpace(body.Text), "!") {
+				guestDeny(responseWriter, 403, "srv.share_guest.modeBashInterdit")
+				return
+			}
 			if !guestAddTry(invitation.ID) {
 				responseWriter.Header().Set("Retry-After", "60")
 				guestDeny(responseWriter, 429, "srv.share_guest.tropDeMessages")
