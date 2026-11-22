@@ -8,6 +8,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Un bouton « Nouvelle session » ouvre la saisie d'un prompt en tête du menu latéral, avec le choix du dossier.
 - Configuration › Santé : un bouton « Retirer » supprime un dossier supplémentaire introuvable de `permissions.additionalDirectories` (aperçu et sauvegarde habituels).
 - Le dialogue « Pousser » propose les 30 tags locaux les plus récents (`GET /v1/git/tags`) : ceux qui sont cochés partent vers chaque remote choisi, après la branche (`tags` dans `POST /v1/git/push-runs`) ; une case « Forcer » écrase un tag déjà présent sur le remote (`forceTags`), jamais la branche.
+- Un texte collé de plus de 1000 lignes ou 32000 caractères est joint comme fichier `paste.txt` au lieu d'être tronqué dans la zone de saisie.
 - Un invité en écriture ne peut plus lancer le mode bash : un message commençant par `!` est refusé (403).
 
 ### Modifié

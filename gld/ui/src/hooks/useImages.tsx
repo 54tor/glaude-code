@@ -17,6 +17,12 @@ const PREVIEWABLE_IMAGE_TYPES = [
   "image/webp",
 ]
 
+const LONG_PASTE_LINES = 1000
+const LONG_PASTE_CHARS = 32000
+
+export const isLongPaste = (text: string) =>
+  text.length > LONG_PASTE_CHARS || text.split("\n").length > LONG_PASTE_LINES
+
 const filesOf = (transfer: DataTransfer | null) =>
   Array.from(transfer?.files ?? [])
 
@@ -80,7 +86,13 @@ export function useImages(sid?: string) {
     // Un collage de fichier n'insère pas de texte : on le prend, le reste suit son cours normal.
     onPaste: (event: React.ClipboardEvent) => {
       const files = filesOf(event.clipboardData)
-      if (!files.length) return
+      if (!files.length) {
+        const text = event.clipboardData?.getData("text/plain") ?? ""
+        if (!isLongPaste(text)) return
+        event.preventDefault()
+        add([new File([text], "paste.txt", { type: "text/plain" })])
+        return
+      }
       event.preventDefault()
       add(files)
     },
