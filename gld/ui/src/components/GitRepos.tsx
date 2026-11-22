@@ -8,8 +8,10 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
-import { GitRepo } from "./GitRepo"
-import { needsPush } from "./GitPush"
+import { Chip } from "@/components/ui/chip"
+import { GitBadge } from "./GitBadge"
+import { GitChanges } from "./GitChanges"
+import { GitPush, needsPush } from "./GitPush"
 
 // Les dépôts des dossiers ajoutés à la session : une pastille résumé, et une liste à l'ouverture avec, par dépôt, la branche, les
 // changements et le bouton Pousser. Les dépôts à pousser sont en tête.
@@ -46,14 +48,25 @@ export function GitRepos({
         </Button>
       </PopoverTrigger>
       <PopoverContent>
-        <ul className="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-1.5 text-xs">
+        <ul className="grid grid-cols-[auto_auto_1fr] items-center gap-x-3 gap-y-1.5 text-xs">
           {dirsToPushFirst.map((repoDir) => (
             <li key={repoDir} className="contents" title={repoDir}>
               <span className="font-medium whitespace-nowrap">
                 {repoDir.split("/").filter(Boolean).pop()}
               </span>
-              <span className="flex items-center gap-1.5 [&>:nth-child(2)]:ml-auto">
-                <GitRepo dir={repoDir} st={status[repoDir]} chip hideClean />
+              <Chip>
+                <GitBadge st={status[repoDir]} hideClean />
+              </Chip>
+              <span className="flex items-center justify-end gap-1.5">
+                <GitPush dir={repoDir} st={status[repoDir]} />
+                <GitChanges
+                  dir={repoDir}
+                  count={
+                    status[repoDir]
+                      ? status[repoDir].changed + status[repoDir].untracked
+                      : 0
+                  }
+                />
               </span>
             </li>
           ))}
