@@ -54,10 +54,10 @@ export function GitRepos({
               <span className="truncate font-medium">
                 {repoDir.split("/").filter(Boolean).pop()}
               </span>
-              <Chip>
+              <Chip className="justify-self-start">
                 <GitBadge st={status[repoDir]} hideClean />
               </Chip>
-              <span className="flex items-center gap-1.5">
+              <span className="flex items-center justify-end gap-1.5">
                 <GitPush dir={repoDir} st={status[repoDir]} />
                 <GitChanges
                   dir={repoDir}
