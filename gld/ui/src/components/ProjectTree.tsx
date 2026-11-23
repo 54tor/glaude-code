@@ -19,6 +19,7 @@ import { tilde } from "@/lib/format"
 import { CM, GroupItems } from "./SessionMenu"
 import { cn } from "@/lib/utils"
 import { sorted, type Node } from "@/lib/tree"
+import { DIR_MIME } from "@/lib/dnd"
 import {
   ContextMenu,
   ContextMenuContent,
@@ -334,6 +335,10 @@ function Item({
             <button
               className="flex min-w-0 flex-1 items-center gap-2 text-left outline-none after:absolute after:inset-0 after:rounded-md focus-visible:after:ring-2 focus-visible:after:ring-ring/80"
               onClick={selectNode}
+              draggable={!!folder}
+              onDragStart={(event) => {
+                if (folder) event.dataTransfer.setData(DIR_MIME, folder.project)
+              }}
               title={folder?.project ?? label ?? node.name}
               aria-current={active}
             >
