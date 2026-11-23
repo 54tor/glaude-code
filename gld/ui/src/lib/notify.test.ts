@@ -94,4 +94,28 @@ describe("notify", () => {
     expect(notification.description).toBe(description)
     expect(notification.action?.label).toBe("Go")
   })
+
+  it("une notification mise à jour repasse en dernière position", () => {
+    const id = toast.loading("a")
+    toast.error("b")
+    toast.success("a2", { id })
+    expect(getNotifications().visible.map((n) => n.message)).toEqual([
+      "b",
+      "a2",
+    ])
+  })
+
+  it("l'éviction préfère les entrées fermées et prévient les ouvertes", () => {
+    const onDismiss = vi.fn()
+    toast.loading("long", { onDismiss })
+    for (let index = 0; index < HISTORY_LIMIT; index++) {
+      toast.dismiss(toast.error(`m${index}`))
+    }
+    expect(getNotifications().history[0].message).toBe("long")
+    expect(onDismiss).not.toHaveBeenCalled()
+    for (let index = 0; index < HISTORY_LIMIT; index++)
+      toast.loading(`o${index}`)
+    expect(getNotifications().history).toHaveLength(HISTORY_LIMIT)
+    expect(onDismiss).toHaveBeenCalledTimes(1)
+  })
 })

@@ -91,10 +91,13 @@ function scheduleAutoClose(
 }
 
 function trimHistory() {
-  if (entries.length <= HISTORY_LIMIT) return
-  const evicted = entries.slice(0, entries.length - HISTORY_LIMIT)
-  evicted.forEach((entry) => clearTimer(entry.notification.id))
-  entries = entries.slice(-HISTORY_LIMIT)
+  while (entries.length > HISTORY_LIMIT) {
+    const closedIndex = entries.findIndex((entry) => entry.notification.closed)
+    const evictedIndex = closedIndex === -1 ? 0 : closedIndex
+    const [evicted] = entries.splice(evictedIndex, 1)
+    clearTimer(evicted.notification.id)
+    if (!evicted.notification.closed) evicted.options.onDismiss?.()
+  }
 }
 
 function push(
@@ -115,14 +118,9 @@ function push(
     closed: false,
     read: false,
   }
-  const existing = entries.find((entry) => entry.notification.id === id)
-  if (existing) {
-    existing.notification = notification
-    existing.options = options
-  } else {
-    entries.push({ notification, options })
-    trimHistory()
-  }
+  entries = entries.filter((entry) => entry.notification.id !== id)
+  entries.push({ notification, options })
+  trimHistory()
   scheduleAutoClose(id, kind, options)
   publish()
   return id

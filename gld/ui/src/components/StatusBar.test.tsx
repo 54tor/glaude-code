@@ -132,4 +132,24 @@ describe("StatusBar", () => {
     expect(screen.getByText("+3")).toBeTruthy()
     expect(screen.queryByText("masquée")).toBeNull()
   })
+
+  it("le bouton historique annonce le nombre de non lues", () => {
+    render(<StatusBar onOpen={vi.fn()} />)
+    act(() => void toast.error("a"))
+    expect(
+      screen.getByLabelText(
+        "Historique des notifications, 1 notification non lue"
+      )
+    ).toBeTruthy()
+  })
+
+  it("une tâche sans description affiche son identifiant", () => {
+    render(<StatusBar onOpen={vi.fn()} />)
+    act(() =>
+      publishTasks("s1", "/d", [
+        { id: "t9", desc: "", status: "running", hasOutput: false },
+      ])
+    )
+    expect(screen.getByText("t9")).toBeTruthy()
+  })
 })

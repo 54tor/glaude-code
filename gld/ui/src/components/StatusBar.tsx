@@ -85,6 +85,10 @@ export function StatusBar({
   const hiddenCount =
     taskChips.length + visible.length - shownTasks.length - shown.length
   const unreadCount = history.filter((entry) => !entry.read).length
+  const historyLabel =
+    unreadCount > 0
+      ? `${t("shell.statusBar.history")}, ${t("shell.statusBar.unread", { count: unreadCount })}`
+      : t("shell.statusBar.history")
   return (
     <div
       role="region"
@@ -101,7 +105,7 @@ export function StatusBar({
           <Chip
             key={chip.key}
             icon={<KindIcon kind="loading" />}
-            label={chip.task.desc}
+            label={chip.task.desc || chip.task.id}
             onOpen={() => onOpen(`${TASK_PREFIX}${chip.key}`)}
           />
         ))}
@@ -126,19 +130,13 @@ export function StatusBar({
       </div>
       <button
         type="button"
-        aria-label={t("shell.statusBar.history")}
-        title={t("shell.statusBar.history")}
+        aria-label={historyLabel}
+        title={historyLabel}
         onClick={() => onOpen(null)}
         className="flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
       >
         <Bell className="size-3.5" />
-        {unreadCount > 0 && (
-          <span
-            aria-label={t("shell.statusBar.unread", { count: unreadCount })}
-          >
-            {unreadCount}
-          </span>
-        )}
+        {unreadCount > 0 && <span aria-hidden>{unreadCount}</span>}
       </button>
     </div>
   )

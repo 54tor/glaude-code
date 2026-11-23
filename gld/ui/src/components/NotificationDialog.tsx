@@ -82,7 +82,7 @@ function TaskDetail({ chip, onBack }: { chip: TaskChip; onBack: () => void }) {
       <div className="flex items-start gap-2">
         <KindIcon kind="loading" />
         <div className="min-w-0 flex-1 space-y-2 break-words">
-          <div className="font-medium">{task.desc}</div>
+          <div className="font-medium">{task.desc || task.id}</div>
           <div className="text-xs text-muted-foreground">
             {t(`conversation.tasks.status.${task.status}`)}
           </div>
