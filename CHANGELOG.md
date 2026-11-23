@@ -4,6 +4,9 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ## [Non publié]
 
+### Corrigé
+- Les listes déroulantes ne remontent plus en haut quand la liste des dossiers se rafraîchit pendant qu'on fait défiler (Nouvelle session › Dossier).
+
 ## [0.17.0] - 2026-11-23
 
 ### Ajouté

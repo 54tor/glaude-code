@@ -9,6 +9,7 @@ import {
 // Radix interdit la valeur "" pour une option : on la remplace par celle-ci le temps de l'affichage.
 const EMPTY = "__défaut__"
 
+// position="popper" : en "item-aligned" Radix recale le menu sur l'option choisie à chaque re-rendu parent (le scroll saute).
 // Liste déroulante shadcn à partir de paires [valeur, libellé] ; la valeur "" (« par défaut ») est permise.
 export function Choose({
   value,
@@ -38,7 +39,7 @@ export function Choose({
       <SelectTrigger size={size} className={className} aria-label={label}>
         <SelectValue />
       </SelectTrigger>
-      <SelectContent>
+      <SelectContent position="popper">
         {options.map(([optionValue, optionLabel]) => (
           <SelectItem key={optionValue || EMPTY} value={optionValue || EMPTY}>
             {optionLabel}
