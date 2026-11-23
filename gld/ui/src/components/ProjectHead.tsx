@@ -11,6 +11,7 @@ import { useActions } from "./actions"
 import { WorkspaceButton } from "./ide/WorkspaceButton"
 import { GitRepo } from "./GitRepo"
 import { Choose } from "./Choose"
+import { DropZone } from "./DropZone"
 
 // En tête d'un dossier : l'état git (branche, changements en attente, avance et retard) du dossier et de ses dépôts, puis ses raccourcis.
 // projectName : nom du projet affiché, active l'ajout d'un dossier.
@@ -60,7 +61,10 @@ export function ProjectHead({
       t("shell.head.addFolderTitle", { name: tilde(project, actions.home) }),
       project || actions.home
     )
-    if (!pickedDir) return
+    if (pickedDir) await attachFolder(pickedDir)
+  }
+  const attachFolder = async (pickedDir: string) => {
+    if (!pickedDir || pickedDir === project) return
     const concernedDirs = [
       ...new Set([
         project,
@@ -92,7 +96,7 @@ export function ProjectHead({
       }
     }
   }
-  return (
+  const body = (
     <div className="mb-4 space-y-3">
       {dirs && (
         <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -159,4 +163,5 @@ export function ProjectHead({
       </div>
     </div>
   )
+  return missing ? body : <DropZone onDir={attachFolder}>{body}</DropZone>
 }
