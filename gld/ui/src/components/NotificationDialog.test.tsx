@@ -1,0 +1,83 @@
+// @vitest-environment jsdom
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { getNotifications, resetNotifications, toast } from "@/lib/notify"
+import { NotificationDialog } from "./NotificationDialog"
+
+describe("NotificationDialog", () => {
+  beforeEach(() => resetNotifications())
+  afterEach(cleanup)
+
+  it("reste fermée quand la cible est undefined", () => {
+    render(<NotificationDialog target={undefined} onTarget={vi.fn()} />)
+    expect(screen.queryByRole("dialog")).toBeNull()
+  })
+
+  it("affiche message et description d'une notification", () => {
+    const id = toast.error("échec", { description: <b>le détail</b> })
+    render(<NotificationDialog target={id} onTarget={vi.fn()} />)
+    expect(screen.getByText("échec")).toBeTruthy()
+    expect(screen.getByText("le détail")).toBeTruthy()
+  })
+
+  it("le bouton d'action de la notification est appelable", () => {
+    const onClick = vi.fn()
+    const id = toast.error("échec", { action: { label: "Réessayer", onClick } })
+    render(<NotificationDialog target={id} onTarget={vi.fn()} />)
+    fireEvent.click(screen.getByText("Réessayer"))
+    expect(onClick).toHaveBeenCalledTimes(1)
+  })
+
+  it("liste l'historique, les plus récentes d'abord", () => {
+    toast.error("ancienne")
+    toast.error("récente")
+    render(<NotificationDialog target={null} onTarget={vi.fn()} />)
+    const rows = screen.getAllByRole("button", { name: /ancienne|récente/ })
+    expect(rows).toHaveLength(2)
+    expect(rows[0].textContent).toContain("récente")
+    expect(rows[1].textContent).toContain("ancienne")
+  })
+
+  it("cliquer une ligne ouvre son détail, retour revient à la liste", () => {
+    const id = toast.error("cible")
+    const onTarget = vi.fn()
+    const { rerender } = render(
+      <NotificationDialog target={null} onTarget={onTarget} />
+    )
+    fireEvent.click(screen.getByRole("button", { name: /cible/ }))
+    expect(onTarget).toHaveBeenCalledWith(id)
+    rerender(<NotificationDialog target={id} onTarget={onTarget} />)
+    fireEvent.click(screen.getByText("Retour à la liste"))
+    expect(onTarget).toHaveBeenLastCalledWith(null)
+  })
+
+  it("une notification fermée reste ouvrable depuis l'historique", () => {
+    const id = toast.error("passée")
+    toast.dismiss(id)
+    render(<NotificationDialog target={id} onTarget={vi.fn()} />)
+    expect(screen.getByText("passée")).toBeTruthy()
+  })
+
+  it("Vider l'historique supprime les notifications fermées", () => {
+    const closedId = toast.error("fermée")
+    toast.dismiss(closedId)
+    toast.error("encore visible")
+    render(<NotificationDialog target={null} onTarget={vi.fn()} />)
+    fireEvent.click(screen.getByText("Vider l'historique"))
+    expect(getNotifications().history.map((n) => n.message)).toEqual([
+      "encore visible",
+    ])
+  })
+
+  it("ouvrir marque tout comme lu", () => {
+    toast.error("a")
+    render(<NotificationDialog target={null} onTarget={vi.fn()} />)
+    act(() => {})
+    expect(getNotifications().history.every((n) => n.read)).toBe(true)
+  })
+
+  it("affiche l'état vide", () => {
+    render(<NotificationDialog target={null} onTarget={vi.fn()} />)
+    expect(screen.getByText("Aucune notification")).toBeTruthy()
+  })
+})

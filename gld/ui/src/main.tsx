@@ -8,7 +8,7 @@ import { GuestApp } from "@/components/GuestApp.tsx"
 import { ThemeProvider } from "@/components/theme-provider.tsx"
 import { StaleBuildSplash } from "@/components/StaleBuildSplash"
 import { TrustDialog } from "@/components/TrustDialog"
-import { StatusBar } from "@/components/StatusBar"
+import { NotificationHost } from "@/components/NotificationHost"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { EDGE } from "@/lib/swipe"
 import { MD } from "@/components/Sidebar"
@@ -96,7 +96,7 @@ createRoot(document.getElementById("root")!).render(
         {isGuestPath ? <GuestApp /> : <App />}
         <TrustDialog />
         <StaleBuildSplash />
-        <StatusBar onOpen={() => undefined} />
+        <NotificationHost />
       </TooltipProvider>
     </ThemeProvider>
   </StrictMode>
