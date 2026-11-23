@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Glaude Code — le poste de pilotage web de Claude Code</title>
+<meta name="description" content="Retrouvez, relisez et reprenez vos sessions Claude Code depuis le navigateur ou le téléphone, partagez-les et gardez la main sur mémoire, règles et réglages. Tout reste sur votre machine.">
+<link rel="alternate" hreflang="en" href="en/">
+<link rel="icon" href="logo.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="wrap top">
+  <a class="brand" href="./"><img src="logo.png" alt="">Glaude Code</a>
+  <nav class="lang" aria-label="Langue"><span aria-current="true">FR</span><a href="en/" hreflang="en" lang="en">EN</a></nav>
+</header>
+
+<main>
+  <div class="wrap hero">
+    <img class="logo" src="logo.png" alt="">
+    <h1>Le poste de pilotage web de Claude Code</h1>
+    <p>Retrouvez, relisez et reprenez vos sessions, pilotez-les depuis votre navigateur ou votre téléphone, partagez-les avec un collègue, et gardez la main sur votre mémoire, vos règles, vos skills et vos réglages. Tout reste sur votre machine : Glaude Code lit simplement le dossier <code>~/.claude</code>.</p>
+    <div class="actions">
+      <a class="btn primary" href="https://github.com/54tor/glaude-code/releases/latest">Télécharger</a>
+      <a class="btn" href="https://github.com/54tor/glaude-code">Voir sur GitHub</a>
+    </div>
+
+    <div class="shots">
+      <div class="desk">
+        <img src="shots/bureau-sessions.png" alt="Toutes les sessions, rangées par date et par projet" width="1920" height="1080">
+        <img src="shots/bureau-conversation.png" alt="Relecture d'une session avec ses outils repliés et la zone de réponse" width="1920" height="1080" loading="lazy">
+      </div>
+      <div class="phone">
+        <img src="shots/mobile-sessions.png" alt="La liste des sessions sur téléphone" width="390" height="844" loading="lazy">
+        <img src="shots/mobile-conversation.png" alt="Une session sur téléphone" width="390" height="844" loading="lazy">
+        <img src="shots/mobile-permissions.png" alt="Les permissions de Claude Code sur téléphone" width="390" height="844" loading="lazy">
+      </div>
+    </div>
+  </div>
+
+  <section class="who">
+    <div class="wrap">
+      <h2>Pour qui ?</h2>
+      <p>Pour vous si vous utilisez Claude Code tous les jours et que :</p>
+      <ul>
+        <li>vous ne retrouvez plus « la session d'hier où on avait réglé ce bug » ;</li>
+        <li>vous avez dix onglets de terminal ouverts et redémarrer la machine vous fait peur ;</li>
+        <li>votre mémoire et vos règles ont grossi sans que vous sachiez ce qui est vraiment chargé, ni combien ça coûte en contexte ;</li>
+        <li>vous voulez suivre ou relancer une session depuis votre téléphone, ou la montrer à quelqu'un ;</li>
+        <li>vous préférez cocher une case plutôt que d'éditer <code>settings.json</code> à la main.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <h2>Ce que vous pouvez faire</h2>
+      <div class="cards">
+        <article class="card"><h3>Retrouver et reprendre</h3><p>Sessions rangées par projet, recherche dans les conversations, point vert sur celles qui tournent, reprise dans un terminal en un clic.</p></article>
+        <article class="card"><h3>Écrire sans terminal</h3><p>Tapez un message depuis la page : Claude répond, et vous voyez en direct ce qu'il fait dans la session tmux.</p></article>
+        <article class="card"><h3>Partager une session</h3><p>Lien d'invitation à usage unique, suivi en direct, lecture seule ou écriture, révocable, jusqu'à 10 invités.</p></article>
+        <article class="card"><h3>Rien perdre au redémarrage</h3><p>Les sessions ouvertes sont notées toutes les 2 minutes ; <strong>Tout rouvrir</strong> les relance chacune dans son onglet.</p></article>
+        <article class="card"><h3>Ranger mémoire et règles</h3><p>Tokens coûtés par fichier, liens cassés, doublons, contradictions, corbeille, export et import.</p></article>
+        <article class="card"><h3>Skills, snippets, réglages</h3><p>Permissions et réglages en cases à cocher, aperçu du changement et sauvegarde avant chaque écriture.</p></article>
+        <article class="card"><h3>Espace de travail</h3><p>Arborescence git, éditeur Monaco servi sans CDN, enregistrement, terminal en lecture seule.</p></article>
+        <article class="card"><h3>Sur téléphone</h3><p>Application installable, notifications push quand une session pose une question ou attend votre message.</p></article>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <h2>Face à la CLI et à Claude.ai</h2>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Besoin</th><th>CLI seule</th><th>Claude.ai (Remote Control, mobile, web)</th><th>Glaude Code</th></tr></thead>
+          <tbody>
+            <tr><td>Piloter depuis le téléphone</td><td>Non</td><td>Oui, compte claude.ai obligatoire, transcript stocké chez Anthropic pendant la connexion</td><td>Oui, en direct vers votre machine, sans compte claude.ai ni tiers</td></tr>
+            <tr><td>Plusieurs sessions</td><td>Un terminal chacune</td><td>Une session distante par process</td><td>Toutes vos sessions dans une seule page</td></tr>
+            <tr><td>Retrouver une session</td><td>Liste plate (<code>--resume</code>)</td><td>Liste, archivage</td><td>Rangées par projet, recherche plein texte, sessions actives signalées</td></tr>
+            <tr><td>Redémarrage</td><td>Sessions perdues de vue</td><td>Reprise par <code>--continue</code> dans les 4 heures environ</td><td><strong>Tout rouvrir</strong> en un clic</td></tr>
+            <tr><td>Montrer une session</td><td>Copier-coller</td><td>Lien en session cloud, instantané figé</td><td>Lien d'invitation en direct, lecture ou écriture, révocable</td></tr>
+            <tr><td>Mémoire, règles, <code>CLAUDE.md</code></td><td>Fichiers à la main</td><td>Pas d'édition documentée</td><td>Page Mémoire : coût en tokens, santé, corbeille</td></tr>
+            <tr><td>Équipe</td><td>Un utilisateur</td><td>Pas de droits par projet</td><td>Multi-utilisateur, neuf droits par compte, second facteur obligatoire</td></tr>
+            <tr><td>Où vivent vos données</td><td>Chez vous</td><td>Sur les serveurs Anthropic pendant la connexion</td><td>Chez vous</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note">Colonne Claude.ai : documentation officielle (code.claude.com/docs), consultée le 31 octobre 2026. Comparatif complet dans le <a href="https://github.com/54tor/glaude-code#readme">README</a>.</p>
+    </div>
+  </section>
+
+  <section class="install" id="installation">
+    <div class="wrap">
+      <h2>Installation</h2>
+      <p>Un seul binaire qui embarque l'interface : ni Go, ni Node.js, ni <code>make</code>. Seul Claude Code doit déjà être installé. Choisissez le fichier de votre système sur <a href="https://github.com/54tor/glaude-code/releases/latest">la dernière release</a> (Linux, macOS, Windows ; amd64 et arm64).</p>
+      <ol>
+        <li>Télécharger et vérifier (exemple Linux amd64) :
+<pre><code>curl -LO https://github.com/54tor/glaude-code/releases/latest/download/gld-linux-amd64
+curl -LO https://github.com/54tor/glaude-code/releases/latest/download/SHA256SUMS
+gh attestation verify gld-linux-amd64 --repo 54tor/glaude-code
+sha256sum --ignore-missing -c SHA256SUMS
+chmod +x gld-linux-amd64 &amp;&amp; mv gld-linux-amd64 ~/.local/bin/gld</code></pre></li>
+        <li>Lancer :
+<pre><code>gld</code></pre></li>
+        <li>Ouvrir <strong>http://127.0.0.1:8799</strong> dans le navigateur. C'est tout.</li>
+      </ol>
+      <p>Compiler depuis les sources, Windows (WSL2), accès depuis un autre appareil, multi-utilisateur : voir le <a href="https://github.com/54tor/glaude-code#readme">README</a>.</p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Glaude Code — licence MIT</span>
+    <a href="https://github.com/54tor/glaude-code">github.com/54tor/glaude-code</a>
+  </div>
+</footer>
+</body>
+</html>
