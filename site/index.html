@@ -5,7 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Glaude Code — le poste de pilotage web de Claude Code</title>
 <meta name="description" content="Retrouvez, relisez et reprenez vos sessions Claude Code depuis le navigateur ou le téléphone, partagez-les et gardez la main sur mémoire, règles et réglages. Tout reste sur votre machine.">
-<link rel="alternate" hreflang="en" href="en/">
+<link rel="canonical" href="https://54tor.github.io/glaude-code/">
+<link rel="alternate" hreflang="fr" href="https://54tor.github.io/glaude-code/">
+<link rel="alternate" hreflang="en" href="https://54tor.github.io/glaude-code/en/">
+<link rel="alternate" hreflang="x-default" href="https://54tor.github.io/glaude-code/">
 <link rel="icon" href="logo.png">
 <link rel="stylesheet" href="style.css">
 </head>
@@ -70,19 +73,19 @@
 
   <section>
     <div class="wrap">
-      <h2>Face à la CLI et à Claude.ai</h2>
-      <div class="table-scroll">
+      <h2 id="comparatif">Face à la CLI et à Claude.ai</h2>
+      <div class="table-scroll" tabindex="0" role="region" aria-labelledby="comparatif">
         <table>
           <thead><tr><th>Besoin</th><th>CLI seule</th><th>Claude.ai (Remote Control, mobile, web)</th><th>Glaude Code</th></tr></thead>
           <tbody>
-            <tr><td>Piloter depuis le téléphone</td><td>Non</td><td>Oui, compte claude.ai obligatoire, transcript stocké chez Anthropic pendant la connexion</td><td>Oui, en direct vers votre machine, sans compte claude.ai ni tiers</td></tr>
-            <tr><td>Plusieurs sessions</td><td>Un terminal chacune</td><td>Une session distante par process</td><td>Toutes vos sessions dans une seule page</td></tr>
-            <tr><td>Retrouver une session</td><td>Liste plate (<code>--resume</code>)</td><td>Liste, archivage</td><td>Rangées par projet, recherche plein texte, sessions actives signalées</td></tr>
-            <tr><td>Redémarrage</td><td>Sessions perdues de vue</td><td>Reprise par <code>--continue</code> dans les 4 heures environ</td><td><strong>Tout rouvrir</strong> en un clic</td></tr>
-            <tr><td>Montrer une session</td><td>Copier-coller</td><td>Lien en session cloud, instantané figé</td><td>Lien d'invitation en direct, lecture ou écriture, révocable</td></tr>
-            <tr><td>Mémoire, règles, <code>CLAUDE.md</code></td><td>Fichiers à la main</td><td>Pas d'édition documentée</td><td>Page Mémoire : coût en tokens, santé, corbeille</td></tr>
-            <tr><td>Équipe</td><td>Un utilisateur</td><td>Pas de droits par projet</td><td>Multi-utilisateur, neuf droits par compte, second facteur obligatoire</td></tr>
-            <tr><td>Où vivent vos données</td><td>Chez vous</td><td>Sur les serveurs Anthropic pendant la connexion</td><td>Chez vous</td></tr>
+            <tr><th scope="row">Piloter depuis le téléphone</th><td>Non</td><td>Oui, compte claude.ai obligatoire, transcript stocké chez Anthropic pendant la connexion</td><td>Oui, en direct vers votre machine, sans compte claude.ai ni tiers</td></tr>
+            <tr><th scope="row">Plusieurs sessions</th><td>Un terminal chacune</td><td>Une session distante par process</td><td>Toutes vos sessions dans une seule page</td></tr>
+            <tr><th scope="row">Retrouver une session</th><td>Liste plate (<code>--resume</code>)</td><td>Liste, archivage</td><td>Rangées par projet, recherche plein texte, sessions actives signalées</td></tr>
+            <tr><th scope="row">Redémarrage</th><td>Sessions perdues de vue</td><td>Reprise par <code>--continue</code> dans les 4 heures environ</td><td><strong>Tout rouvrir</strong> en un clic</td></tr>
+            <tr><th scope="row">Montrer une session</th><td>Copier-coller</td><td>Lien en session cloud, instantané figé</td><td>Lien d'invitation en direct, lecture ou écriture, révocable</td></tr>
+            <tr><th scope="row">Mémoire, règles, <code>CLAUDE.md</code></th><td>Fichiers à la main</td><td>Pas d'édition documentée</td><td>Page Mémoire : coût en tokens, santé, corbeille</td></tr>
+            <tr><th scope="row">Équipe</th><td>Un utilisateur</td><td>Pas de droits par projet</td><td>Multi-utilisateur, neuf droits par compte, second facteur obligatoire</td></tr>
+            <tr><th scope="row">Où vivent vos données</th><td>Chez vous</td><td>Sur les serveurs Anthropic pendant la connexion</td><td>Chez vous</td></tr>
           </tbody>
         </table>
       </div>

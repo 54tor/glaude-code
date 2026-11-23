@@ -78,7 +78,7 @@ code, pre { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; fo
   background: var(--surface);
 }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
-.btn:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.btn:focus-visible, .table-scroll:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 
 .shots { display: grid; gap: 16px; padding: 24px 0 8px; }
 .shots img { border-radius: var(--radius); border: 1px solid var(--line); box-shadow: 0 8px 30px rgb(0 0 0 / 0.12); }

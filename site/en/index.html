@@ -5,7 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Glaude Code — the web cockpit for Claude Code</title>
 <meta name="description" content="Find, reread and resume your Claude Code sessions from your browser or phone, share them, and stay in control of memory, rules and settings. Everything stays on your machine.">
-<link rel="alternate" hreflang="fr" href="../">
+<link rel="canonical" href="https://54tor.github.io/glaude-code/en/">
+<link rel="alternate" hreflang="fr" href="https://54tor.github.io/glaude-code/">
+<link rel="alternate" hreflang="en" href="https://54tor.github.io/glaude-code/en/">
+<link rel="alternate" hreflang="x-default" href="https://54tor.github.io/glaude-code/">
 <link rel="icon" href="../logo.png">
 <link rel="stylesheet" href="../style.css">
 </head>
@@ -71,19 +74,19 @@
 
   <section>
     <div class="wrap">
-      <h2>Compared with the CLI and Claude.ai</h2>
-      <div class="table-scroll">
+      <h2 id="comparison">Compared with the CLI and Claude.ai</h2>
+      <div class="table-scroll" tabindex="0" role="region" aria-labelledby="comparison">
         <table>
           <thead><tr><th>Need</th><th>CLI only</th><th>Claude.ai (Remote Control, mobile, web)</th><th>Glaude Code</th></tr></thead>
           <tbody>
-            <tr><td>Drive from your phone</td><td>No</td><td>Yes, claude.ai account required, transcript stored by Anthropic while connected</td><td>Yes, straight to your machine, no claude.ai account, no third party</td></tr>
-            <tr><td>Several sessions</td><td>One terminal each</td><td>One remote session per process</td><td>All your sessions in a single page</td></tr>
-            <tr><td>Finding a session</td><td>Flat list (<code>--resume</code>)</td><td>List, archiving</td><td>Grouped by project, full-text search, active sessions flagged</td></tr>
-            <tr><td>Reboot</td><td>Sessions lost from view</td><td>Resume with <code>--continue</code> within about 4 hours</td><td><strong>Reopen all</strong> in one click</td></tr>
-            <tr><td>Showing a session</td><td>Copy and paste</td><td>Cloud session link, frozen snapshot</td><td>Live invitation link, read or write, revocable</td></tr>
-            <tr><td>Memory, rules, <code>CLAUDE.md</code></td><td>Files by hand</td><td>No documented editing</td><td>Memory page: token cost, health checks, trash</td></tr>
-            <tr><td>Team</td><td>Single user</td><td>No per-project rights</td><td>Multi-user, nine rights per account, second factor required</td></tr>
-            <tr><td>Where your data lives</td><td>With you</td><td>On Anthropic servers while connected</td><td>With you</td></tr>
+            <tr><th scope="row">Drive from your phone</th><td>No</td><td>Yes, claude.ai account required, transcript stored by Anthropic while connected</td><td>Yes, straight to your machine, no claude.ai account, no third party</td></tr>
+            <tr><th scope="row">Several sessions</th><td>One terminal each</td><td>One remote session per process</td><td>All your sessions in a single page</td></tr>
+            <tr><th scope="row">Finding a session</th><td>Flat list (<code>--resume</code>)</td><td>List, archiving</td><td>Grouped by project, full-text search, active sessions flagged</td></tr>
+            <tr><th scope="row">Reboot</th><td>Sessions lost from view</td><td>Resume with <code>--continue</code> within about 4 hours</td><td><strong>Reopen all</strong> in one click</td></tr>
+            <tr><th scope="row">Showing a session</th><td>Copy and paste</td><td>Cloud session link, frozen snapshot</td><td>Live invitation link, read or write, revocable</td></tr>
+            <tr><th scope="row">Memory, rules, <code>CLAUDE.md</code></th><td>Files by hand</td><td>No documented editing</td><td>Memory page: token cost, health checks, trash</td></tr>
+            <tr><th scope="row">Team</th><td>Single user</td><td>No per-project rights</td><td>Multi-user, nine rights per account, second factor required</td></tr>
+            <tr><th scope="row">Where your data lives</th><td>With you</td><td>On Anthropic servers while connected</td><td>With you</td></tr>
           </tbody>
         </table>
       </div>
