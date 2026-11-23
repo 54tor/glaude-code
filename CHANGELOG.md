@@ -4,6 +4,8 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ## [Non publié]
 
+## [0.17.0] - 2026-11-23
+
 ### Ajouté
 - Un bouton « Nouvelle session » ouvre la saisie d'un prompt en tête du menu latéral, avec le choix du dossier.
 - Configuration › Santé : un bouton « Retirer » supprime un dossier supplémentaire introuvable de `permissions.additionalDirectories` (aperçu et sauvegarde habituels).
@@ -815,7 +817,8 @@ Première version : `gld`, interface web locale pour parcourir, piloter et confi
 - Terminal intégré désactivé par défaut ; lecture bornée des fichiers de commandes.
 - Refus d'agir quand les sessions ouvertes sont indéterminées.
 
-[Non publié]: https://github.com/54tor/glaude-code/compare/v0.16.0...HEAD
+[Non publié]: https://github.com/54tor/glaude-code/compare/v0.17.0...HEAD
+[0.17.0]: https://github.com/54tor/glaude-code/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/54tor/glaude-code/compare/v0.15.1...v0.16.0
 [0.15.1]: https://github.com/54tor/glaude-code/compare/v0.15.0...v0.15.1
 [0.15.0]: https://github.com/54tor/glaude-code/compare/v0.14.0...v0.15.0
