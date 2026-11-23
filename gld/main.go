@@ -158,6 +158,7 @@ func main() {
 	}
 	go expireTrashLoop(trashExpireEvery)
 	go emptyProjectsLoop(emptyProjectsEvery)
+	go syncProjectDirs()
 	go func() { _, _ = projectMcpStates(workDir()) }() // état MCP déjà prêt à la première ouverture de page
 	go func() { _ = sessions() }()                     // cache des transcripts prêt avant la première page
 	go func() { _ = syncIndex() }()                    // index de recherche prêt avant la première requête
