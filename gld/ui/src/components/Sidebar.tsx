@@ -49,7 +49,6 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useLocal } from "@/hooks/useLocal"
 import { CreditsButton } from "./Credits"
 import { PairButton } from "./PairDevice"
-import { PushButton } from "./PushSettings"
 import { InvitesButton } from "./InvitesButton"
 import { HomeSwitcher } from "./HomeSwitcher"
 import { DropZone } from "./DropZone"
@@ -480,14 +479,6 @@ function filterTree(nodes: Node[], query: string): Node[] {
   })
 }
 
-function PushFooter() {
-  return (
-    <div className="flex items-center justify-end border-t px-4 py-2">
-      <PushButton />
-    </div>
-  )
-}
-
 export function Sidebar({ searchRef, ...props }: SidebarProps) {
   const { t } = useTranslation()
   // Recherche propre à la navbar : indépendante de celle de la barre du haut (paramètre d'URL q).
@@ -907,7 +898,6 @@ export function Sidebar({ searchRef, ...props }: SidebarProps) {
           )}
         </div>
       )}
-      <PushFooter />
     </>
   )
   if (wide)

@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode, type SyntheticEvent } from "react"
 import { useTranslation } from "react-i18next"
 import {
-  Bell,
+  History,
   CircleCheck,
   Fan,
   Info,
@@ -11,6 +11,7 @@ import {
 } from "lucide-react"
 import { toast, useNotifications, type NotifyKind } from "@/lib/notify"
 import { api } from "@/lib/api"
+import { PushButton } from "./PushSettings"
 import { useTaskChips } from "@/lib/tasksStore"
 
 export const MAX_VISIBLE_CHIPS = 5
@@ -70,7 +71,10 @@ function Chip({
 }
 
 // Les dialogues Radix se ferment sur toute interaction hors d'eux : la barre, posée au-dessus, ne doit pas les fermer.
-const keepDialogsOpen = (event: SyntheticEvent) => event.stopPropagation()
+const keepDialogsOpen = (event: SyntheticEvent) => {
+  const isInsideBar = event.currentTarget.contains(event.target as Node)
+  if (isInsideBar) event.stopPropagation()
+}
 
 function VersionLabel() {
   const { t } = useTranslation()
@@ -157,6 +161,7 @@ export function StatusBar({
         )}
       </div>
       <VersionLabel />
+      <PushButton />
       <button
         type="button"
         aria-label={historyLabel}
@@ -164,7 +169,7 @@ export function StatusBar({
         onClick={() => onOpen(null)}
         className="flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
       >
-        <Bell className="size-3.5" />
+        <History className="size-3.5" />
         {unreadCount > 0 && <span aria-hidden>{unreadCount}</span>}
       </button>
     </div>

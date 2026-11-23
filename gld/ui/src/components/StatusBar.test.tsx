@@ -4,17 +4,42 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { resetNotifications, toast } from "@/lib/notify"
 import { publishTasks, resetTasks } from "@/lib/tasksStore"
 import { api } from "@/lib/api"
+import * as push from "@/lib/push"
+import { setAuth } from "@/lib/auth"
+import { TooltipProvider } from "@/components/ui/tooltip"
 import { MAX_VISIBLE_CHIPS, StatusBar } from "./StatusBar"
+
+vi.mock("@/lib/push", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/push")>()),
+  pushSupported: vi.fn(),
+  currentPushState: vi.fn(),
+}))
 
 describe("StatusBar", () => {
   beforeEach(() => {
     resetNotifications()
     resetTasks()
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      }
+    )
+    vi.mocked(push.pushSupported).mockReturnValue(true)
+    vi.mocked(push.currentPushState).mockResolvedValue({
+      subscribed: false,
+      asking: false,
+      waiting: false,
+    })
     vi.spyOn(api, "updateInfo").mockRejectedValue(new Error("hors ligne"))
   })
   afterEach(() => {
     cleanup()
+    vi.unstubAllGlobals()
     vi.restoreAllMocks()
+    setAuth({ state: "loading" })
   })
 
   it("est une région nommée", () => {
@@ -189,5 +214,33 @@ describe("StatusBar", () => {
     render(<StatusBar onOpen={vi.fn()} />)
     await act(async () => {})
     expect(screen.getByRole("region").textContent).not.toMatch(/v\d/)
+  })
+
+  it("la cloche push ouvre les réglages de notifications push", async () => {
+    setAuth({ state: "open", csrf: "", share: undefined })
+    render(
+      <TooltipProvider>
+        <StatusBar onOpen={vi.fn()} />
+      </TooltipProvider>
+    )
+    fireEvent.click(screen.getByRole("button", { name: "Notifications" }))
+    await act(async () => {})
+    expect(screen.getAllByRole("switch")).toHaveLength(3)
+  })
+
+  it("laisse passer pointerdown venant d'un contenu porté hors de la barre", async () => {
+    setAuth({ state: "open", csrf: "", share: undefined })
+    render(
+      <TooltipProvider>
+        <StatusBar onOpen={vi.fn()} />
+      </TooltipProvider>
+    )
+    fireEvent.click(screen.getByRole("button", { name: "Notifications" }))
+    await act(async () => {})
+    const seen = vi.fn()
+    document.addEventListener("pointerdown", seen)
+    fireEvent.pointerDown(screen.getAllByRole("switch")[0])
+    document.removeEventListener("pointerdown", seen)
+    expect(seen).toHaveBeenCalled()
   })
 })
