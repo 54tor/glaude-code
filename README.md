@@ -369,6 +369,16 @@ la corbeille.
 **Le port 8799 est déjà pris.**
 Lancez `GLD_WEB_PORT=8800 gld`.
 
+## Star History
+
+<a href="https://www.star-history.com/?repos=54tor%2Fglaude-code&type=timeline&legend=bottom-right">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=54tor/glaude-code&type=timeline&theme=dark&legend=bottom-right" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=54tor/glaude-code&type=timeline&legend=bottom-right" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=54tor/glaude-code&type=timeline&legend=bottom-right" />
+ </picture>
+</a>
+
 ## Licence
 
 MIT, voir [LICENSE](LICENSE).
