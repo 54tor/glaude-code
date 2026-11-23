@@ -30,7 +30,7 @@ export type GroupActions = {
 // Projets : ensembles nommés de dossiers de travail.
 export type ProjectActions = {
   add: (dir: string, name: string | null) => void // null : nouveau projet (nom demandé)
-  addToProjects: (dir: string, names: string[]) => void // un seul enregistrement pour tous les projets
+  addToProjects: (dir: string, names: string[], alsoWith?: string) => void // un seul enregistrement pour tous les projets
   remove: (dir: string, name: string) => void
   rename: (p: Project) => void
   delete: (p: Project) => void

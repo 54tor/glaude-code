@@ -215,22 +215,59 @@ export function useAppActions(context: {
   }
   const projectExists = (projectName: string) =>
     projects.some((project) => project.name === projectName)
+  // Chaque dossier d'un projet liste les autres dans ses additionalDirectories locaux (dans les deux sens), pour que Claude y accède.
+  const allowProjectDirs = async (
+    dir: string,
+    nextProjects: Project[],
+    names: string[],
+    alsoWith?: string
+  ) => {
+    const isUsable = (candidate: string) =>
+      !data?.groups.find((folder) => folder.project === candidate)?.missing
+    const siblings = [
+      ...new Set(
+        nextProjects
+          .filter((project) => names.includes(project.name))
+          .flatMap((project) => project.dirs)
+      ),
+    ]
+    if (alsoWith) siblings.push(alsoWith)
+    const usableSiblings = [...new Set(siblings)].filter(
+      (sibling) => sibling !== dir && isUsable(sibling)
+    )
+    const allow = async (owner: string, allowed: string) => {
+      const transcriptsDir = data?.groups.find(
+        (folder) => folder.project === owner
+      )?.sessions[0]?.dir
+      if (!transcriptsDir) return
+      try {
+        await api.configEdit({
+          file: "l/" + transcriptsDir,
+          op: "add",
+          path: ["permissions", "additionalDirectories"],
+          value: allowed,
+        })
+      } catch (error) {
+        toast.error(errMsg(error))
+      }
+    }
+    for (const sibling of usableSiblings) {
+      await allow(sibling, dir)
+      await allow(dir, sibling)
+    }
+  }
   const projectActs: ProjectActions = {
     add: (dir, name) => {
       const addDirToProject = (projectName: string) => {
-        if (projectExists(projectName)) {
-          saveProjects(
-            projects.map((project) => {
-              const shouldAddDir =
-                project.name === projectName && !project.dirs.includes(dir)
-              return shouldAddDir
+        const nextProjects = projectExists(projectName)
+          ? projects.map((project) =>
+              project.name === projectName && !project.dirs.includes(dir)
                 ? { ...project, dirs: [...project.dirs, dir] }
                 : project
-            })
-          )
-        } else {
-          saveProjects([...projects, { name: projectName, dirs: [dir] }])
-        }
+            )
+          : [...projects, { name: projectName, dirs: [dir] }]
+        saveProjects(nextProjects)
+        void allowProjectDirs(dir, nextProjects, [projectName])
         toast.success(
           i18n.t("shell.act.addedToProject", {
             dir: tilde(dir, home),
@@ -253,15 +290,14 @@ export function useAppActions(context: {
         }
       )
     },
-    addToProjects: (dir, names) => {
-      const updatedProjects = projects.map((project) => {
-        const shouldAddDir =
-          names.includes(project.name) && !project.dirs.includes(dir)
-        return shouldAddDir
+    addToProjects: (dir, names, alsoWith) => {
+      const nextProjects = projects.map((project) =>
+        names.includes(project.name) && !project.dirs.includes(dir)
           ? { ...project, dirs: [...project.dirs, dir] }
           : project
-      })
-      saveProjects(updatedProjects)
+      )
+      saveProjects(nextProjects)
+      void allowProjectDirs(dir, nextProjects, names, alsoWith)
     },
     remove: (dir, name) =>
       saveProjects(

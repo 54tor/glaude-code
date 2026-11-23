@@ -1,9 +1,6 @@
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { FolderPlus, MessageSquarePlus, ShieldCheck } from "lucide-react"
-import { toast } from "@/lib/notify"
-import { api } from "@/lib/api"
-import { errMsg } from "@/lib/apiError"
 import { tilde } from "@/lib/format"
 import { useGit } from "@/hooks/useGit"
 import { Button } from "@/components/ui/button"
@@ -65,36 +62,12 @@ export function ProjectHead({
   }
   const attachFolder = async (pickedDir: string) => {
     if (!pickedDir || pickedDir === project) return
-    const concernedDirs = [
-      ...new Set([
-        project,
-        ...parentProjects.flatMap((parentProject) => parentProject.dirs),
-      ]),
-    ]
-    const dirsToAllow = concernedDirs.filter(
-      (concernedDir) =>
-        concernedDir !== pickedDir && !isMissingFolder(concernedDir)
-    )
     if (!actions.folder(pickedDir)) await actions.addDirPath(pickedDir, true)
-    if (parentProjects.length)
-      actions.projectActs.addToProjects(
-        pickedDir,
-        parentProjects.map((parentProject) => parentProject.name)
-      )
-    for (const dirToAllow of dirsToAllow) {
-      const transcriptsDir = actions.folder(dirToAllow)?.sessions[0]?.dir
-      if (!transcriptsDir) continue
-      try {
-        await api.configEdit({
-          file: "l/" + transcriptsDir,
-          op: "add",
-          path: ["permissions", "additionalDirectories"],
-          value: pickedDir,
-        })
-      } catch (error) {
-        toast.error(errMsg(error))
-      }
-    }
+    actions.projectActs.addToProjects(
+      pickedDir,
+      parentProjects.map((parentProject) => parentProject.name),
+      project
+    )
   }
   const body = (
     <div className="mb-4 space-y-3">

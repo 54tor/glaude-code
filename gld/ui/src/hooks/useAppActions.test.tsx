@@ -616,6 +616,28 @@ describe("groupes", () => {
 describe("projets", () => {
   const project: Project = { name: "Refonte", dirs: [`${HOME}/Projets/a`] }
 
+  it("addToProjects : le dossier ajouté et chaque dossier du projet s'ajoutent mutuellement à leurs dossiers supplémentaires", async () => {
+    const editSpy = vi
+      .spyOn(api, "configEdit")
+      .mockResolvedValue(undefined as never)
+    const { result } = setup({ data: { projects: [project] } as never })
+    await act(
+      async () =>
+        void result.current.actions.projectActs.addToProjects(
+          `${HOME}/Projets/b`,
+          ["Refonte"]
+        )
+    )
+    const editsObtenus = editSpy.mock.calls.map(([edit]) => [
+      edit.file,
+      edit.value,
+    ])
+    expect(editsObtenus).toEqual([
+      ["l/dir-a1", `${HOME}/Projets/b`],
+      ["l/dir-b1", `${HOME}/Projets/a`],
+    ])
+  })
+
   it("add dans un projet existant : ajoute le dossier une seule fois", async () => {
     const { result } = setup({ data: { projects: [project] } as never })
     act(
