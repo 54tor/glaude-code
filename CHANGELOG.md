@@ -18,6 +18,8 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Le cookie de sélection du dossier (`home`) porte désormais l'attribut `Secure` en HTTPS, comme les autres cookies.
 - Équipes d'agents : le `leadSessionId` d'un `config.json` n'est retenu que s'il correspond au nom de l'équipe, pour qu'un fichier forgé ne désigne pas le panneau d'une autre session.
 - Sous `GLD_RUN_AS` (expérimental), les documents cités par une conversation ne sont listés et servis que s'ils appartiennent au compte cible : un transcript forgé ne fait plus lire un fichier de root.
+- Au changement de compte dans un même navigateur, les partages, les poussées git et les réglages d'affichage qui nomment des dossiers (projets repliés, notes) du compte précédent sont effacés.
+- Le bouton « Actualiser » du compte ne reste plus bloqué quand une requête échoue.
 
 ## [0.17.0] - 2026-11-23
 

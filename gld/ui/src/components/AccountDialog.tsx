@@ -153,12 +153,15 @@ export function AccountButton() {
   // Actualiser : le serveur lance « claude -p /usage » (local, sans coût) ; le relevé arrive quelques secondes plus tard.
   const refresh = async () => {
     setUpdating(true)
-    setAccount(await api.account(true))
-    for (const waitMs of USAGE_POLL_DELAYS_MS) {
-      await new Promise((resolve) => setTimeout(resolve, waitMs))
-      setAccount(await api.account())
+    try {
+      setAccount(await api.account(true))
+      for (const waitMs of USAGE_POLL_DELAYS_MS) {
+        await new Promise((resolve) => setTimeout(resolve, waitMs))
+        setAccount(await api.account())
+      }
+    } finally {
+      setUpdating(false)
     }
-    setUpdating(false)
   }
   const shownLimits = (["five_hour", "seven_day"] as const)
     .map((limitKey) => account?.limits.find((limit) => limit.key === limitKey))

@@ -38,4 +38,16 @@ describe("clearUserData", () => {
     clearUserData()
     expect(getNotifications().history).toEqual([])
   })
+  it("retire les clés de stockage qui nomment les dossiers du compte précédent", () => {
+    for (const storageKey of [
+      "gld.projects.folded",
+      "gld.notes.dir/p/x",
+      "ccFont",
+    ])
+      localStorage.setItem(storageKey, "v")
+    clearUserData()
+    expect(localStorage.getItem("gld.projects.folded")).toBeNull()
+    expect(localStorage.getItem("gld.notes.dir/p/x")).toBeNull()
+    expect(localStorage.getItem("ccFont")).toBe("v")
+  })
 })

@@ -42,6 +42,12 @@ const setRuns = (nextRuns: GitPushRun[]) => {
   runSubscribers.forEach((subscriber) => subscriber())
 }
 
+// Changement de compte : les poussées et leur sortie appartiennent au compte précédent ; un suivi en cours n'écrit plus (sortie retirée).
+export function resetGitPushes() {
+  outputByRun.clear()
+  setRuns([])
+}
+
 const updateRun = (runId: number, changes: Partial<GitPushRun>) => {
   setRuns(
     currentRuns.map((run) => (run.id === runId ? { ...run, ...changes } : run))

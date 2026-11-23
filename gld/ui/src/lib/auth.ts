@@ -3,6 +3,8 @@ import { resetNotifications, toast } from "@/lib/notify"
 import { i18n } from "@/i18n"
 import { clearDrafts, guardDrafts } from "@/hooks/useDraft"
 import { resetGit } from "@/hooks/useGit"
+import { resetGitPushes } from "@/hooks/useGitPush"
+import { resetShares } from "@/hooks/useShares"
 import { resetWarm } from "@/hooks/useKeepWarm"
 import { resetOpen } from "@/hooks/useOpen"
 import { ApiError, netError, qs, readResponse, v1 } from "@/lib/apiError"
@@ -190,8 +192,16 @@ const USER_STORAGE_KEYS = [
   "gld.open",
   "ccMemSorts",
   "gld.session-view",
+  "gld.projects.folded",
+  "gld.local.folded",
+  "gld.hot.openFolded",
 ]
-const USER_STORAGE_PREFIXES = ["gld.editor.", "gld.mem.open.", "gld.ide."]
+const USER_STORAGE_PREFIXES = [
+  "gld.editor.",
+  "gld.mem.open.",
+  "gld.ide.",
+  "gld.notes.dir/",
+]
 const userKey = (storageKey: string) =>
   USER_STORAGE_KEYS.includes(storageKey) ||
   USER_STORAGE_PREFIXES.some((prefix) => storageKey.startsWith(prefix))
@@ -271,6 +281,8 @@ export function clearUserData() {
   resetOpen()
   resetTrust()
   resetNotifications()
+  resetShares()
+  resetGitPushes()
   for (const storageKey of storedKeys()) {
     if (userKey(storageKey)) localStorage.removeItem(storageKey)
   }
