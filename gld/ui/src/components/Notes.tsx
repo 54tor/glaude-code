@@ -13,7 +13,7 @@ import {
   Send,
   X,
 } from "lucide-react"
-import { toast } from "sonner"
+import { toast } from "@/lib/notify"
 import { api, type SentNote } from "@/lib/api"
 import { errMsg } from "@/lib/apiError"
 import { setOpen, useOpen } from "@/hooks/useOpen"

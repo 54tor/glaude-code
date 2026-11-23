@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { ArrowUp, Folder, Home, Search } from "lucide-react"
-import { toast } from "sonner"
+import { toast } from "@/lib/notify"
 import { useTranslation } from "react-i18next"
 import { api, type Ls } from "@/lib/api"
 import { join } from "@/lib/paths"

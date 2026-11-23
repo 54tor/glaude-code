@@ -15,7 +15,7 @@ import {
   Trash2,
 } from "lucide-react"
 import { useLocation } from "wouter"
-import { toast } from "sonner"
+import { toast } from "@/lib/notify"
 import { api, type MemFile } from "@/lib/api"
 import { errMsg } from "@/lib/apiError"
 import { href } from "@/lib/route"

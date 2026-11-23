@@ -10,7 +10,7 @@ import {
   Heart,
   Star,
 } from "lucide-react"
-import { toast } from "sonner"
+import { toast } from "@/lib/notify"
 import { useTranslation } from "react-i18next"
 import { Button } from "@/components/ui/button"
 import { Tip } from "@/components/ui/tooltip"

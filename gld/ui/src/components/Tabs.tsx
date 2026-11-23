@@ -7,7 +7,7 @@ import {
   SquareTerminal,
   Trash2,
 } from "lucide-react"
-import { toast } from "sonner"
+import { toast } from "@/lib/notify"
 import { useTranslation } from "react-i18next"
 import { api, type TabSave, type TabSession } from "@/lib/api"
 import { ago, full, tilde } from "@/lib/format"

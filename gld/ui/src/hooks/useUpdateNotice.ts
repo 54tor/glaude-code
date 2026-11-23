@@ -1,6 +1,6 @@
 import { useEffect } from "react"
 import { useTranslation } from "react-i18next"
-import { toast } from "sonner"
+import { toast } from "@/lib/notify"
 import { api } from "@/lib/api"
 
 const NOTICE_DURATION_MS = 15000

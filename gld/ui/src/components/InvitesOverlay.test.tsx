@@ -8,7 +8,7 @@ import {
   within,
 } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { toast } from "sonner"
+import { toast } from "@/lib/notify"
 import { api, type InviteInfo, type ShareInfo } from "@/lib/api"
 import { ApiError } from "@/lib/apiError"
 import { resetShares } from "@/hooks/useShares"

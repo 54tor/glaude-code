@@ -20,7 +20,7 @@ import {
   Trash2,
   Upload,
 } from "lucide-react"
-import { toast } from "sonner"
+import { toast } from "@/lib/notify"
 import { cn } from "cn"
 import {
   ContextMenu,

@@ -7,7 +7,7 @@ import {
   waitFor,
 } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { toast } from "sonner"
+import { toast } from "@/lib/notify"
 import { i18n } from "@/i18n"
 import { api, type QItem } from "@/lib/api"
 import { ApiError } from "@/lib/apiError"

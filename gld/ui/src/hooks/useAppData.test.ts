@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const toastError = vi.fn()
 const toastDismiss = vi.fn()
-vi.mock("sonner", () => ({
+vi.mock("@/lib/notify", () => ({
   toast: {
     error: (...values: unknown[]) => toastError(...values),
     dismiss: (...values: unknown[]) => toastDismiss(...values),

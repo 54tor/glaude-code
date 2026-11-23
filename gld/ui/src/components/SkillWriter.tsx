@@ -1,7 +1,7 @@
 import { useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Fan, Sparkles } from "lucide-react"
-import { toast } from "sonner"
+import { toast } from "@/lib/notify"
 import { api } from "@/lib/api"
 import { errMsg } from "@/lib/apiError"
 import { Button } from "@/components/ui/button"

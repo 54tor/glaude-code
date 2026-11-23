@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useState, type FormEvent } from "react"
 import { useTranslation } from "react-i18next"
 import { MoreHorizontal, TriangleAlert, UserPlus } from "lucide-react"
-import { toast } from "sonner"
+import { toast } from "@/lib/notify"
 import {
   boot,
   DANGEROUS,

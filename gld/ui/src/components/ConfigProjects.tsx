@@ -7,7 +7,7 @@ import { href } from "@/lib/route"
 import { tilde } from "@/lib/format"
 import { cn, copyText } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { toast } from "sonner"
+import { toast } from "@/lib/notify"
 import { useTranslation } from "react-i18next"
 import {
   DropdownMenu,

@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { toast } from "sonner"
 
 type D = typeof import("./useDraft") &
   typeof import("./importQueues") & {
     api: typeof import("@/lib/api").api
     ApiError: typeof import("@/lib/apiError").ApiError
+    notify: typeof import("@/lib/notify")
   }
 const ok = { item: {} as never }
 
@@ -22,6 +22,7 @@ async function fresh(stored: unknown): Promise<D> {
     ...(await import("./importQueues")),
     api,
     ApiError: (await import("@/lib/apiError")).ApiError,
+    notify: await import("@/lib/notify"),
   }
 }
 afterEach(() => vi.restoreAllMocks())
@@ -102,7 +103,9 @@ describe("importLocalQueues", () => {
     vi.spyOn(value.api, "queueAdd")
       .mockRejectedValueOnce(new value.ApiError(409, "conflict", "pleine"))
       .mockResolvedValueOnce(ok)
-    const err = vi.spyOn(toast, "error").mockImplementation(() => "")
+    const err = vi
+      .spyOn(value.notify.toast, "error")
+      .mockImplementation(() => "")
     await value.importLocalQueues()
     expect(value.draftOf("s1").text).toBe("x\na")
     expect(err).toHaveBeenCalled()
@@ -113,7 +116,9 @@ describe("importLocalQueues", () => {
       s1: { text: "", queue: ["a", "b"], sending: Date.now() - 60_000 },
     })
     vi.spyOn(value.api, "queueAdd").mockResolvedValue(ok)
-    const err = vi.spyOn(toast, "error").mockImplementation(() => "")
+    const err = vi
+      .spyOn(value.notify.toast, "error")
+      .mockImplementation(() => "")
     await value.importLocalQueues()
     expect(value.draftOf("s1").text).toBe("a")
     expect(err).toHaveBeenCalled()

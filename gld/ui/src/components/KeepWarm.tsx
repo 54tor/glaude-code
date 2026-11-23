@@ -8,7 +8,7 @@ import {
   Snowflake,
 } from "lucide-react"
 import { useTranslation } from "react-i18next"
-import { toast } from "sonner"
+import { toast } from "@/lib/notify"
 import { api, type Session } from "@/lib/api"
 import { errMsg } from "@/lib/apiError"
 import { cn } from "@/lib/utils"

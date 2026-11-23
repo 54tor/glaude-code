@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { Copy, Download, FilePen, RotateCcw, Upload } from "lucide-react"
-import { toast } from "sonner"
+import { toast } from "@/lib/notify"
 import { useTranslation } from "react-i18next"
 import { Button } from "@/components/ui/button"
 import {

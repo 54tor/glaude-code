@@ -21,7 +21,7 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
-import { toast } from "sonner"
+import { toast } from "@/lib/notify"
 import { cn, copyText } from "@/lib/utils"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import type { Row } from "./actions"

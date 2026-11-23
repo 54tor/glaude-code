@@ -1,6 +1,6 @@
 import { useRef, useState } from "react"
 import { Fan, Sparkles } from "lucide-react"
-import { toast } from "sonner"
+import { toast } from "@/lib/notify"
 import { useTranslation } from "react-i18next"
 import { api, type MemFile } from "@/lib/api"
 import { errMsg } from "@/lib/apiError"

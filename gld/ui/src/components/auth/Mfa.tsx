@@ -2,7 +2,7 @@ import { useId, useState, type FormEvent, type ReactNode } from "react"
 import { useTranslation } from "react-i18next"
 import QRCode from "react-qr-code"
 import { Copy, Download, KeyRound, Smartphone } from "lucide-react"
-import { toast } from "sonner"
+import { toast } from "@/lib/notify"
 import {
   abandon,
   boot,

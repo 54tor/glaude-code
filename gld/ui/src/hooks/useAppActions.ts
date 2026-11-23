@@ -1,5 +1,5 @@
 import { useRef, type Dispatch, type SetStateAction } from "react"
-import { toast } from "sonner"
+import { toast } from "@/lib/notify"
 import { i18n } from "@/i18n"
 import { watchTrust } from "@/lib/trust"
 import {

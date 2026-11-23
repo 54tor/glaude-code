@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Bell } from "lucide-react"
-import { toast } from "sonner"
+import { toast } from "@/lib/notify"
 import { useAuth } from "@/lib/auth"
 import { errMsg } from "@/lib/apiError"
 import {

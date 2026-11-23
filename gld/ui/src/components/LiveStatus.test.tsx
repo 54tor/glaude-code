@@ -7,7 +7,7 @@ import {
   renderHook,
   screen,
 } from "@testing-library/react"
-import { toast } from "sonner"
+import { toast } from "@/lib/notify"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
   api,

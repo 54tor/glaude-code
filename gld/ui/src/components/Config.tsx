@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react"
 import { Stethoscope } from "lucide-react"
-import { toast } from "sonner"
+import { toast } from "@/lib/notify"
 import { useTranslation } from "react-i18next"
 import { api, type CfgOverview } from "@/lib/api"
 import { errMsg } from "@/lib/apiError"

@@ -1,6 +1,6 @@
 import { i18n, loc } from "@/i18n"
 import { ALargeSmall, Clock, HardDrive } from "lucide-react"
-import { toast } from "sonner"
+import { toast } from "@/lib/notify"
 import type { MemFile, MemProject, MemTarget } from "@/lib/api"
 import { copyText } from "@/lib/utils"
 

@@ -21,7 +21,7 @@ import {
   Upload,
   X,
 } from "lucide-react"
-import { toast } from "sonner"
+import { toast } from "@/lib/notify"
 import { api, type SnipScope, type Snippet } from "@/lib/api"
 import { ago, size, tilde } from "@/lib/format"
 import { cn, copyText } from "@/lib/utils"

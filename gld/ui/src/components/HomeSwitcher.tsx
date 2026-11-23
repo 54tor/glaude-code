@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { Check, FolderCog, Plus, X } from "lucide-react"
-import { toast } from "sonner"
+import { toast } from "@/lib/notify"
 import { useTranslation } from "react-i18next"
 import { api, type HomesInfo } from "@/lib/api"
 import { errMsg } from "@/lib/apiError"

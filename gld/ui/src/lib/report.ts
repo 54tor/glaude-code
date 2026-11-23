@@ -1,4 +1,4 @@
-import { toast } from "sonner"
+import { toast } from "@/lib/notify"
 import { i18n } from "@/i18n"
 import { errMsg } from "./apiError"
 

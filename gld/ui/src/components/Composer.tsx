@@ -13,7 +13,7 @@ import {
   type Opt,
 } from "@/lib/prompt"
 import { type Live } from "./LiveStatus"
-import { toast } from "sonner"
+import { toast } from "@/lib/notify"
 import {
   ArrowDownToLine,
   Bug,

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Download } from "lucide-react"
-import { toast } from "sonner"
+import { toast } from "@/lib/notify"
 import { api, type DocEntry } from "@/lib/api"
 import { qs, seg, v1 } from "@/lib/apiError"
 import { brief, size } from "@/lib/format"

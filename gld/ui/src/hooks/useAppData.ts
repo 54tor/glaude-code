@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react"
-import { toast } from "sonner"
+import { toast } from "@/lib/notify"
 import { i18n } from "@/i18n"
 import { api, type Data, type SnipScope, type Snippet } from "@/lib/api"
 import { ApiError } from "@/lib/apiError"

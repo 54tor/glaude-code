@@ -7,7 +7,7 @@ import {
   ShieldCheck,
   Users,
 } from "lucide-react"
-import { toast } from "sonner"
+import { toast } from "@/lib/notify"
 import { loc } from "@/i18n"
 import { boot, logout, signedOut, useAuth, type Reauth } from "@/lib/auth"
 import { http, seg } from "@/lib/http"

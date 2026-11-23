@@ -8,7 +8,7 @@ import {
   type KeyboardEvent,
 } from "react"
 import { useTranslation } from "react-i18next"
-import { toast } from "sonner"
+import { toast } from "@/lib/notify"
 import { cn } from "cn"
 import { ChevronLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"

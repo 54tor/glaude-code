@@ -1,4 +1,4 @@
-import { toast } from "sonner"
+import { toast } from "@/lib/notify"
 import { useTranslation } from "react-i18next"
 import { resolveFront, setLang } from "@/i18n"
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react"

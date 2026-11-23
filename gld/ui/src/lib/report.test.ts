@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const success = vi.fn()
 const error = vi.fn()
-vi.mock("sonner", () => ({
+vi.mock("@/lib/notify", () => ({
   toast: {
     success: (...values: unknown[]) => success(...values),
     error: (...values: unknown[]) => error(...values),

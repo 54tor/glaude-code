@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react"
-import { toast } from "sonner"
+import { toast } from "@/lib/notify"
 import { useTranslation } from "react-i18next"
 import { i18n } from "@/i18n"
 import { api, type CfgEdit, type CfgIssue, type CfgReply } from "@/lib/api"

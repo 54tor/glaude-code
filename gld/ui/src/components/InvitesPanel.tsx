@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { ExternalLink, X } from "lucide-react"
-import { toast } from "sonner"
+import { toast } from "@/lib/notify"
 import { api, type InviteInfo, type ShareInfo } from "@/lib/api"
 import { errMsg } from "@/lib/apiError"
 import { ago } from "@/lib/format"

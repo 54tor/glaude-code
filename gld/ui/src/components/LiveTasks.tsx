@@ -8,7 +8,7 @@ import {
   Fan,
   OctagonAlert,
 } from "lucide-react"
-import { toast } from "sonner"
+import { toast } from "@/lib/notify"
 import { api, type BgTask, type Workflow } from "@/lib/api"
 import { ApiError, errMsg } from "@/lib/apiError"
 import { ago, compact } from "@/lib/format"

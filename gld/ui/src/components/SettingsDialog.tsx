@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import { Monitor, Moon, Sun } from "lucide-react"
 import { useTranslation } from "react-i18next"
-import { toast } from "sonner"
+import { toast } from "@/lib/notify"
 import { setLang, type Lang } from "@/i18n"
 import { api } from "@/lib/api"
 import { errMsg } from "@/lib/apiError"

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Brain, FileText, FolderSearch, Globe, Send } from "lucide-react"
-import { toast } from "sonner"
+import { toast } from "@/lib/notify"
 import { api, type MemFile, type MemProject } from "@/lib/api"
 import { tilde } from "@/lib/format"
 import { argAt } from "@/lib/commands"

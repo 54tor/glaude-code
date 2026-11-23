@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react"
-import { toast } from "sonner"
+import { toast } from "@/lib/notify"
 import { api } from "@/lib/api"
 import { errMsg } from "@/lib/apiError"
 import { tilde } from "@/lib/format"

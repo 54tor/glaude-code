@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { RotateCcw, Trash2 } from "lucide-react"
-import { toast } from "sonner"
+import { toast } from "@/lib/notify"
 import { api, type FsTrashItem } from "@/lib/api"
 import { ApiError } from "@/lib/apiError"
 import { Button } from "@/components/ui/button"

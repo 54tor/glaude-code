@@ -1,5 +1,5 @@
 import { useEffect, useState, useSyncExternalStore } from "react"
-import { toast } from "sonner"
+import { toast } from "@/lib/notify"
 import { i18n } from "@/i18n"
 import { clearDrafts, guardDrafts } from "@/hooks/useDraft"
 import { resetGit } from "@/hooks/useGit"

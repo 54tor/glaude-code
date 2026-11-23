@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react"
-import { toast } from "sonner"
+import { toast } from "@/lib/notify"
 import { i18n } from "@/i18n"
 import { useKeepWarm } from "@/hooks/useKeepWarm"
 import { HOT } from "@/lib/sessionsView"

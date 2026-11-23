@@ -45,8 +45,8 @@ const handles = vi.hoisted(() => {
   return { all, of }
 })
 const toast = vi.hoisted(() => Object.assign(vi.fn(), { error: vi.fn() }))
-vi.mock("sonner", async (orig) => ({
-  ...(await orig<typeof import("sonner")>()),
+vi.mock("@/lib/notify", async (orig) => ({
+  ...(await orig<typeof import("@/lib/notify")>()),
   toast,
 }))
 

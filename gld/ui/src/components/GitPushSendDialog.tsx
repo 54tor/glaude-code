@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next"
-import { toast } from "sonner"
+import { toast } from "@/lib/notify"
 import { api } from "@/lib/api"
 import { authFetch } from "@/lib/auth"
 import { errMsg, qs, readResponse, v1 } from "@/lib/apiError"

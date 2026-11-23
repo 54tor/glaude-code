@@ -55,7 +55,7 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
-import { toast } from "sonner"
+import { toast } from "@/lib/notify"
 import { copyText } from "@/lib/utils"
 import { Confirm, type Ask } from "./Confirm"
 import { Skeleton } from "@/components/ui/skeleton"
