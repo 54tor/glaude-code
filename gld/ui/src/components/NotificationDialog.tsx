@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react"
 import {
   clearHistory,
   markAllRead,
+  toast,
   useNotifications,
   type Notification,
 } from "@/lib/notify"
@@ -27,9 +28,11 @@ const timeOf = (notification: Notification) =>
 function Detail({
   notification,
   onBack,
+  onDone,
 }: {
   notification: Notification
   onBack: () => void
+  onDone: () => void
 }) {
   const { t } = useTranslation()
   return (
@@ -50,7 +53,15 @@ function Detail({
             {timeOf(notification)}
           </div>
           {notification.action && (
-            <Button size="sm" onClick={notification.action.onClick}>
+            <Button
+              size="sm"
+              onClick={(event) => {
+                notification.action?.onClick(event)
+                if (event.defaultPrevented) return
+                toast.dismiss(notification.id)
+                onDone()
+              }}
+            >
               {notification.action.label}
             </Button>
           )}
@@ -176,7 +187,11 @@ export function NotificationDialog({
           <TaskDetail chip={selectedTask} onBack={() => onTarget(null)} />
         )}
         {selected && (
-          <Detail notification={selected} onBack={() => onTarget(null)} />
+          <Detail
+            notification={selected}
+            onBack={() => onTarget(null)}
+            onDone={() => onTarget(undefined)}
+          />
         )}
         {!selected && !selectedTask && (
           <HistoryList history={history} onPick={onTarget} />

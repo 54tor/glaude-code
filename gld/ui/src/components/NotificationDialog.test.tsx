@@ -33,6 +33,31 @@ describe("NotificationDialog", () => {
     expect(onClick).toHaveBeenCalledTimes(1)
   })
 
+  it("l'action ferme la notification et la modale", () => {
+    const id = toast.error("échec", {
+      action: { label: "Annuler", onClick: vi.fn() },
+    })
+    const onTarget = vi.fn()
+    render(<NotificationDialog target={id} onTarget={onTarget} />)
+    fireEvent.click(screen.getByText("Annuler"))
+    expect(getNotifications().visible).toHaveLength(0)
+    expect(onTarget).toHaveBeenCalledWith(undefined)
+  })
+
+  it("l'action qui appelle preventDefault garde notification et modale", () => {
+    const id = toast.error("échec", {
+      action: {
+        label: "Envoyer",
+        onClick: (event) => event.preventDefault(),
+      },
+    })
+    const onTarget = vi.fn()
+    render(<NotificationDialog target={id} onTarget={onTarget} />)
+    fireEvent.click(screen.getByText("Envoyer"))
+    expect(getNotifications().visible).toHaveLength(1)
+    expect(onTarget).not.toHaveBeenCalled()
+  })
+
   it("liste l'historique, les plus récentes d'abord", () => {
     toast.error("ancienne")
     toast.error("récente")

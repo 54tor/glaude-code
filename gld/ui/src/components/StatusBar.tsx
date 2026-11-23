@@ -93,7 +93,10 @@ export function StatusBar({
       onFocus={keepDialogsOpen}
       className="status-bar pointer-events-auto fixed inset-x-0 bottom-0 z-[60] flex h-[var(--bar-h)] items-center gap-2 border-t bg-background px-2 pb-[env(safe-area-inset-bottom)]"
     >
-      <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
+      <div
+        aria-live="polite"
+        className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden"
+      >
         {shownTasks.map((chip) => (
           <Chip
             key={chip.key}

@@ -440,7 +440,7 @@ function GuestSession({ handle }: { handle: string }) {
         onOpenAutoFocus={(focusEvent) => focusEvent.preventDefault()}
         onInteractOutside={(interactEvent) => interactEvent.preventDefault()}
         onEscapeKeyDown={(keyEvent) => keyEvent.preventDefault()}
-        className="safe-t safe-b flex h-[calc(var(--vvh,100dvh)*0.94)] w-[96vw] max-w-none flex-col gap-0 overflow-hidden p-0 sm:max-w-none max-md:top-[var(--vvt,0px)] max-md:left-0 max-md:h-[var(--vvh,100dvh)] max-md:w-screen max-md:translate-x-0 max-md:translate-y-0 max-md:rounded-none max-md:border-0"
+        className="safe-t flex h-[calc(var(--vvh,100dvh)*0.94)] w-[96vw] max-w-none flex-col gap-0 overflow-hidden p-0 sm:max-w-none max-md:top-[var(--vvt,0px)] max-md:left-0 max-md:h-[var(--vvh,100dvh)] max-md:w-screen max-md:translate-x-0 max-md:translate-y-0 max-md:rounded-none max-md:border-0"
       >
         <DialogHeader className="gap-1 border-b px-4 pt-2.5 pb-3 md:px-6 md:pb-4">
           <div className="flex items-start gap-4">

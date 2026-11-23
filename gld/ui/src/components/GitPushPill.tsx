@@ -21,7 +21,9 @@ export function GitPushPill({
       type="button"
       onClick={() => setGitPushTerminalOpen(run.id, true)}
       title={t("conversation.gitPush.openTerminal")}
-      style={{ bottom: `calc(0.75rem + ${position * PILL_STACK_STEP_REM}rem)` }}
+      style={{
+        bottom: `calc(var(--bar-h) + 0.75rem + ${position * PILL_STACK_STEP_REM}rem)`,
+      }}
       className="fixed left-3 z-[100] flex max-w-[60vw] cursor-pointer items-center gap-2 rounded-full border bg-popover px-3 py-1.5 text-xs text-popover-foreground shadow-md"
     >
       <Loader2 className="size-3.5 shrink-0 animate-spin" aria-hidden />

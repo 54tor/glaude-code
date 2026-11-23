@@ -17,6 +17,12 @@ describe("StatusBar", () => {
     expect(screen.getByRole("region", { name: "Barre d'état" })).toBeTruthy()
   })
 
+  it("annonce les nouvelles notifications aux lecteurs d'écran", () => {
+    render(<StatusBar onOpen={vi.fn()} />)
+    act(() => void toast.error("alerte"))
+    expect(screen.getByText("alerte").closest("[aria-live]")).not.toBeNull()
+  })
+
   it("rend une pastille par notification visible", () => {
     render(<StatusBar onOpen={vi.fn()} />)
     act(() => {
