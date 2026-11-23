@@ -243,4 +243,10 @@ describe("StatusBar", () => {
     document.removeEventListener("pointerdown", seen)
     expect(seen).toHaveBeenCalled()
   })
+
+  it("reste sous les menus et dialogues (z-50)", () => {
+    render(<StatusBar onOpen={vi.fn()} />)
+    const bar = screen.getByRole("region")
+    expect(bar.className).toContain("z-40")
+  })
 })

@@ -131,4 +131,16 @@ describe("NotificationDialog", () => {
     render(<NotificationDialog target="task:s1:absente" onTarget={vi.fn()} />)
     expect(screen.getByText("Aucune notification")).toBeTruthy()
   })
+
+  it("cliquer un bouton de la description ferme la modale", () => {
+    const onOpenSession = vi.fn()
+    const id = toast.warning("alerte", {
+      description: <button onClick={onOpenSession}>ouvrir</button>,
+    })
+    const onTarget = vi.fn()
+    render(<NotificationDialog target={id} onTarget={onTarget} />)
+    fireEvent.click(screen.getByText("ouvrir"))
+    expect(onOpenSession).toHaveBeenCalled()
+    expect(onTarget).toHaveBeenCalledWith(undefined)
+  })
 })

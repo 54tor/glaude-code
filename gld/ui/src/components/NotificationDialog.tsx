@@ -45,7 +45,12 @@ function Detail({
         <div className="min-w-0 flex-1 space-y-2 break-words">
           <div className="font-medium">{notification.message}</div>
           {notification.description && (
-            <div className="text-muted-foreground">
+            <div
+              className="text-muted-foreground"
+              onClick={(event) => {
+                if ((event.target as Element).closest("button, a")) onDone()
+              }}
+            >
               {notification.description}
             </div>
           )}

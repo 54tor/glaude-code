@@ -127,7 +127,7 @@ export function StatusBar({
       aria-label={t("shell.statusBar.label")}
       onPointerDown={keepDialogsOpen}
       onFocus={keepDialogsOpen}
-      className="status-bar pointer-events-auto fixed inset-x-0 bottom-0 z-[60] flex h-[var(--bar-h)] items-center gap-2 border-t bg-background px-2 pb-[env(safe-area-inset-bottom)]"
+      className="status-bar pointer-events-auto fixed inset-x-0 bottom-0 z-40 flex h-[var(--bar-h)] items-center gap-2 border-t bg-background px-2 pb-[env(safe-area-inset-bottom)]"
     >
       <div
         aria-live="polite"
