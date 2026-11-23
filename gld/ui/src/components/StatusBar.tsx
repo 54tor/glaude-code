@@ -1,4 +1,4 @@
-import type { ReactNode, SyntheticEvent } from "react"
+import { useEffect, useState, type ReactNode, type SyntheticEvent } from "react"
 import { useTranslation } from "react-i18next"
 import {
   Bell,
@@ -10,6 +10,7 @@ import {
   X,
 } from "lucide-react"
 import { toast, useNotifications, type NotifyKind } from "@/lib/notify"
+import { api } from "@/lib/api"
 import { useTaskChips } from "@/lib/tasksStore"
 
 export const MAX_VISIBLE_CHIPS = 5
@@ -71,6 +72,33 @@ function Chip({
 // Les dialogues Radix se ferment sur toute interaction hors d'eux : la barre, posée au-dessus, ne doit pas les fermer.
 const keepDialogsOpen = (event: SyntheticEvent) => event.stopPropagation()
 
+function VersionLabel() {
+  const { t } = useTranslation()
+  const [updateInfo, setUpdateInfo] =
+    useState<Awaited<ReturnType<typeof api.updateInfo>>>()
+  useEffect(() => {
+    api.updateInfo().then(setUpdateInfo, () => {})
+  }, [])
+  if (!updateInfo) return null
+  return (
+    <div className="flex min-w-0 shrink items-center gap-2 text-xs text-muted-foreground tabular-nums">
+      <span className="truncate" title={updateInfo.current}>
+        {updateInfo.current}
+      </span>
+      {updateInfo.newer && (
+        <a
+          href={updateInfo.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="shrink-0 font-medium text-primary hover:underline"
+        >
+          {t("shell.sidebar.updateTo", { latest: updateInfo.latest })}
+        </a>
+      )}
+    </div>
+  )
+}
+
 export function StatusBar({
   onOpen,
 }: {
@@ -128,6 +156,7 @@ export function StatusBar({
           </span>
         )}
       </div>
+      <VersionLabel />
       <button
         type="button"
         aria-label={historyLabel}

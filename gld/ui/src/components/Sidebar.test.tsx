@@ -672,38 +672,6 @@ describe("Sidebar — projets, dossiers, pied de menu", () => {
     await mount({ args: "--model opus" })
     expect(screen.getByText("--model opus")).toBeTruthy()
   })
-
-  it("version : affichée avec un lien de mise à jour seulement si une release plus récente existe", async () => {
-    vi.mocked(api.updateInfo).mockResolvedValue({
-      current: "v0.9.0",
-      latest: "v0.9.1",
-      url: "https://github.com/example/glaude-code/releases/tag/v0.9.1",
-      newer: true,
-    })
-    await mount()
-    expect(screen.getByText("v0.9.0")).toBeTruthy()
-    const updateLink = screen.getByRole("link", {
-      name: "Mettre à jour : v0.9.1",
-    })
-    expect(updateLink.getAttribute("rel")).toContain("noopener")
-  })
-
-  it("version à jour : pas de lien", async () => {
-    vi.mocked(api.updateInfo).mockResolvedValue({
-      current: "v0.9.1",
-      latest: "v0.9.1",
-      url: "x",
-      newer: false,
-    })
-    await mount()
-    expect(screen.getByText("v0.9.1")).toBeTruthy()
-    expect(screen.queryByRole("link", { name: /Mettre à jour/ })).toBeNull()
-  })
-
-  it("version indisponible : pas de pied de version", async () => {
-    await mount()
-    expect(document.querySelector("aside")?.textContent).not.toMatch(/v\d/)
-  })
 })
 
 describe("Sidebar — petit écran", () => {

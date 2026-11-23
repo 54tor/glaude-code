@@ -3,14 +3,19 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { resetNotifications, toast } from "@/lib/notify"
 import { publishTasks, resetTasks } from "@/lib/tasksStore"
+import { api } from "@/lib/api"
 import { MAX_VISIBLE_CHIPS, StatusBar } from "./StatusBar"
 
 describe("StatusBar", () => {
   beforeEach(() => {
     resetNotifications()
     resetTasks()
+    vi.spyOn(api, "updateInfo").mockRejectedValue(new Error("hors ligne"))
   })
-  afterEach(cleanup)
+  afterEach(() => {
+    cleanup()
+    vi.restoreAllMocks()
+  })
 
   it("est une région nommée", () => {
     render(<StatusBar onOpen={vi.fn()} />)
@@ -151,5 +156,38 @@ describe("StatusBar", () => {
       ])
     )
     expect(screen.getByText("t9")).toBeTruthy()
+  })
+
+  it("version : affichée avec un lien de mise à jour seulement si une release plus récente existe", async () => {
+    vi.mocked(api.updateInfo).mockResolvedValue({
+      current: "v0.9.0",
+      latest: "v0.9.1",
+      url: "https://github.com/example/glaude-code/releases/tag/v0.9.1",
+      newer: true,
+    })
+    render(<StatusBar onOpen={vi.fn()} />)
+    expect(await screen.findByText("v0.9.0")).toBeTruthy()
+    const updateLink = screen.getByRole("link", {
+      name: "Mettre à jour : v0.9.1",
+    })
+    expect(updateLink.getAttribute("rel")).toContain("noopener")
+  })
+
+  it("version à jour : pas de lien", async () => {
+    vi.mocked(api.updateInfo).mockResolvedValue({
+      current: "v0.9.1",
+      latest: "v0.9.1",
+      url: "x",
+      newer: false,
+    })
+    render(<StatusBar onOpen={vi.fn()} />)
+    expect(await screen.findByText("v0.9.1")).toBeTruthy()
+    expect(screen.queryByRole("link", { name: /Mettre à jour/ })).toBeNull()
+  })
+
+  it("version indisponible : rien n'est affiché", async () => {
+    render(<StatusBar onOpen={vi.fn()} />)
+    await act(async () => {})
+    expect(screen.getByRole("region").textContent).not.toMatch(/v\d/)
   })
 })

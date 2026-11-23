@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState, useSyncExternalStore } from "react"
+import { Fragment, useState, useSyncExternalStore } from "react"
 import { useTranslation } from "react-i18next"
 import { CleanupWarning } from "./CleanupWarning"
 import { SessionTrash } from "./SessionTrash"
@@ -59,7 +59,6 @@ import { ProjectItems, ProjectTree } from "./ProjectTree"
 import { segs } from "@/lib/paths"
 import { CM, GroupItems, SessionItems } from "./SessionMenu"
 import { nest } from "./SessionList"
-import { api } from "@/lib/api"
 import type { Project, Session, VGroup } from "@/lib/api"
 import { useActions, type Row } from "./actions"
 
@@ -481,38 +480,10 @@ function filterTree(nodes: Node[], query: string): Node[] {
   })
 }
 
-// Pied de navbar : version courante (un build de travail affiche son `git describe`) et lien vers la release plus récente.
-function VersionFooter() {
-  const { t } = useTranslation()
-  const [updateInfo, setUpdateInfo] = useState<{
-    current: string
-    latest: string
-    url: string
-    newer: boolean
-  }>()
-  useEffect(() => {
-    api.updateInfo().then(setUpdateInfo, () => {})
-  }, [])
+function PushFooter() {
   return (
-    <div className="flex items-center gap-2 border-t px-4 py-2 text-xs text-muted-foreground tabular-nums">
-      {updateInfo && (
-        <span className="truncate" title={updateInfo.current}>
-          {updateInfo.current}
-        </span>
-      )}
-      <div className="ml-auto flex shrink-0 items-center gap-2">
-        {updateInfo?.newer && (
-          <a
-            href={updateInfo.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-medium text-primary hover:underline"
-          >
-            {t("shell.sidebar.updateTo", { latest: updateInfo.latest })}
-          </a>
-        )}
-        <PushButton />
-      </div>
+    <div className="flex items-center justify-end border-t px-4 py-2">
+      <PushButton />
     </div>
   )
 }
@@ -936,7 +907,7 @@ export function Sidebar({ searchRef, ...props }: SidebarProps) {
           )}
         </div>
       )}
-      <VersionFooter />
+      <PushFooter />
     </>
   )
   if (wide)
