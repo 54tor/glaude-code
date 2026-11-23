@@ -5,15 +5,12 @@ on:
     branches: [main]
     paths:
       - site/**
-      - docs/logo.png
       - docs/screenshots/**
       - .github/workflows/pages.yml
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: pages
@@ -31,7 +28,6 @@ jobs:
           set -eu
           mkdir -p _site/shots
           cp -r site/. _site/
-          cp docs/logo.png _site/
           for shot in bureau-sessions bureau-conversation mobile-sessions mobile-conversation mobile-permissions; do
             cp "docs/screenshots/${shot}.png" _site/shots/
           done
@@ -43,6 +39,9 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
