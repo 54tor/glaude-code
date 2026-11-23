@@ -41,14 +41,19 @@ export function GitPushDialog({ dir, branch, onOpenChange }: Props) {
       (response) => {
         if (!isCurrent) return
         setUnpushed(response.remotes)
-        const behindNames = response.remotes
+        const trackedRemotes = response.remotes.filter(
+          (remote) => remote.tracked
+        )
+        const candidates =
+          trackedRemotes.length > 0 ? trackedRemotes : response.remotes
+        const behindNames = candidates
           .filter((remote) => remote.total > 0)
           .map((remote) => remote.name)
         setSelected(
           new Set(
             behindNames.length > 0
               ? behindNames
-              : response.remotes.map((remote) => remote.name)
+              : candidates.map((remote) => remote.name)
           )
         )
       },

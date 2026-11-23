@@ -22,6 +22,7 @@ type UnpushedCommit struct {
 
 type RemoteUnpushed struct {
 	Name    string           `json:"name"`
+	Tracked bool             `json:"tracked"` // remote suivi par la branche courante : coché par défaut dans le dialogue
 	Total   int              `json:"total"`
 	Commits []UnpushedCommit `json:"commits"`
 }
@@ -43,6 +44,11 @@ func parseUnpushedLog(logOutput string) []UnpushedCommit {
 // Un remote sans la branche voit donc ses commits manquants plutôt qu'une liste vide.
 func gitUnpushed(dir string) []RemoteUnpushed {
 	remoteNames := gitRemoteNames(dir)
+	branch, _ := gitOut1(dir, "symbolic-ref", "--short", "-q", "HEAD")
+	trackedRemote := ""
+	if branch != "" {
+		trackedRemote, _ = gitOut1(dir, "config", "--get", "branch."+branch+".remote")
+	}
 	unpushed := make([]RemoteUnpushed, 0, len(remoteNames))
 	for _, remoteName := range remoteNames {
 		notOnRemote := []string{"HEAD", "--not", "--remotes=" + remoteName}
@@ -50,7 +56,7 @@ func gitUnpushed(dir string) []RemoteUnpushed {
 		total, _ := strconv.Atoi(countOutput)
 		logArgs := append([]string{"log", "-n", strconv.Itoa(unpushedCommitsMax), "--format=%h" + logFieldSeparator + "%s" + logFieldSeparator + "%cI"}, notOnRemote...)
 		logOutput, _ := gitOut1(dir, logArgs...)
-		unpushed = append(unpushed, RemoteUnpushed{Name: remoteName, Total: total, Commits: parseUnpushedLog(logOutput)})
+		unpushed = append(unpushed, RemoteUnpushed{Name: remoteName, Tracked: remoteName == trackedRemote, Total: total, Commits: parseUnpushedLog(logOutput)})
 	}
 	return unpushed
 }

@@ -12,6 +12,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Un invité en écriture ne peut plus lancer le mode bash : un message commençant par `!` est refusé (403).
 
 ### Modifié
+- Le dialogue « Pousser » ne coche par défaut que le remote suivi par la branche (`tracked` dans `GET /v1/git/unpushed`) ; les autres restent listés mais décochés. Sans amont (première poussée), tous les remotes en retard restent cochés.
 - La liste des dépôts d'une session aligne le nom (en entier) et l'état de chaque dépôt en colonnes, sans répéter « propre ».
 
 ### Corrigé

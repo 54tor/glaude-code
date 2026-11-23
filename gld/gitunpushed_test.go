@@ -36,6 +36,10 @@ func TestGitUnpushedListsMissingCommitsPerRemote(t *testing.T) {
 		}
 	}
 	for _, remote := range unpushed {
+		isTrackedAttendu := remote.Name == "origin"
+		if remote.Tracked != isTrackedAttendu {
+			t.Errorf("%s : tracked %v, attendu %v", remote.Name, remote.Tracked, isTrackedAttendu)
+		}
 		if remote.Name == "origin" && (len(remote.Commits) != 1 || remote.Commits[0].Subject != "deux") {
 			t.Errorf("origin : %+v", remote.Commits)
 		}

@@ -530,6 +530,7 @@ export type GitRemote = { name: string; url: string }
 export type UnpushedCommit = { hash: string; subject: string; date: string }
 export type RemoteUnpushed = {
   name: string
+  tracked: boolean
   total: number
   commits: UnpushedCommit[]
 }
