@@ -400,9 +400,6 @@
       "confirm_other": "Supprimer définitivement {{count}} sessions ? Transcript, sous-agents et fichiers associés partent.",
       "emptyAll": "Vider la corbeille"
     },
-    "toast": {
-      "notifications": "Notifications"
-    },
     "images": {
       "pasted": "image collée",
       "uploadFailed": "Envoi de l'image impossible : {{msg}}",

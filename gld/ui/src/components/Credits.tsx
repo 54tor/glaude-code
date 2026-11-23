@@ -57,10 +57,8 @@ const WEB = [
   ["Monaco Editor", "https://microsoft.github.io/monaco-editor"],
   ["i18next, react-i18next", "https://www.i18next.com"],
   ["react-qr-code", "https://github.com/rosskhanas/react-qr-code"],
-  ["next-themes", "https://github.com/pacocoursey/next-themes"],
   ["class-variance-authority", "https://cva.style"],
   ["xterm.js", "https://xtermjs.org"],
-  ["sonner", "https://sonner.emilkowal.ski"],
   ["cmdk", "https://github.com/dip/cmdk"],
   ["fflate", "https://github.com/101arrowz/fflate"],
   [

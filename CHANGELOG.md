@@ -5,6 +5,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 ## [Non publié]
 
 ### Ajouté
+- Une barre d'état fixe en bas de page remplace les notifications flottantes : chaque notification et chaque tâche de fond en cours y devient une pastille, les pastilles s'additionnent, un clic ouvre le détail dans une modale, et l'historique des notifications reste consultable (icône cloche).
 - Un dossier glissé depuis la barre latérale sur le bloc des dossiers d'un projet l'y ajoute, comme le bouton « Ajouter un dossier ».
 
 ### Corrigé

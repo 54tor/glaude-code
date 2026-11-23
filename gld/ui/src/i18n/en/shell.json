@@ -400,9 +400,6 @@
       "confirm_other": "Permanently delete {{count}} sessions? Transcripts, subagents and associated files are removed.",
       "emptyAll": "Empty the trash"
     },
-    "toast": {
-      "notifications": "Notifications"
-    },
     "images": {
       "pasted": "pasted image",
       "uploadFailed": "Could not upload the image: {{msg}}",
