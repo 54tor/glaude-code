@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { api, type BgTask, type Workflow } from "@/lib/api"
 import { ApiError } from "@/lib/apiError"
 import type { Live } from "./LiveStatus"
+import { getTaskChips, resetTasks } from "@/lib/tasksStore"
 import { LiveTasks, stopTask, WorkflowProgress } from "./LiveTasks"
 
 const task = (overrides: Partial<BgTask> = {}): BgTask => ({
@@ -302,5 +303,22 @@ describe("WorkflowProgress", () => {
       />
     )
     expect(screen.getByText("(sans phase)")).toBeTruthy()
+  })
+})
+
+describe("LiveTasks → barre d'état", () => {
+  beforeEach(() => resetTasks())
+  it("publie les tâches en cours puis les retire au démontage", async () => {
+    const { unmount } = render(
+      <LiveTasks
+        live={liveWith([task(), task({ id: "t2", status: "completed" })])}
+        dir="/home/bob/p"
+        id="s1"
+      />
+    )
+    await flush()
+    expect(getTaskChips().map((chip) => chip.key)).toEqual(["s1:t1"])
+    unmount()
+    expect(getTaskChips()).toEqual([])
   })
 })

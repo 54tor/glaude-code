@@ -2,10 +2,15 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { getNotifications, resetNotifications, toast } from "@/lib/notify"
+import { publishTasks, resetTasks } from "@/lib/tasksStore"
+import { api } from "@/lib/api"
 import { NotificationDialog } from "./NotificationDialog"
 
 describe("NotificationDialog", () => {
-  beforeEach(() => resetNotifications())
+  beforeEach(() => {
+    resetNotifications()
+    resetTasks()
+  })
   afterEach(cleanup)
 
   it("reste fermée quand la cible est undefined", () => {
@@ -78,6 +83,27 @@ describe("NotificationDialog", () => {
 
   it("affiche l'état vide", () => {
     render(<NotificationDialog target={null} onTarget={vi.fn()} />)
+    expect(screen.getByText("Aucune notification")).toBeTruthy()
+  })
+
+  it("affiche une tâche en cours et permet de l'arrêter", () => {
+    const sessionSend = vi
+      .spyOn(api, "sessionSend")
+      .mockResolvedValue(undefined as never)
+    publishTasks("s1", "/d", [
+      { id: "t1", desc: "npm run build", status: "running", hasOutput: true },
+    ])
+    render(<NotificationDialog target="task:s1:t1" onTarget={vi.fn()} />)
+    expect(screen.getByText("npm run build")).toBeTruthy()
+    fireEvent.click(screen.getByText("Arrêter la tâche"))
+    expect(sessionSend).toHaveBeenCalledWith(
+      "s1",
+      expect.stringContaining("t1")
+    )
+  })
+
+  it("une tâche terminée retombe sur la liste", () => {
+    render(<NotificationDialog target="task:s1:absente" onTarget={vi.fn()} />)
     expect(screen.getByText("Aucune notification")).toBeTruthy()
   })
 })

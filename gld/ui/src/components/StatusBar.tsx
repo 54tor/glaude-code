@@ -1,4 +1,4 @@
-import type { SyntheticEvent } from "react"
+import type { ReactNode, SyntheticEvent } from "react"
 import { useTranslation } from "react-i18next"
 import {
   Bell,
@@ -9,14 +9,11 @@ import {
   TriangleAlert,
   X,
 } from "lucide-react"
-import {
-  toast,
-  useNotifications,
-  type Notification,
-  type NotifyKind,
-} from "@/lib/notify"
+import { toast, useNotifications, type NotifyKind } from "@/lib/notify"
+import { useTaskChips } from "@/lib/tasksStore"
 
 export const MAX_VISIBLE_CHIPS = 5
+export const TASK_PREFIX = "task:"
 
 const KIND_STYLE: Record<NotifyKind, string> = {
   success: "text-success",
@@ -36,28 +33,32 @@ export function KindIcon({ kind }: { kind: NotifyKind }) {
 }
 
 function Chip({
-  notification,
+  icon,
+  label,
   onOpen,
+  onDismiss,
 }: {
-  notification: Notification
-  onOpen: (id: string) => void
+  icon: ReactNode
+  label: ReactNode
+  onOpen: () => void
+  onDismiss?: () => void
 }) {
   const { t } = useTranslation()
   return (
     <div className="flex max-w-[16rem] min-w-0 items-center rounded-md border bg-muted/40 text-xs">
       <button
         type="button"
-        onClick={() => onOpen(notification.id)}
+        onClick={onOpen}
         className="flex min-w-0 items-center gap-1.5 rounded-l-md px-2 py-1 hover:bg-muted"
       >
-        <KindIcon kind={notification.kind} />
-        <span className="truncate">{notification.message}</span>
+        {icon}
+        <span className="truncate">{label}</span>
       </button>
-      {notification.kind !== "loading" && (
+      {onDismiss && (
         <button
           type="button"
           aria-label={t("shell.statusBar.dismiss")}
-          onClick={() => toast.dismiss(notification.id)}
+          onClick={onDismiss}
           className="rounded-r-md px-1 py-1 text-muted-foreground hover:bg-muted hover:text-foreground"
         >
           <X className="size-3" />
@@ -77,8 +78,12 @@ export function StatusBar({
 }) {
   const { t } = useTranslation()
   const { visible, history } = useNotifications()
-  const shown = visible.slice(-MAX_VISIBLE_CHIPS)
-  const hiddenCount = visible.length - shown.length
+  const taskChips = useTaskChips()
+  const shownTasks = taskChips.slice(0, MAX_VISIBLE_CHIPS)
+  const notificationSlots = MAX_VISIBLE_CHIPS - shownTasks.length
+  const shown = notificationSlots > 0 ? visible.slice(-notificationSlots) : []
+  const hiddenCount =
+    taskChips.length + visible.length - shownTasks.length - shown.length
   const unreadCount = history.filter((entry) => !entry.read).length
   return (
     <div
@@ -89,11 +94,25 @@ export function StatusBar({
       className="status-bar pointer-events-auto fixed inset-x-0 bottom-0 z-[60] flex h-[var(--bar-h)] items-center gap-2 border-t bg-background px-2 pb-[env(safe-area-inset-bottom)]"
     >
       <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
+        {shownTasks.map((chip) => (
+          <Chip
+            key={chip.key}
+            icon={<KindIcon kind="loading" />}
+            label={chip.task.desc}
+            onOpen={() => onOpen(`${TASK_PREFIX}${chip.key}`)}
+          />
+        ))}
         {shown.map((notification) => (
           <Chip
             key={notification.id}
-            notification={notification}
-            onOpen={onOpen}
+            icon={<KindIcon kind={notification.kind} />}
+            label={notification.message}
+            onOpen={() => onOpen(notification.id)}
+            onDismiss={
+              notification.kind === "loading"
+                ? undefined
+                : () => toast.dismiss(notification.id)
+            }
           />
         ))}
         {hiddenCount > 0 && (

@@ -2,10 +2,14 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { resetNotifications, toast } from "@/lib/notify"
+import { publishTasks, resetTasks } from "@/lib/tasksStore"
 import { MAX_VISIBLE_CHIPS, StatusBar } from "./StatusBar"
 
 describe("StatusBar", () => {
-  beforeEach(() => resetNotifications())
+  beforeEach(() => {
+    resetNotifications()
+    resetTasks()
+  })
   afterEach(cleanup)
 
   it("est une région nommée", () => {
@@ -83,5 +87,43 @@ describe("StatusBar", () => {
     expect(seen).toHaveBeenCalledTimes(1)
     document.removeEventListener("pointerdown", seen)
     document.removeEventListener("focusin", seen)
+  })
+
+  it("affiche les tâches en cours avant les notifications, clic = task:clé", () => {
+    const onOpen = vi.fn()
+    render(<StatusBar onOpen={onOpen} />)
+    act(() => {
+      toast.error("une erreur")
+      publishTasks("s1", "/d", [
+        { id: "t1", desc: "npm run build", status: "running", hasOutput: true },
+      ])
+    })
+    const labels = screen
+      .getAllByRole("button")
+      .map((button) => button.textContent)
+    expect(labels.indexOf("npm run build")).toBeLessThan(
+      labels.indexOf("une erreur")
+    )
+    fireEvent.click(screen.getByText("npm run build"))
+    expect(onOpen).toHaveBeenCalledWith("task:s1:t1")
+  })
+
+  it("le plafond compte aussi les tâches", () => {
+    render(<StatusBar onOpen={vi.fn()} />)
+    act(() => {
+      publishTasks(
+        "s1",
+        "/d",
+        Array.from({ length: MAX_VISIBLE_CHIPS + 2 }, (_, index) => ({
+          id: `t${index}`,
+          desc: `tâche ${index}`,
+          status: "running",
+          hasOutput: false,
+        }))
+      )
+      toast.error("masquée")
+    })
+    expect(screen.getByText("+3")).toBeTruthy()
+    expect(screen.queryByText("masquée")).toBeNull()
   })
 })
