@@ -530,7 +530,11 @@ function GuestSession({ handle }: { handle: string }) {
             )}
             {history.msgs.map((message, messageIndex) => (
               <Message
-                key={`${message.o ?? messageIndex}-${messageIndex}`}
+                key={
+                  message.o === undefined
+                    ? `i${messageIndex}`
+                    : `${message.o}.${message.n ?? 0}`
+                }
                 m={message}
                 conv={{ dir, id, tools, guest: true }}
               />

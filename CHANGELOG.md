@@ -6,6 +6,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ### Corrigé
 - Les listes déroulantes ne remontent plus en haut quand la liste des dossiers se rafraîchit pendant qu'on fait défiler (Nouvelle session › Dossier).
+- Vue invité : le rafraîchissement ne remet plus le défilement en place ; les messages gardent une clé stable quand la fenêtre d'historique s'élargit.
 
 ## [0.17.0] - 2026-11-23
 
