@@ -170,3 +170,12 @@ func TestReadTeamTasks(t *testing.T) {
 		t.Fatalf("%+v", tf)
 	}
 }
+
+func TestReadTeamIgnoresLeadSessionOfAnotherTeam(t *testing.T) {
+	root, dir := teamRoot(t, false)
+	os.WriteFile(filepath.Join(dir, "config.json"), []byte(`{"leadSessionId":"11111111-13eb-4519-9823-771e3a943e4c"}`), 0o644)
+	teamFiles, err := readTeam(root, tName)
+	if err != nil || teamFiles.LeadSessionID != "" {
+		t.Fatalf("leadSessionId attendu vide, obtenu %q (%v)", teamFiles.LeadSessionID, err)
+	}
+}

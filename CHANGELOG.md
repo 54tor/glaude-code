@@ -16,6 +16,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Les listes déroulantes ne remontent plus en haut quand la liste des dossiers se rafraîchit pendant qu'on fait défiler (Nouvelle session › Dossier).
 - Vue invité : le rafraîchissement ne remet plus le défilement en place ; les messages gardent une clé stable quand la fenêtre d'historique s'élargit.
 - Le cookie de sélection du dossier (`home`) porte désormais l'attribut `Secure` en HTTPS, comme les autres cookies.
+- Équipes d'agents : le `leadSessionId` d'un `config.json` n'est retenu que s'il correspond au nom de l'équipe, pour qu'un fichier forgé ne désigne pas le panneau d'une autre session.
 
 ## [0.17.0] - 2026-11-23
 

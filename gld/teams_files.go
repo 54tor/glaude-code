@@ -123,7 +123,9 @@ func readTeam(cfgRoot, name string) (TeamFiles, error) {
 	} else if configMap, isObject := config.(map[string]any); !isObject {
 		teamFiles.Unknown = append(teamFiles.Unknown, cfgRel)
 	} else {
-		teamFiles.LeadSessionID = str(configMap, "leadSessionId")
+		if leadSessionID := str(configMap, "leadSessionId"); strings.HasPrefix(leadSessionID, strings.TrimPrefix(name, "session-")+"-") {
+			teamFiles.LeadSessionID = leadSessionID // le nom d'équipe est « session- » + 8 premiers caractères de l'uuid du chef : config.json ne désigne pas une autre session
+		}
 		if leadProcess, hasLeadProcess := configMap["leadProcess"].(map[string]any); hasLeadProcess {
 			if pid, hasPID := leadProcess["pid"].(float64); hasPID {
 				teamFiles.LeadPID = int(pid)
