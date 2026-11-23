@@ -183,7 +183,7 @@ export function clearHistory() {
   publish()
 }
 
-export function resetNotifyForTests() {
+export function resetNotifications() {
   timers.forEach((timer) => clearTimeout(timer))
   timers.clear()
   entries = []

@@ -1,5 +1,5 @@
 import { useEffect, useState, useSyncExternalStore } from "react"
-import { toast } from "@/lib/notify"
+import { resetNotifications, toast } from "@/lib/notify"
 import { i18n } from "@/i18n"
 import { clearDrafts, guardDrafts } from "@/hooks/useDraft"
 import { resetGit } from "@/hooks/useGit"
@@ -270,6 +270,7 @@ export function clearUserData() {
   resetWarm()
   resetOpen()
   resetTrust()
+  resetNotifications()
   for (const storageKey of storedKeys()) {
     if (userKey(storageKey)) localStorage.removeItem(storageKey)
   }

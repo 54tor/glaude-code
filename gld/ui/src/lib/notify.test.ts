@@ -3,14 +3,14 @@ import {
   AUTO_CLOSE_MS,
   HISTORY_LIMIT,
   getNotifications,
-  resetNotifyForTests,
+  resetNotifications,
   toast,
 } from "./notify"
 
 describe("notify", () => {
   beforeEach(() => {
     vi.useFakeTimers()
-    resetNotifyForTests()
+    resetNotifications()
   })
   afterEach(() => vi.useRealTimers())
 

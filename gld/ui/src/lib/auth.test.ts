@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { authFetch, setAuth } from "./auth"
+import { authFetch, clearUserData, setAuth } from "./auth"
+import { getNotifications, toast } from "./notify"
 
 beforeEach(() => {
   setAuth({ state: "open", csrf: "", share: undefined })
@@ -29,4 +30,12 @@ describe("authFetch X-Gld-Share", () => {
       expect(sent().get("X-Gld-Share")).toBe("0123456789abcdef")
     }
   )
+})
+
+describe("clearUserData", () => {
+  it("vide les notifications du compte précédent", () => {
+    toast.error("secret du compte A")
+    clearUserData()
+    expect(getNotifications().history).toEqual([])
+  })
 })
