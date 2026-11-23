@@ -6,9 +6,11 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ### Ajouté
 - Une barre d'état fixe en bas de page remplace les notifications flottantes : chaque notification et chaque tâche de fond en cours y devient une pastille, les pastilles s'additionnent, un clic ouvre le détail dans une modale, et l'historique des notifications reste consultable (icône cloche). La version courante et le lien « Mettre à jour » s'y affichent, à la place du pied du menu latéral, avec la cloche des notifications push ; l'historique des notifications prend l'icône d'horloge.
+- L'avertissement « sessions bientôt effacées par Claude Code » devient une alerte de la barre d'état, avec la liste des sessions dans le détail ; fermée, elle ne revient que si la liste des sessions menacées change.
 - Un dossier glissé depuis la barre latérale sur le bloc des dossiers d'un projet l'y ajoute, comme le bouton « Ajouter un dossier ».
 
 ### Corrigé
+- La liste des dépôts d'une session (bouton « N à pousser ») affiche de nouveau le nom de chaque dépôt : chaque ligne passe à la ligne au lieu de dépasser du menu.
 - Tout dossier ajouté à un projet (menu, glisser-déposer, bouton « Ajouter un dossier ») s'ajoute aux dossiers supplémentaires de chaque dossier du projet, et reçoit les leurs en retour. Avant, seul le dossier ajouté était autorisé chez les autres. Au démarrage, gld complète aussi les projets existants.
 - Les listes déroulantes ne remontent plus en haut quand la liste des dossiers se rafraîchit pendant qu'on fait défiler (Nouvelle session › Dossier).
 - Vue invité : le rafraîchissement ne remet plus le défilement en place ; les messages gardent une clé stable quand la fenêtre d'historique s'élargit.
