@@ -602,6 +602,19 @@
       "sessionUntitled": "Session sans titre",
       "linkOf": "Lien de {{name}}",
       "linkNew": "Nouveau lien"
+    },
+    "statusBar": {
+      "label": "Barre d'état",
+      "history": "Historique des notifications",
+      "unread_one": "{{count}} notification non lue",
+      "unread_other": "{{count}} notifications non lues",
+      "dismiss": "Fermer la notification",
+      "moreHidden": "+{{count}}",
+      "detailTitle": "Notification",
+      "historyTitle": "Historique",
+      "empty": "Aucune notification",
+      "clear": "Vider l'historique",
+      "back": "Retour à la liste"
     }
   }
 }

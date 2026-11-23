@@ -8,7 +8,7 @@ import { GuestApp } from "@/components/GuestApp.tsx"
 import { ThemeProvider } from "@/components/theme-provider.tsx"
 import { StaleBuildSplash } from "@/components/StaleBuildSplash"
 import { TrustDialog } from "@/components/TrustDialog"
-import { Toaster } from "@/components/ui/sonner"
+import { StatusBar } from "@/components/StatusBar"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { EDGE } from "@/lib/swipe"
 import { MD } from "@/components/Sidebar"
@@ -24,7 +24,10 @@ const visualViewport = window.visualViewport
 if (visualViewport) {
   const fitToVisualViewport = () => {
     const rootElement = document.documentElement
-    rootElement.style.setProperty("--vvh", `${visualViewport.height}px`)
+    rootElement.style.setProperty(
+      "--vvh",
+      `calc(${visualViewport.height}px - var(--bar-h))`
+    )
     rootElement.style.setProperty("--vvt", `${visualViewport.offsetTop}px`)
     const isKeyboardCoveringScreen =
       visualViewport.height < window.screen.height * KEYBOARD_OPEN_SCREEN_RATIO
@@ -35,7 +38,10 @@ if (visualViewport) {
       isInstalledPortrait && !isKeyboardCoveringScreen
         ? Math.max(visualViewport.height, window.screen.height)
         : visualViewport.height
-    rootElement.style.setProperty("--app-h", `${appHeight}px`)
+    rootElement.style.setProperty(
+      "--app-h",
+      `calc(${appHeight}px - var(--bar-h))`
+    )
     const isMobileWidth = !window.matchMedia(MD).matches
     rootElement.toggleAttribute(
       "data-kb",
@@ -90,11 +96,7 @@ createRoot(document.getElementById("root")!).render(
         {isGuestPath ? <GuestApp /> : <App />}
         <TrustDialog />
         <StaleBuildSplash />
-        <Toaster
-          position="bottom-right"
-          mobileOffset={{ bottom: "calc(16px + env(safe-area-inset-bottom))" }}
-          richColors
-        />
+        <StatusBar onOpen={() => undefined} />
       </TooltipProvider>
     </ThemeProvider>
   </StrictMode>

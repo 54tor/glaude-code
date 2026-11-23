@@ -238,6 +238,10 @@
 }
 @media (prefers-reduced-motion: reduce) { .warm-wave { animation: none; } }
 
+/* Barre d'état fixe en bas : --app-h et --vvh (main.tsx) en retranchent la hauteur ; masquée clavier ouvert. */
+:root { --bar-h: calc(1.75rem + env(safe-area-inset-bottom)); }
+[data-kb] { --bar-h: 0px; }
+[data-kb] .status-bar { display: none; }
 /* iPhone : l'application installée s'étend sous la barre d'état, la Dynamic Island et l'indicateur d'accueil (viewport-fit=cover,
    barre d'état translucide). Les surfaces pleine hauteur s'en écartent ; clavier ouvert, il couvre déjà l'indicateur. */
 .safe-t { padding-top: env(safe-area-inset-top); }

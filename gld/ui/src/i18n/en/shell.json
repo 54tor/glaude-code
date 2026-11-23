@@ -602,6 +602,19 @@
       "sessionUntitled": "Untitled session",
       "linkOf": "Link for {{name}}",
       "linkNew": "New link"
+    },
+    "statusBar": {
+      "label": "Status bar",
+      "history": "Notification history",
+      "unread_one": "{{count}} unread notification",
+      "unread_other": "{{count}} unread notifications",
+      "dismiss": "Dismiss notification",
+      "moreHidden": "+{{count}}",
+      "detailTitle": "Notification",
+      "historyTitle": "History",
+      "empty": "No notifications",
+      "clear": "Clear history",
+      "back": "Back to the list"
     }
   }
 }
