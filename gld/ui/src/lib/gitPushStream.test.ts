@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-vi.mock("@/lib/http", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/http")>()),
-  http: { get: vi.fn(), post: vi.fn(), del: vi.fn() },
-}))
+// Sans importOriginal : le vrai http charge auth, qui importe useGitPush puis gitPushStream avant que le mock soit prêt.
+vi.mock("@/lib/http", async () => {
+  const { qs, seg } = await import("@/lib/apiError")
+  return { http: { get: vi.fn(), post: vi.fn(), del: vi.fn() }, qs, seg }
+})
 
 import { ApiError } from "@/lib/apiError"
 import { http } from "@/lib/http"
