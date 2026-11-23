@@ -82,6 +82,26 @@ func TestGitPush(t *testing.T) {
 	}
 }
 
+// Un remote dont la poussée est désactivée (`no_push`, amont d'un subtree) n'est ni listé ni poussable.
+func TestGitRemotesHidesNoPushRemote(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git absent")
+	}
+	root := t.TempDir()
+	workDir := root + "/work"
+	git(t, root, "init", "-q", "-b", "main", workDir)
+	git(t, workDir, "remote", "add", "origin", root+"/a.git")
+	git(t, workDir, "remote", "add", "amont", "https://example.org/amont.git")
+	git(t, workDir, "remote", "set-url", "--push", "amont", "no_push")
+	remotes := gitRemotes(workDir)
+	if len(remotes) != 1 || remotes[0].Name != "origin" {
+		t.Fatalf("valeurObtenue %+v", remotes)
+	}
+	if _, err := gitPush(workDir, "amont"); err == nil {
+		t.Fatal("remote no_push accepté")
+	}
+}
+
 // Un hook pre-push qui refuse : sa sortie arrive dans le flux, suivie du code de retour non nul de git ; un push sans hook rend 0.
 func TestStreamGitPushReportsHookOutputAndExitCode(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {

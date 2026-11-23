@@ -101,14 +101,17 @@ func gitOut1(dir string, args ...string) (string, error) {
 	return strings.TrimSpace(string(output)), err
 }
 
-// gitRemotes : les remotes du dépôt, avec l'adresse de poussée (`git remote -v`, lignes « (push) »).
+// noPushURL : valeur de `git remote set-url --push <remote> no_push` qui désactive la poussée (remote amont d'un subtree).
+const noPushURL = "no_push"
+
+// gitRemotes : les remotes du dépôt, avec l'adresse de poussée (`git remote -v`, lignes « (push) »), sans ceux dont la poussée est désactivée.
 func gitRemotes(dir string) []GitRemote {
 	remoteOutput, _ := gitOut1(dir, "remote", "-v")
 	var remotes []GitRemote
 	for _, remoteLine := range strings.Split(remoteOutput, "\n") {
 		fields := strings.Fields(remoteLine)
 		isPushLine := len(fields) == 3 && fields[2] == "(push)"
-		if isPushLine {
+		if isPushLine && fields[1] != noPushURL {
 			remotes = append(remotes, GitRemote{fields[0], maskURL(fields[1])})
 		}
 	}
