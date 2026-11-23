@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"net/http"
 	"net/http/httptest"
 	"net/http/httputil"
@@ -274,5 +275,22 @@ func TestSaveHomesRefuseDeReecrireUnFichierIllisible(t *testing.T) {
 	}
 	if contenuObtenu, _ := os.ReadFile(homesFile()); string(contenuObtenu) != contenuAttendu {
 		t.Fatalf("fichier des homes modifié : %s", contenuObtenu)
+	}
+}
+
+func TestHomeCookieSecureOverTLS(t *testing.T) {
+	mux := http.NewServeMux()
+	routesHomes(mux)
+	for _, withTLS := range []bool{false, true} {
+		request := httptest.NewRequest("PUT", "/v1/homes/current", strings.NewReader(`{"name":""}`))
+		if withTLS {
+			request.TLS = &tls.ConnectionState{}
+		}
+		recorder := httptest.NewRecorder()
+		mux.ServeHTTP(recorder, request)
+		cookies := recorder.Result().Cookies()
+		if len(cookies) != 1 || cookies[0].Secure != withTLS {
+			t.Fatalf("TLS %v : cookies %v, Secure attendu %v", withTLS, cookies, withTLS)
+		}
 	}
 }

@@ -637,7 +637,7 @@ func routesHomes(mux *http.ServeMux) {
 				return
 			}
 		}
-		cookie := &http.Cookie{Name: homeCookie, Value: url.QueryEscape(body.Name), Path: "/", SameSite: http.SameSiteStrictMode, HttpOnly: true, MaxAge: 365 * 24 * 3600}
+		cookie := &http.Cookie{Name: homeCookie, Value: url.QueryEscape(body.Name), Path: "/", SameSite: http.SameSiteStrictMode, HttpOnly: true, Secure: requestHTTPS(request), MaxAge: 365 * 24 * 3600}
 		if body.Name == "" {
 			cookie.MaxAge = -1
 		}

@@ -12,6 +12,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Tout dossier ajouté à un projet (menu, glisser-déposer, bouton « Ajouter un dossier ») s'ajoute aux dossiers supplémentaires de chaque dossier du projet, et reçoit les leurs en retour. Avant, seul le dossier ajouté était autorisé chez les autres. Au démarrage, gld complète aussi les projets existants.
 - Les listes déroulantes ne remontent plus en haut quand la liste des dossiers se rafraîchit pendant qu'on fait défiler (Nouvelle session › Dossier).
 - Vue invité : le rafraîchissement ne remet plus le défilement en place ; les messages gardent une clé stable quand la fenêtre d'historique s'élargit.
+- Le cookie de sélection du dossier (`home`) porte désormais l'attribut `Secure` en HTTPS, comme les autres cookies.
 
 ## [0.17.0] - 2026-11-23
 
