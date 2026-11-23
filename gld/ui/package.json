@@ -72,6 +72,9 @@
     "vitest": "^5.1.1"
   },
   "overrides": {
-    "dompurify": "3.4.17"
+    "dompurify": "3.4.17",
+    "@ts-morph/common": {
+      "minimatch": "11.0.9"
+    }
   }
 }
