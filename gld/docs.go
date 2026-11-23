@@ -110,7 +110,7 @@ func routesDocs(mux *http.ServeMux) {
 		}
 		defer documentFile.Close()
 		fileInfo, statErr := documentFile.Stat()
-		isServable := statErr == nil && fileInfo.Mode().IsRegular() && fileInfo.Size() <= docMax
+		isServable := statErr == nil && fileInfo.Mode().IsRegular() && fileInfo.Size() <= docMax && ownedByRunAsTarget(fileInfo)
 		if !isServable {
 			notFound(responseWriter)
 			return

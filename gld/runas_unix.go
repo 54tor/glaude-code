@@ -125,6 +125,15 @@ func loginShell(name string) string {
 
 func runAsOn() bool { return runAsAcct != nil }
 
+// ownedByRunAsTarget : sous GLD_RUN_AS, vrai seulement pour un fichier du compte cible ; un transcript qu'il écrit ne doit pas faire lire un fichier de root.
+func ownedByRunAsTarget(info os.FileInfo) bool {
+	if runAsAcct == nil {
+		return true
+	}
+	stat, isUnixStat := info.Sys().(*syscall.Stat_t)
+	return isUnixStat && stat.Uid == runAsAcct.cred.Uid
+}
+
 func runAsHome() string {
 	if runAsAcct == nil {
 		return ""

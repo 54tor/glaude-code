@@ -82,7 +82,7 @@ func describeDoc(path, timestamp string) docEntry {
 	}
 	defer documentFile.Close()
 	fileInfo, statErr := documentFile.Stat()
-	if statErr != nil || !fileInfo.Mode().IsRegular() {
+	if statErr != nil || !fileInfo.Mode().IsRegular() || !ownedByRunAsTarget(fileInfo) {
 		entry.Missing = true
 		return entry
 	}

@@ -17,6 +17,8 @@ func runAsOn() bool { return false }
 
 func runAsHome() string { return "" }
 
+func ownedByRunAsTarget(os.FileInfo) bool { return true }
+
 func tmuxDetached() bool { return false }
 
 const runAsChildEnv = "GLD_RUN_AS_CHILD"
