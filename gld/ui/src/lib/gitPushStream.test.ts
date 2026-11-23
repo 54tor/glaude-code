@@ -70,6 +70,29 @@ describe("suivi d'une poussée durable", () => {
     vi.useRealTimers()
   })
 
+  it("retente sur un 404 passager puis abandonne s'il persiste", async () => {
+    vi.useFakeTimers()
+    const notFound = new ApiError(404, "not_found", "introuvable")
+    vi.mocked(http.get)
+      .mockRejectedValueOnce(notFound)
+      .mockResolvedValueOnce(page("suite\n", 6, runInfo()))
+      .mockResolvedValueOnce(page(null, 6, runInfo()))
+    const receivedChunks: string[] = []
+    const recovered = followGitPush("run1", (chunk) =>
+      receivedChunks.push(new TextDecoder().decode(chunk))
+    )
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(await recovered).toBe(0)
+    expect(receivedChunks).toEqual(["suite\n"])
+
+    vi.mocked(http.get).mockReset().mockRejectedValue(notFound)
+    const persistent = followGitPush("run1", () => {})
+    const outcome = persistent.catch((error: unknown) => error)
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(await outcome).toBe(notFound)
+    vi.useRealTimers()
+  })
+
   it("signale une poussée interrompue plutôt qu'un état indéterminé", async () => {
     vi.mocked(http.get).mockResolvedValue(
       page(

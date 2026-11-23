@@ -23,6 +23,8 @@ type OutputPage = { out: string | null; next: number; run: PushRunInfo }
 const POLL_INTERVAL_MS = 500
 const RETRY_INTERVAL_MS = 1500 // gld redémarre : la poussée continue, on retente
 const SERVER_ERROR_STATUS = 500
+const NOT_FOUND_STATUS = 404
+const MAX_NOT_FOUND_RETRIES = 10 // un 404 passager (état serveur relu) ne doit pas couper le rapport
 
 const bytesOfBase64 = (encoded: string) =>
   Uint8Array.from(atob(encoded), (character) => character.charCodeAt(0))
@@ -66,6 +68,7 @@ export async function followGitPush(
   abortSignal?: AbortSignal
 ): Promise<number> {
   let offset = 0
+  let notFoundRetries = 0
   for (;;) {
     if (abortSignal?.aborted) throw new Error("aborted")
     let page: OutputPage
@@ -74,10 +77,15 @@ export async function followGitPush(
         `/git/push-runs/${seg(runId)}/output${qs({ offset })}`
       )
     } catch (requestError) {
-      if (!isTransient(requestError)) throw requestError
+      const isPassingNotFound =
+        requestError instanceof ApiError &&
+        requestError.status === NOT_FOUND_STATUS &&
+        notFoundRetries++ < MAX_NOT_FOUND_RETRIES
+      if (!isTransient(requestError) && !isPassingNotFound) throw requestError
       await sleep(RETRY_INTERVAL_MS)
       continue
     }
+    notFoundRetries = 0
     if (page.out) onOutput(bytesOfBase64(page.out))
     offset = page.next
     if (page.out) continue

@@ -15,6 +15,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - La liste des dépôts d'une session aligne le nom (en entier) et l'état de chaque dépôt en colonnes, sans répéter « propre ».
 
 ### Corrigé
+- Le suivi d'une poussée retente jusqu'à 10 fois sur un 404 passager au lieu d'abandonner : le rapport joint n'est plus coupé en plein milieu alors que la poussée réussit.
 - Une session ouverte dans tmux depuis gld démarre dans le dossier de son projet : un nouvel onglet tmux ouvert à la main s'y place, au lieu du dossier de gld.
 - Une session dont un coéquipier d'agent-teams travaille encore reste « occupée » (au lieu de passer « attend votre message » quand l'écran semble au repos), et la file d'attente n'y envoie plus de message.
 
