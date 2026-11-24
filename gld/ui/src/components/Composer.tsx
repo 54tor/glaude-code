@@ -569,7 +569,9 @@ function ColdHint({ text, onNew }: ColdHintProps) {
       className="flex items-center gap-2 rounded-md bg-info/10 px-3 py-1 text-xs text-info"
     >
       <Snowflake className="size-3.5 shrink-0" aria-hidden />
-      <span className="min-w-0 flex-1">{text}</span>
+      <span className="min-w-0 flex-1 max-md:line-clamp-2" title={text}>
+        {text}
+      </span>
       <Button
         size="xs"
         variant="outline"
@@ -781,7 +783,12 @@ function LiveSend({
             className="flex items-center gap-2 rounded-md bg-warning/10 px-3 py-1 text-xs text-warning"
           >
             <Minimize2 className="size-3.5 shrink-0" aria-hidden />
-            <span className="min-w-0 flex-1">{compactHint}</span>
+            <span
+              className="min-w-0 flex-1 max-md:line-clamp-2"
+              title={compactHint}
+            >
+              {compactHint}
+            </span>
             <Button
               size="xs"
               variant="outline"
