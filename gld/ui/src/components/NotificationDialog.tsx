@@ -16,9 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { useTaskChips, type TaskChip } from "@/lib/tasksStore"
-import { stopTask } from "./LiveTasks"
-import { KindIcon, TASK_PREFIX } from "./StatusBar"
+import { KindIcon } from "./StatusBar"
 
 type Target = string | null | undefined
 
@@ -70,41 +68,6 @@ function Detail({
               {notification.action.label}
             </Button>
           )}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function TaskDetail({ chip, onBack }: { chip: TaskChip; onBack: () => void }) {
-  const { t } = useTranslation()
-  const { task, sessionId } = chip
-  return (
-    <div className="space-y-3">
-      <Button variant="ghost" size="sm" onClick={onBack}>
-        <ArrowLeft /> {t("shell.statusBar.back")}
-      </Button>
-      <div className="flex items-start gap-2">
-        <KindIcon kind="loading" />
-        <div className="min-w-0 flex-1 space-y-2 break-words">
-          <div className="font-medium">{task.desc || task.id}</div>
-          <div className="text-xs text-muted-foreground">
-            {t(`conversation.tasks.status.${task.status}`)}
-          </div>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() =>
-              void stopTask(
-                sessionId,
-                task.id,
-                task.desc,
-                t("conversation.tasks.stopSent")
-              )
-            }
-          >
-            {t("conversation.tasks.stop")}
-          </Button>
         </div>
       </div>
     </div>
@@ -166,13 +129,8 @@ export function NotificationDialog({
   useEffect(() => {
     if (isOpen) markAllRead()
   }, [isOpen, history])
-  const taskChips = useTaskChips()
-  const isTask = typeof target === "string" && target.startsWith(TASK_PREFIX)
-  const selectedTask = isTask
-    ? taskChips.find((chip) => `${TASK_PREFIX}${chip.key}` === target)
-    : undefined
   const selected =
-    typeof target === "string" && !isTask
+    typeof target === "string"
       ? history.find((notification) => notification.id === target)
       : undefined
   return (
@@ -180,7 +138,7 @@ export function NotificationDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>
-            {selected || selectedTask
+            {selected
               ? t("shell.statusBar.detailTitle")
               : t("shell.statusBar.historyTitle")}
           </DialogTitle>
@@ -188,9 +146,6 @@ export function NotificationDialog({
             {t("shell.statusBar.history")}
           </DialogDescription>
         </DialogHeader>
-        {selectedTask && (
-          <TaskDetail chip={selectedTask} onBack={() => onTarget(null)} />
-        )}
         {selected && (
           <Detail
             notification={selected}
@@ -198,9 +153,7 @@ export function NotificationDialog({
             onDone={() => onTarget(undefined)}
           />
         )}
-        {!selected && !selectedTask && (
-          <HistoryList history={history} onPick={onTarget} />
-        )}
+        {!selected && <HistoryList history={history} onPick={onTarget} />}
       </DialogContent>
     </Dialog>
   )

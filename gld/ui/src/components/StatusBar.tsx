@@ -12,10 +12,8 @@ import {
 import { toast, useNotifications, type NotifyKind } from "@/lib/notify"
 import { api } from "@/lib/api"
 import { PushButton } from "./PushSettings"
-import { useTaskChips } from "@/lib/tasksStore"
 
 export const MAX_VISIBLE_CHIPS = 5
-export const TASK_PREFIX = "task:"
 
 const KIND_STYLE: Record<NotifyKind, string> = {
   success: "text-success",
@@ -110,12 +108,8 @@ export function StatusBar({
 }) {
   const { t } = useTranslation()
   const { visible, history } = useNotifications()
-  const taskChips = useTaskChips()
-  const shownTasks = taskChips.slice(0, MAX_VISIBLE_CHIPS)
-  const notificationSlots = MAX_VISIBLE_CHIPS - shownTasks.length
-  const shown = notificationSlots > 0 ? visible.slice(-notificationSlots) : []
-  const hiddenCount =
-    taskChips.length + visible.length - shownTasks.length - shown.length
+  const shown = visible.slice(-MAX_VISIBLE_CHIPS)
+  const hiddenCount = visible.length - shown.length
   const unreadCount = history.filter((entry) => !entry.read).length
   const historyLabel =
     unreadCount > 0
@@ -133,14 +127,6 @@ export function StatusBar({
         aria-live="polite"
         className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden"
       >
-        {shownTasks.map((chip) => (
-          <Chip
-            key={chip.key}
-            icon={<KindIcon kind="loading" />}
-            label={chip.task.desc || chip.task.id}
-            onOpen={() => onOpen(`${TASK_PREFIX}${chip.key}`)}
-          />
-        ))}
         {shown.map((notification) => (
           <Chip
             key={notification.id}
