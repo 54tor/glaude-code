@@ -46,7 +46,7 @@ afterEach(() => {
 
 function TerminalOfFirstRun() {
   const run = useGitPushRuns()[0]
-  return run ? <GitPushTerminal run={run} /> : null
+  return run ? <GitPushTerminal run={run} onSend={() => {}} /> : null
 }
 
 describe("GitPushTerminal", () => {

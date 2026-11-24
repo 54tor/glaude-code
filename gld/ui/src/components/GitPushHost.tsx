@@ -56,7 +56,7 @@ function GitPushRunView({
   requestSend: (runId: number) => void
 }) {
   useGitPushToast(run, requestSend)
-  return <GitPushTerminal run={run} />
+  return <GitPushTerminal run={run} onSend={() => requestSend(run.id)} />
 }
 
 function ToastBody({

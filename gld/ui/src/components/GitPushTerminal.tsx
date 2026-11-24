@@ -2,7 +2,7 @@ import { useEffect, useState } from "react"
 import { Terminal } from "@xterm/xterm"
 import { FitAddon } from "@xterm/addon-fit"
 import "@xterm/xterm/css/xterm.css"
-import { Minimize2 } from "lucide-react"
+import { Minimize2, Send } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import {
   readGitPushChunks,
@@ -21,7 +21,13 @@ import {
 
 // Terminal en lecture seule du push courant : rejoue la sortie déjà reçue puis suit la suite. Le fermer ou le réduire ne
 // l'arrête pas ; le toast du push permet de le rouvrir.
-export function GitPushTerminal({ run }: { run: GitPushRun }) {
+export function GitPushTerminal({
+  run,
+  onSend,
+}: {
+  run: GitPushRun
+  onSend: () => void
+}) {
   const { t } = useTranslation()
   const [terminalHost, setTerminalHost] = useState<HTMLDivElement | null>(null)
   const isOpen = run.isTerminalOpen
@@ -54,6 +60,7 @@ export function GitPushTerminal({ run }: { run: GitPushRun }) {
 
   const isRunning = run.status === "running"
   const isSuccess = run.status === "succeeded"
+  const isFailure = run.status === "failed" || run.status === "error"
   return (
     <Dialog
       open={isOpen}
@@ -97,6 +104,11 @@ export function GitPushTerminal({ run }: { run: GitPushRun }) {
               </p>
             )}
           </div>
+          {isFailure && (
+            <Button size="sm" onClick={onSend}>
+              <Send /> {t("conversation.gitPush.sendToClaude")}
+            </Button>
+          )}
           {isRunning && (
             <Button
               size="sm"

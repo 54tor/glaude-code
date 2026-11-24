@@ -11,6 +11,8 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Une page de présentation en français et en anglais (captures, comparatif, installation) est publiée sur GitHub Pages à chaque modification du site.
 
 ### Corrigé
+- La barre d'état montre les tâches de fond de toutes les sessions actives sur chaque page, et plus seulement celles de la conversation ouverte.
+- Un push en échec propose le bouton « Envoyer à Claude » dans son terminal, en plus de la notification.
 - Sur mobile, les bandeaux « Compacter » et « Cache expiré » au-dessus de la saisie tiennent sur deux lignes au lieu de quatre ; le texte complet reste en infobulle.
 - Le fond sombre des fenêtres (conversation, boîtes de dialogue) ne recouvre plus la barre d'état : elle reste visible et sans voile en bas de l'écran.
 - La liste des dépôts d'une session (bouton « N à pousser ») affiche de nouveau le nom de chaque dépôt : chaque ligne passe à la ligne au lieu de dépasser du menu.

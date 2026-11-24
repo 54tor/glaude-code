@@ -11,7 +11,6 @@ import {
 import { toast } from "@/lib/notify"
 import { api, type BgTask, type Workflow } from "@/lib/api"
 import { ApiError, errMsg } from "@/lib/apiError"
-import { clearTasks, publishTasks } from "@/lib/tasksStore"
 import { ago, compact } from "@/lib/format"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -226,10 +225,6 @@ export function LiveTasks({
     if (!output?.ok) return t("conversation.tasks.noOutput")
     return output.text || t("conversation.tasks.empty")
   }
-  useEffect(() => {
-    publishTasks(id, dir, tasks)
-  }, [id, dir, tasks])
-  useEffect(() => () => clearTasks(id), [id])
   if (tasks.length === 0) return null
   return (
     <>

@@ -50,6 +50,7 @@ import { segs } from "@/lib/paths"
 import { Compose, type ComposeAsk } from "@/components/Compose"
 import { AuthScreen } from "@/components/auth/Login"
 import { GitPushHost } from "@/components/GitPushHost"
+import { TasksSync } from "@/components/TasksSync"
 import { boot, useAuth } from "@/lib/auth"
 import { importLocalQueues } from "@/hooks/importQueues"
 
@@ -930,6 +931,7 @@ function Shell() {
       <Confirm ask={ask} onClose={() => setAsk(null)} />
       <BanAlert />
       <GitPushHost />
+      <TasksSync sessions={liveSessions} />
       <Prompt ask={prompt} onClose={() => setPrompt(null)} />
       <Compose ask={compose} onClose={() => setCompose(null)} />
       <SessionInfo row={info} onClose={() => setInfo(null)} />
