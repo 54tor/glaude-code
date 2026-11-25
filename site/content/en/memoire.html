@@ -1,0 +1,46 @@
+<h1>Memory and rules</h1>
+<p class="lead">See what Claude actually loads at the start of each session, what it costs, and tidy it up without risking losing anything.</p>
+
+<h2 id="page">The Memory page</h2>
+<p>It gathers your <code>CLAUDE.md</code> files, your rules and each project's memory.</p>
+<figure>
+  <img src="{{R}}shots/05-memoire.png" alt="The Memory page: CLAUDE.md, rules and project memory with their token cost" width="1920" height="1080" loading="lazy">
+  <figcaption>The Memory page: files, rules and project memory, with the cost of each.</figcaption>
+</figure>
+<ul>
+  <li><strong>Read, edit, move, copy</strong> a file or an entry.</li>
+  <li><strong>Disable a rule</strong> without deleting it.</li>
+  <li>See <strong>how many tokens</strong> each file adds to every session: that is the context cost paid at each start.</li>
+</ul>
+
+<h2 id="sante">The Health tab</h2>
+<p>It automatically spots:</p>
+<ul>
+  <li><strong>broken links</strong> (an entry pointing to a missing file);</li>
+  <li><strong>indexes that are too long</strong>;</li>
+  <li><strong>duplicates</strong>;</li>
+  <li><strong>contradictions</strong> between entries.</li>
+</ul>
+
+<h2 id="claude">Ask Claude to tidy up</h2>
+<p>You can ask Claude (Haiku model, a few tenths of a cent) to <strong>rewrite</strong> or <strong>merge</strong> entries. The result is a draft that you review before it is written.</p>
+<figure>
+  <img src="{{R}}shots/04-memoire-modale.png" alt="Window for editing a memory entry" width="1920" height="1080" loading="lazy">
+  <figcaption>Editing a memory entry.</figcaption>
+</figure>
+
+<h2 id="corbeille">Trash: nothing is lost</h2>
+<p>Any file that is deleted or replaced first goes to a <strong>trash</strong>, from where it can be restored in one click. Emptying the trash is a separate action.</p>
+
+<h2 id="export">Export and import</h2>
+<p>You can <strong>export</strong> one entry, a selection or all the projects' memory entries to a JSON file, and <strong>import</strong> it on someone else's setup. The recipient:</p>
+<ol>
+  <li>chooses the project that receives each group of entries;</li>
+  <li>ticks the entries to import;</li>
+  <li>settles each name conflict: <em>skip</em>, <em>replace</em> or <em>keep both</em>.</li>
+</ol>
+
+<h2 id="droits">Rights in multi-user mode</h2>
+<div class="callout warn">
+  <p>Memory and rules files are <strong>instructions</strong>: every Claude session in the folder loads them. The <code>mem_write</code> right therefore amounts to being able to steer what other people's sessions do. Details in <a href="multi-utilisateur.html#droits">Accounts and multi-user</a>.</p>
+</div>

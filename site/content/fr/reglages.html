@@ -1,0 +1,50 @@
+<h1>Skills, snippets et réglages</h1>
+<p class="lead">Gérer ce qui se règle d'habitude à la main dans <code>settings.json</code> : en listes et en cases à cocher, avec un aperçu de chaque changement et une sauvegarde avant chaque écriture.</p>
+
+<h2 id="configuration">Configuration</h2>
+<p>La page <strong>Configuration</strong> expose les <strong>permissions</strong>, les <strong>réglages</strong> et les <strong>dossiers supplémentaires</strong> de Claude Code.</p>
+<figure>
+  <img src="{{R}}shots/07-configuration-permissions.png" alt="La page Configuration : permissions de Claude Code en listes et cases à cocher" width="1920" height="1080" loading="lazy">
+  <figcaption>Les permissions de Claude Code, en listes et cases à cocher.</figcaption>
+</figure>
+<ul>
+  <li>Chaque modification <strong>montre ce qui change</strong> avant d'être écrite.</li>
+  <li>Une <strong>sauvegarde</strong> est faite à chaque écriture, et restaurable.</li>
+  <li>Le réglage <code>language</code> de cette page choisit aussi la <a href="demarrer.html#langue">langue de Glaude Code</a>.</li>
+</ul>
+<figure>
+  <img src="{{R}}shots/06-configuration-projets.png" alt="La page Configuration : réglages par projet" width="1920" height="1080" loading="lazy">
+</figure>
+
+<h2 id="skills">Skills</h2>
+<figure>
+  <img src="{{R}}shots/08-skills.png" alt="La page Skills, Extensions et Plugins" width="1920" height="1080" loading="lazy">
+  <figcaption>Skills, extensions et plugins.</figcaption>
+</figure>
+<ul>
+  <li><strong>Lire, créer, modifier</strong> un skill et le <strong>copier vers un projet</strong> ; la liste signale les skills mal décrits.</li>
+  <li><strong>npx skills</strong> : les skills posés par <code>npx skills</code> sont reconnus (source, lien ou copie, mise à jour disponible). Vous pouvez en <strong>chercher, installer, mettre à jour et retirer</strong> depuis la page. Chaque action affiche la commande exacte avant de la lancer ; elle exige le droit <code>config_write</code>.</li>
+</ul>
+
+<h2 id="snippets">Snippets</h2>
+<p>Les snippets sont vos commandes <code>/nom</code> de Claude Code. Vous pouvez les <strong>créer, modifier, importer ou exporter</strong>, et les <strong>insérer dans un message</strong>.</p>
+<figure>
+  <img src="{{R}}shots/14-snippets.png" alt="La page Snippets : commandes slash personnelles" width="1920" height="1080" loading="lazy">
+</figure>
+
+<h2 id="compte">Compte : limites et consommation</h2>
+<p>L'icône <strong>Compte</strong> (en haut à droite) affiche vos <strong>limites d'usage</strong> et votre <strong>consommation des 14 derniers jours</strong>.</p>
+<figure>
+  <img src="{{R}}shots/09-stats.png" alt="Limites d'usage et consommation des 14 derniers jours" width="1920" height="1080" loading="lazy">
+</figure>
+
+<h2 id="theme">Thème sombre</h2>
+<p>L'interface suit le thème clair ou sombre de votre système.</p>
+<figure>
+  <img src="{{R}}shots/10-sombre.png" alt="L'interface en thème sombre" width="1920" height="1080" loading="lazy">
+</figure>
+
+<h2 id="droits">Droits en mode multi-utilisateur</h2>
+<div class="callout warn">
+  <p>Écrire un hook, un serveur MCP ou un skill exécute du code sous le compte système qui fait tourner gld : le droit <code>config_write</code> est équivalent à ce compte. Les snippets le demandent aussi. Voir <a href="multi-utilisateur.html#droits">Comptes et multi-utilisateur</a>.</p>
+</div>

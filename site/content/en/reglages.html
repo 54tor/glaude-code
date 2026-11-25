@@ -1,0 +1,50 @@
+<h1>Skills, snippets and settings</h1>
+<p class="lead">Manage what you usually set by hand in <code>settings.json</code>: through lists and checkboxes, with a preview of each change and a backup before every write.</p>
+
+<h2 id="configuration">Configuration</h2>
+<p>The <strong>Configuration</strong> page exposes Claude Code's <strong>permissions</strong>, <strong>settings</strong> and <strong>additional folders</strong>.</p>
+<figure>
+  <img src="{{R}}shots/07-configuration-permissions.png" alt="The Configuration page: Claude Code permissions as lists and checkboxes" width="1920" height="1080" loading="lazy">
+  <figcaption>Claude Code permissions, as lists and checkboxes.</figcaption>
+</figure>
+<ul>
+  <li>Each change <strong>shows what will change</strong> before it is written.</li>
+  <li>A <strong>backup</strong> is made on every write, and can be restored.</li>
+  <li>The <code>language</code> setting on this page also chooses the <a href="demarrer.html#langue">Glaude Code language</a>.</li>
+</ul>
+<figure>
+  <img src="{{R}}shots/06-configuration-projets.png" alt="The Configuration page: per-project settings" width="1920" height="1080" loading="lazy">
+</figure>
+
+<h2 id="skills">Skills</h2>
+<figure>
+  <img src="{{R}}shots/08-skills.png" alt="The Skills, Extensions and Plugins page" width="1920" height="1080" loading="lazy">
+  <figcaption>Skills, extensions and plugins.</figcaption>
+</figure>
+<ul>
+  <li><strong>Read, create, edit</strong> a skill and <strong>copy it to a project</strong>; the list flags poorly described skills.</li>
+  <li><strong>npx skills</strong>: skills installed by <code>npx skills</code> are recognized (source, link or copy, update available). You can <strong>search, install, update and remove</strong> them from the page. Each action shows the exact command before running it; it requires the <code>config_write</code> right.</li>
+</ul>
+
+<h2 id="snippets">Snippets</h2>
+<p>Snippets are your Claude Code <code>/name</code> commands. You can <strong>create, edit, import or export</strong> them, and <strong>insert them into a message</strong>.</p>
+<figure>
+  <img src="{{R}}shots/14-snippets.png" alt="The Snippets page: personal slash commands" width="1920" height="1080" loading="lazy">
+</figure>
+
+<h2 id="compte">Account: limits and usage</h2>
+<p>The <strong>Account</strong> icon (top right) shows your <strong>usage limits</strong> and your <strong>consumption over the last 14 days</strong>.</p>
+<figure>
+  <img src="{{R}}shots/09-stats.png" alt="Usage limits and consumption over the last 14 days" width="1920" height="1080" loading="lazy">
+</figure>
+
+<h2 id="theme">Dark theme</h2>
+<p>The interface follows your system's light or dark theme.</p>
+<figure>
+  <img src="{{R}}shots/10-sombre.png" alt="The interface in dark theme" width="1920" height="1080" loading="lazy">
+</figure>
+
+<h2 id="droits">Rights in multi-user mode</h2>
+<div class="callout warn">
+  <p>Writing a hook, an MCP server or a skill runs code under the system account that runs gld: the <code>config_write</code> right is equivalent to that account. Snippets require it too. See <a href="multi-utilisateur.html#droits">Accounts and multi-user</a>.</p>
+</div>

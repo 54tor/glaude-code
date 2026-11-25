@@ -1,0 +1,68 @@
+<h1>Agent teams</h1>
+<p class="lead">Claude Code's native agent teams, driven from the <strong>Teams</strong> page: a project lead who creates teammates, and you following along, writing and answering their requests from the browser.</p>
+
+<div class="callout warn">
+  <p><strong>Experimental feature.</strong> Agent teams are an experimental Claude Code feature, and Glaude Code's handling of them has not yet been verified end to end on a real launch. Try them on a throwaway repository first.</p>
+</div>
+
+<h2 id="catalogue">The catalog</h2>
+<p>Glaude Code ships <strong>21 agents</strong> and <strong>11 ready-made teams</strong>. An agent has a role identifier (<code>testeur</code>, <code>chef</code>…) and a label ("Tester", "Project lead"), with no first name; a first name is drawn at each launch for every teammate.</p>
+<figure>
+  <img src="{{R}}shots/13-equipes.png" alt="The Teams page: the 11 catalog teams, the composition, the goal and the Launch button" width="1920" height="1080" loading="lazy">
+  <figcaption>The Teams page: catalog teams, composition, goal and folder.</figcaption>
+</figure>
+<div class="table-scroll">
+<table>
+  <thead><tr><th>Team</th><th>Agents</th></tr></thead>
+  <tbody>
+    <tr><td>Feature</td><td>Architect, backend development, frontend development, tester, reviewer</td></tr>
+    <tr><td>Bug fix</td><td>Explorer, backend development, tester</td></tr>
+    <tr><td>Bug investigation</td><td>Three investigators</td></tr>
+    <tr><td>Security audit</td><td>Authentication security, injections, secrets, dependencies</td></tr>
+    <tr><td>Code review</td><td>Reviewer, performance, authentication security</td></tr>
+    <tr><td>Refactoring</td><td>Explorer, refactoring, tester, reviewer</td></tr>
+    <tr><td>Documentation</td><td>Explorer, writer</td></tr>
+    <tr><td>UI and UX</td><td>UX and accessibility, frontend development, browser QA</td></tr>
+    <tr><td>Data migration</td><td>Data and migrations, backend development, tester</td></tr>
+    <tr><td>Release to production</td><td>DevOps, tester, writer</td></tr>
+    <tr><td>Exploring unfamiliar code</td><td>Explorer, architect, writer</td></tr>
+  </tbody>
+</table>
+</div>
+<p>"Read" agents only get the reading tools (<code>Read</code>, <code>Grep</code>, <code>Glob</code>); "write" agents get the default tools.</p>
+
+<h2 id="lancer">Launch a team</h2>
+<ol>
+  <li>Tick one or more teams: the launched <strong>composition</strong> is the union of the ticked teams, without duplicates.</li>
+  <li>Write the <strong>goal</strong> (4,000 characters at most) and choose the <strong>folder</strong>.</li>
+  <li>Click <strong>Launch</strong>: gld opens the lead's session in tmux, with the list of teammates to create.</li>
+</ol>
+<p>Prerequisites: <strong>tmux</strong> and a terminal launcher (for example <code>terminator</code>, <code>kitty</code>, <code>wezterm</code>, <code>gnome-terminal</code>, <code>konsole</code>, <code>xfce4-terminal</code> or <code>tilix</code>) under the account that runs gld. Without them, the launch is refused, as on native Windows. A launch on a Claude Code version that does not support teams is flagged "unavailable".</p>
+<p>The permission mode is Claude Code's default: <strong>nothing is approved automatically</strong>.</p>
+
+<h2 id="suivre">Follow and answer</h2>
+<ul>
+  <li>The interface shows each teammate as "First name · Role label"; the lead is "Project lead".</li>
+  <li><strong>Direct messages</strong>: write to the lead (default) or to a teammate. The message goes out immediately if the target is idle with no dialog pending; otherwise it is queued (20 at most per team, order preserved).</li>
+  <li><strong>Permission requests</strong>: a teammate's requests are displayed in the lead's pane. You answer them from the page; the key is only accepted if a request is actually on screen.</li>
+  <li>The screen shows "Answer in the terminal" when the lead is waiting with no readable request.</li>
+</ul>
+<p>To close the team, use the close button: it closes the lead's session and deletes the team's log and queue.</p>
+
+<h2 id="perso">Your own agents and teams</h2>
+<p><strong>New agent</strong> and <strong>New team</strong> create your own (up to 200 agents and 100 teams). Editing a shipped item creates a <strong>personal copy</strong>: shipped items are never written. An agent used by a team cannot be deleted.</p>
+
+<h2 id="limites">Limits</h2>
+<ul>
+  <li>One team per session; it ends with the lead's session. No nested teams.</li>
+  <li>3 to 5 teammates are recommended: the interface warns beyond 5, without blocking.</li>
+  <li><strong>Token cost grows with the number of teammates.</strong></li>
+  <li>The message queue is in memory: it is lost when gld restarts.</li>
+</ul>
+
+<h2 id="droits">Rights in multi-user mode</h2>
+<ul>
+  <li><code>sessions_read</code>: see the catalog, the teams and the lead's screen.</li>
+  <li><code>exec</code>: launch, write, answer requests, close.</li>
+  <li><code>config_write</code>: create, edit or delete your agents and teams.</li>
+</ul>

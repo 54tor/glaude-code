@@ -1,0 +1,66 @@
+<h1>Phone and remote access</h1>
+<p class="lead">Follow or restart a session from your phone or another computer, get notified when Claude asks a question, and do it without exposing your machine.</p>
+
+<h2 id="telephone">On a small screen</h2>
+<p>The page adapts to small screens: the menu moves into the ☰ button, and Glaude Code installs like an app ("Add to Home Screen").</p>
+<figure class="phone">
+  <img src="{{R}}shots/mobile-sessions.png" alt="The session list on a phone" width="390" height="844" loading="lazy">
+  <figcaption>The session list on a phone.</figcaption>
+</figure>
+<figure class="phone">
+  <img src="{{R}}shots/mobile-conversation.png" alt="A session on a phone" width="390" height="844" loading="lazy">
+  <figcaption>A session: reading and replying.</figcaption>
+</figure>
+
+<h2 id="listen">Open gld to other devices</h2>
+<p>By default, the page is only reachable from your own computer. To open it from a phone or another computer:</p>
+<pre><code>gld --listen 0.0.0.0</code></pre>
+<p>Glaude Code then prints an address containing a <strong>secret token</strong>: open it as is. Without that address, the page asks for the token; it carries the icon and the manifest, so adding it to an iPhone's home screen works from it.</p>
+<div class="callout warn">
+  <p><strong>Never expose it directly on the Internet.</strong> The connection is not encrypted by default, and the page can read and delete your sessions and launch Claude. Go through a tunnel (SSH, Tailscale…) or serve over HTTPS (below).</p>
+</div>
+
+<h3 id="jeton">Shared machine: set a token</h3>
+<p>On a machine shared with other accounts, the local address is reachable by them too. Set a token (at least 16 characters): it is required even without <code>--listen</code>, and gld prints the address with <code>$GLD_WEB_TOKEN</code> in place of the token, so that it does not end up in the logs.</p>
+<pre><code>GLD_WEB_TOKEN=$(openssl rand -hex 24) gld</code></pre>
+<p><code>gld --token=&lt;token&gt;</code> does the same, but the argument is visible to everyone in <code>ps</code>: prefer the variable.</p>
+
+<h2 id="jumelage">Connect a phone without retyping the token</h2>
+<ol>
+  <li>On a device that is already connected, open <strong>Connect a device</strong> (phone icon at the top of the sidebar): it shows an <strong>eight-digit code</strong>, valid for two minutes and a single use.</li>
+  <li>On the phone, open Glaude Code (the home-screen app or the browser) and tap <strong>Connect this device with a code</strong>, under the token or password field.</li>
+  <li>Type the code: the connection happens where it is typed, so inside the app.</li>
+</ol>
+<p>The same code exists as a <strong>QR</strong>, but the camera then opens the browser, not the app.</p>
+<ul>
+  <li>The phone gets <strong>its own session</strong>. In token mode, it lasts as long as it comes back at least once every 90 days, can be revoked from the same window and drops if the token changes. With accounts, it is a session of the account that displayed the code, visible in <em>Profile › Sessions</em>.</li>
+  <li>Ten wrong codes per minute block the address for one minute.</li>
+</ul>
+
+<h3 id="public-url">Public address</h3>
+<p>The QR code reuses the address of the page that displays it. If you display it from <code>127.0.0.1</code> or the local IP while the phone goes through a domain name (proxy, tunnel), give that public address:</p>
+<pre><code>gld --listen 0.0.0.0 --public-url https://gld.example.org   # or GLD_PUBLIC_URL=https://gld.example.org</code></pre>
+<p>With a public <code>https://</code> address on a <em>name</em> (neither an IP nor <code>localhost</code>), gld sends <code>Strict-Transport-Security: max-age=31536000</code>: the browser will then refuse any plain-HTTP access to that name, on any port, for one year. Do not declare as the public address a name that also serves another service over HTTP.</p>
+
+<h2 id="https">HTTPS with mkcert</h2>
+<p>On iPhone and iPad, the installed app has no notifications (push included), no native copy and no security key while it is served over HTTP. gld can serve HTTPS itself with a certificate the device trusts, for example one created with <a href="https://github.com/FiloSottile/mkcert">mkcert</a>: install its root authority on the iPhone, then enable it in <em>Settings › General › About › Certificate Trust Settings</em>.</p>
+<pre><code>mkcert 192.168.0.10 my-pc.local
+gld --listen 0.0.0.0 --tls-cert 192.168.0.10+1.pem --tls-key 192.168.0.10+1-key.pem</code></pre>
+<p>The <code>GLD_WEB_TLS_CERT</code> and <code>GLD_WEB_TLS_KEY</code> variables are equivalent to the two options. Security keys (WebAuthn) additionally require a <strong>domain name</strong>, not an IP address.</p>
+
+<h2 id="push">Push notifications</h2>
+<figure class="phone">
+  <img src="{{R}}shots/mobile-permissions.png" alt="Claude Code permissions on a phone" width="390" height="844" loading="lazy">
+</figure>
+<p>The 🔔 button at the bottom of the sidebar, to the right of the version, enables for <strong>this device</strong> a notification when a session asks a question or an authorization request, and when it is waiting for your message. The two types are set separately. They arrive with the app closed.</p>
+<ul>
+  <li><strong>Prerequisites</strong>: a page served over HTTPS with a certificate the device trusts, and, on iPhone, the app added to the home screen.</li>
+  <li><strong>Multi-user</strong>: each subscriber only receives the sessions of folders where they have the <code>sessions_read</code> right, checked at every send. The subscription follows the session that created it: after sign-out, revocation, expiry or a password change, the device receives nothing anymore; re-enable the button after signing in again. An account has at most 10 subscribed devices.</li>
+  <li><strong>Privacy</strong>: the keys and subscriptions are in <code>gld-web-push.json</code> (0600 permissions); only the browsers' push services (Apple, Google, Mozilla, Microsoft) are accepted as destinations.</li>
+  <li><strong>Limits</strong>: a secondary configuration folder only sends once its process is launched; an open tab does not silence notifications; the click opens the session in the configuration folder chosen in the browser (for a session from another folder, switch folders first).</li>
+</ul>
+
+<h2 id="locations">Restrict the folder browser</h2>
+<p>The folder browser (new session, "Reassign", "Move") starts from your home folder and can browse the whole disk. <code>--locations</code> (or <code>GLD_WEB_LOCATIONS</code>) limits it to a comma-separated list of roots, absolute paths or <code>~</code>:</p>
+<pre><code>gld --locations ~/Projets,/mnt/data</code></pre>
+<p>The browser opens on the first root and does not go above it. Symbolic links are resolved before the check; a requested path outside the roots falls back to the first one. This bounds the browser, <strong>not</strong> Claude Code's rights nor the rest of the interface.</p>

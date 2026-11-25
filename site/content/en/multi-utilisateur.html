@@ -1,0 +1,118 @@
+<h1>Accounts and multi-user</h1>
+<p class="lead">By default, a single token gives access to everything. The <strong>optional</strong> multi-user mode lets several people sign in, each with their own account, a mandatory second factor and independent rights per Claude configuration folder.</p>
+
+<div class="callout warn">
+  <p>Read <a href="#limites-droits">what the rights protect, and what they do not</a> first: <code>exec</code> and <code>config_write</code> are equivalent to the system account that runs gld.</p>
+</div>
+
+<h2 id="activer">Enable</h2>
+<p>Nothing changes as long as no account exists. The mode is enabled by creating the <strong>first account</strong>, on the command line, never from the web interface:</p>
+<pre><code>gld user add --admin alice</code></pre>
+<p>The password is requested twice, without echo: 12 characters minimum, and passwords from the embedded list of the most common ones are refused. The running server notices within 2 seconds at most; the sign-in form then replaces the token for the browser.</p>
+<p>An administrator has <strong>no access</strong> to a configuration folder by default: grant yourself rights.</p>
+<pre><code>gld user grant alice main mem_read mem_write usage_read sessions_read</code></pre>
+<p><code>main</code> designates the main folder; for another one, give its name. The <strong>Accounts</strong> screen of the interface (administrators) does the same afterwards.</p>
+<div class="table-scroll">
+<table>
+  <thead><tr><th>Command</th><th>Effect</th></tr></thead>
+  <tbody>
+    <tr><td><code>gld user add [--admin] &lt;name&gt;</code></td><td>creates an account</td></tr>
+    <tr><td><code>gld user list</code></td><td>lists accounts</td></tr>
+    <tr><td><code>gld user disable|enable &lt;name&gt;</code></td><td>disables or re-enables</td></tr>
+    <tr><td><code>gld user passwd &lt;name&gt;</code></td><td>changes the password</td></tr>
+    <tr><td><code>gld user reset-mfa &lt;name&gt;</code></td><td>erases TOTP, security keys and backup codes, closes sessions</td></tr>
+    <tr><td><code>gld user grant [--yes] &lt;name&gt; &lt;home&gt; &lt;rights…&gt;</code></td><td>grants rights</td></tr>
+    <tr><td><code>gld user revoke &lt;name&gt; &lt;home&gt; &lt;rights…&gt;</code></td><td>removes rights</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2 id="connexion">Sign in</h2>
+<figure>
+  <img src="{{R}}shots/23-multi-utilisateur-connexion.png" alt="The sign-in screen with name and password" width="1920" height="1080" loading="lazy">
+</figure>
+<ol>
+  <li><strong>Name and password.</strong></li>
+  <li><strong>Second factor, mandatory</strong>: a TOTP code, a WebAuthn security key (hardware key, passkey) or one of the 10 backup codes (single-use, shown once).</li>
+  <li>An account with no factor enrolls one at first sign-in and receives its backup codes.</li>
+</ol>
+<figure>
+  <img src="{{R}}shots/24-multi-utilisateur-second-facteur.png" alt="The second factor screen" width="1920" height="1080" loading="lazy">
+</figure>
+<div class="callout warn">
+  <p>Enrolling the first factor only requires the password: create the account right before the person's first sign-in (or enroll them yourself), and do not leave an account with no factor lying around.</p>
+</div>
+<ul>
+  <li>Adding or removing a factor, changing one's password or regenerating one's codes requires <strong>reauthentication</strong>: password <em>and</em> code.</li>
+  <li>Sessions expire after 12 h of inactivity, and after 30 days at the latest. Disabling an account, resetting its factors or changing its password closes its sessions.</li>
+  <li><strong>Brute-force protection</strong>: after repeated failures, sign-in is temporarily blocked, with an identical message whatever the cause.</li>
+</ul>
+<figure>
+  <img src="{{R}}shots/28-profil-securite.png" alt="The profile: factors, sessions and password" width="1920" height="1080" loading="lazy">
+  <figcaption>The profile: authentication factors, open sessions, password.</figcaption>
+</figure>
+
+<h2 id="droits">The nine rights</h2>
+<p>Nine independent rights, per (account, configuration folder) pair. A missing right means denied.</p>
+<div class="table-scroll">
+<table>
+  <thead><tr><th>Right</th><th>Opens</th></tr></thead>
+  <tbody>
+    <tr><td><code>mem_read</code></td><td>Memory, rules, snippets (read), notes, trash (read), health, reading the folder's configuration</td></tr>
+    <tr><td><code>mem_write</code></td><td>Write, move, merge, delete CLAUDE.md, rules, memory, notes; empty the trash</td></tr>
+    <tr><td><code>mem_sync</code></td><td>Sync between configuration folders (requires <code>mem_read</code> on the source, <code>mem_write</code> on the destination)</td></tr>
+    <tr><td><code>usage_read</code></td><td>Account and consumption, never the content of conversations</td></tr>
+    <tr><td><code>sessions_read</code></td><td>Transcripts, session state, search</td></tr>
+    <tr><td><code>config_write</code></td><td>Settings and skills (hooks, MCP servers, permissions), snippets, raw editing, restoring a backup</td></tr>
+    <tr><td><code>exec</code></td><td>Chat, new session, web terminal, sending keys, git push, renaming and deleting sessions, browsing the disk</td></tr>
+    <tr><td><code>fs_read</code></td><td>Read a project's tree and files, <code>.env</code> and keys included</td></tr>
+    <tr><td><code>fs_write</code></td><td>Write, create, rename and delete a project's files. Does not imply <code>fs_read</code></td></tr>
+  </tbody>
+</table>
+</div>
+<figure>
+  <img src="{{R}}shots/27-admin-droits.png" alt="The administration screen for rights per account and per folder" width="1920" height="1080" loading="lazy">
+  <figcaption>Rights per account and per configuration folder.</figcaption>
+</figure>
+<ul>
+  <li>An administrator manages accounts and rights but has <strong>no implicit access</strong> to folders.</li>
+  <li>The server refuses to grant <code>mem_write</code> or <code>config_write</code> to an account without <code>mem_read</code> on the same folder.</li>
+  <li>Rights are attached to a configuration folder's <strong>identifier</strong>, not to its name.</li>
+</ul>
+
+<h3 id="limites-droits">What the rights protect, and what they do not</h3>
+<div class="callout warn">
+  <p><strong><code>exec</code> and <code>config_write</code> are equivalent to the system account that runs gld.</strong> Writing a hook, an MCP server or a skill, or opening the chat or the web terminal, runs code under that user: the person can read and write the authentication database and the key. Only grant these two rights to people you trust.</p>
+  <p><code>mem_write</code> executes nothing, but memory and rules files are <strong>instructions</strong> that every Claude session in the folder loads. Granting it amounts to being able to steer what other people's sessions do.</p>
+</div>
+<p>A co-user limited to memory, usage and reading sessions has no path to the accounts database.</p>
+
+<h2 id="admin">Administration and log</h2>
+<figure>
+  <img src="{{R}}shots/25-admin-comptes.png" alt="The Accounts screen: accounts, state and actions" width="1920" height="1080" loading="lazy">
+  <figcaption>The Accounts screen.</figcaption>
+</figure>
+<figure>
+  <img src="{{R}}shots/26-admin-journal.png" alt="The authentication event log" width="1920" height="1080" loading="lazy">
+  <figcaption>The event log.</figcaption>
+</figure>
+
+<h2 id="donnees">Where the data lives</h2>
+<ul>
+  <li>The authentication folder is <code>GLD_AUTH_DIR</code> if set, otherwise the OS configuration folder followed by <code>gld</code> (Linux <code>~/.config/gld</code>). It contains the <code>auth.db</code> database (SQLite). It is <strong>distinct</strong> from <code>CLAUDE_CONFIG_DIR</code>: backing up or syncing a configuration folder does not carry the accounts.</li>
+  <li>TOTP secrets are encrypted and sensitive rows are signed with a master key (the <code>GLD_AUTH_KEY</code> variable, the OS keyring, or the <code>auth.key</code> file by default).</li>
+  <li>gld <strong>never silently falls back to open mode</strong>: if the database is deleted or tampered with while gld is running, the service is refused (503) until restart.</li>
+  <li><strong>Lost key</strong>: <code>gld user reset-mfa</code> cannot help. Recover the key (backup, original value of <code>GLD_AUTH_KEY</code>); otherwise, move the database out of the folder and recreate the first account: accounts, factors and rights have to be redone.</li>
+</ul>
+
+<h2 id="jeton">What about the token?</h2>
+<p>With accounts, the token is no longer used by the browser: it only counts as an <code>Authorization: Bearer</code> header (automation), and <strong>only if it is set through <code>GLD_WEB_TOKEN</code></strong>. It grants all rights on every folder, never administration.</p>
+
+<h2 id="multi-home">Several configuration folders</h2>
+<figure>
+  <img src="{{R}}shots/21-multi-home-pro.png" alt="A second Claude configuration folder with its own sessions" width="1920" height="1080" loading="lazy">
+</figure>
+<p>Each configuration folder ("home") has its own sessions, memory and rights. Creating or removing a folder is reserved to administrators; other users only see the ones where they have at least one right.</p>
+
+<h2 id="api">API</h2>
+<p>The HTTP API (REST under <code>/v1</code>, errors <code>{"error":{"code","message"}}</code>) is described in the OpenAPI file of the <a href="https://github.com/54tor/glaude-code/blob/main/docs/reference/openapi.yaml">repository</a>. The full multi-user guide (variables, limits, migrations) is in <a href="https://github.com/54tor/glaude-code/blob/main/docs/auth.md">docs/auth.md</a>.</p>

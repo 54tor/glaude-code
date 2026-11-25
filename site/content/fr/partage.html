@@ -1,0 +1,72 @@
+<h1>Partager une session</h1>
+<p class="lead">Montrer une session à un collègue sans copier-coller : un lien d'invitation, un suivi en direct, lecture seule ou écriture, révocable à tout moment.</p>
+
+<h2 id="inviter">Inviter quelqu'un</h2>
+<ol>
+  <li>Ouvrez le menu de la session (<strong>…</strong>) et choisissez <strong>Partager…</strong>.</li>
+  <li>Cliquez sur <strong>Inviter quelqu'un</strong> (le nom est facultatif : « Invité N » sinon).</li>
+  <li>Le lien se copie ; collez-le dans votre messagerie.</li>
+</ol>
+<figure>
+  <img src="{{R}}shots/16-partage-session-hote.png" alt="La fenêtre de partage d'une session côté hôte" width="1920" height="1080" loading="lazy">
+  <figcaption>La fenêtre de partage, côté hôte.</figcaption>
+</figure>
+<ul>
+  <li>Une session peut avoir <strong>jusqu'à 10 invitations</strong>, chacune avec son propre lien, son nom, son mode et sa révocation.</li>
+  <li>Chaque lien est <strong>à usage unique</strong> : le premier qui l'ouvre et appuie sur le bouton le réserve. Tout autre navigateur ou appareil est refusé.</li>
+  <li><strong>Régénérer le lien</strong> rend l'ancien inutilisable sans toucher aux autres invités.</li>
+  <li>Le mode est <strong>lecture seule</strong> à la création ; vous donnez l'écriture ensuite, invité par invité.</li>
+</ul>
+
+<h2 id="suivre">Suivre les invités</h2>
+<p>Le bouton <strong>Invitations</strong> de l'en-tête (visible dès qu'un partage existe) ouvre la liste de toutes les invitations : état de chacune (connecté, absent depuis…, lien non utilisé), mode, lien, révocation, et les <strong>messages d'invités en attente</strong>, que vous pouvez retirer. La pastille compte les invités connectés et les messages en attente, sans notification.</p>
+<figure>
+  <img src="{{R}}shots/17-invitations-hote.png" alt="La liste des invitations d'une session côté hôte" width="1920" height="1080" loading="lazy">
+</figure>
+
+<h2 id="invite">Ce que voit et fait l'invité</h2>
+<figure>
+  <img src="{{R}}shots/18-mode-invite.png" alt="La vue d'un invité" width="1920" height="1080" loading="lazy">
+  <figcaption>La vue invité : la conversation en direct et la file d'envoi.</figcaption>
+</figure>
+<p>L'invité voit <strong>toute la conversation</strong>, y compris les sorties d'outils et des tâches de fond, et la suit en direct. S'il a l'écriture, il peut écrire dans la <strong>file d'envoi</strong> : gld transmet ses messages quand la session est au repos et qu'aucune question n'est affichée à l'écran. Ils arrivent dans la session précédés de <code>[Invité &lt;nom&gt;]</code>. Il peut citer des fichiers du projet avec <code>@</code>.</p>
+<p>Il ne peut <strong>pas</strong> :</p>
+<ul>
+  <li>répondre aux demandes de permission ;</li>
+  <li>ouvrir de documents ni voir vos autres sessions ;</li>
+  <li>lire les fichiers de configuration (<code>.json</code>, <code>.yaml</code>, <code>.toml</code>, <code>.ini</code>, <code>.xml</code>…).</li>
+</ul>
+<p>Dans ce qu'il lit, les chemins absolus de votre machine, le nom de votre compte Claude et votre identité git sont <strong>masqués</strong> ; sa ligne d'activité n'indique que l'outil en cours. En revanche, il voit le <strong>titre</strong> de la session tel quel : renommez la session avant de partager si besoin.</p>
+
+<h2 id="gerer">Gérer un invité</h2>
+<ul>
+  <li><strong>Passer en lecture seule</strong> : il ne peut plus écrire et ses messages encore en file sont supprimés (sauf celui en cours d'envoi) ; il peut toujours retirer les siens.</li>
+  <li><strong>Redonner l'écriture.</strong></li>
+  <li><strong>Révoquer</strong> : il perd l'accès immédiatement et ses messages en file sont supprimés.</li>
+  <li><strong>Mettre fin au partage</strong> révoque tous les invités.</li>
+</ul>
+<p>Un navigateur peut rejoindre <strong>plusieurs sessions partagées</strong> (une invitation par session et par navigateur) : la page <code>/guest</code> les liste (et redirige s'il n'y en a qu'une), et un menu <strong>Autres sessions partagées</strong> permet de passer de l'une à l'autre.</p>
+
+<h2 id="file">La file d'envoi</h2>
+<p>Elle vit sur le serveur, pour toutes les sessions : elle survit à la fermeture de l'onglet. Un message en cours d'envoi au moment d'un redémarrage de gld apparaît <strong>incertain</strong> et n'est jamais renvoyé automatiquement ; vous pouvez le relancer depuis la file.</p>
+<p>Limites : 50 messages par session, 32 Ko par message, 10 ajouts par minute par invitation.</p>
+
+<h2 id="precautions">Précautions et limites</h2>
+<div class="callout warn">
+  <p><strong>Sessions sans demande de permission.</strong> Une session lancée en acceptation automatique ou en bypass exécute directement les messages de l'invité : ne la partagez qu'avec quelqu'un de confiance.</p>
+</div>
+<ul>
+  <li><strong>HTTPS.</strong> Sans HTTPS, le cookie de l'invité n'est pas marqué <code>Secure</code> : utilisez une adresse HTTPS si vous exposez gld.</li>
+  <li><strong>Durée.</strong> Le cookie de l'invité dure 30 jours. Après <strong>Quitter</strong>, le lien est consommé : régénérez-en un.</li>
+  <li><strong>Tester votre propre lien.</strong> Si vous l'ouvrez avec un accès hôte (jeton, appareil jumelé, compte ayant le droit <code>exec</code> sur ce dossier de configuration), gld le refuse sans le consommer ; testez-le dans une fenêtre privée. En mode local ouvert sans jeton, l'ouvrir le consomme (ce navigateur reçoit un cookie d'invité) mais ne verrouille pas votre interface d'hôte.</li>
+  <li><strong>Pas de tunnel.</strong> gld n'en crée aucun : le collègue doit déjà atteindre gld (<code>--listen</code>, reverse proxy ou VPN). Voir <a href="mobile.html">Téléphone et accès distant</a>.</li>
+  <li>Le partage fonctionne en mode local sans jeton, en mode jeton (un utilisateur) et en mode <a href="multi-utilisateur.html">multi-utilisateur</a>.</li>
+</ul>
+
+<h3 id="essai">Essayer sans rien configurer</h3>
+<p>Un tunnel rapide <a href="https://try.cloudflare.com/">trycloudflare</a> (sans compte) suffit pour un essai :</p>
+<pre><code>cloudflared tunnel --url http://127.0.0.1:8799</code></pre>
+<p>Il affiche une adresse <code>https://….trycloudflare.com</code> ; donnez-la aussi à gld (<code>--public-url</code>) pour que les liens d'invitation la reprennent.</p>
+<div class="callout warn">
+  <p>L'adresse change à chaque lancement (les liens déjà envoyés cessent de marcher) et <strong>tout gld devient joignable depuis Internet</strong> : activez d'abord un jeton ou les comptes, et arrêtez le tunnel après le test. Cette piste est un essai, pas une installation : elle n'a pas été validée avec gld.</p>
+</div>

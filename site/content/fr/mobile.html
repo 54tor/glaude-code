@@ -1,0 +1,66 @@
+<h1>Téléphone et accès distant</h1>
+<p class="lead">Suivre ou relancer une session depuis votre téléphone ou un autre poste, être prévenu quand Claude pose une question, et le faire sans exposer votre machine.</p>
+
+<h2 id="telephone">Sur un petit écran</h2>
+<p>La page s'adapte aux petits écrans : le menu passe dans le bouton ☰, et Glaude Code s'installe comme une application (« Sur l'écran d'accueil »).</p>
+<figure class="phone">
+  <img src="{{R}}shots/mobile-sessions.png" alt="La liste des sessions sur téléphone" width="390" height="844" loading="lazy">
+  <figcaption>La liste des sessions sur téléphone.</figcaption>
+</figure>
+<figure class="phone">
+  <img src="{{R}}shots/mobile-conversation.png" alt="Une session sur téléphone" width="390" height="844" loading="lazy">
+  <figcaption>Une session : lecture et réponse.</figcaption>
+</figure>
+
+<h2 id="listen">Ouvrir gld à d'autres appareils</h2>
+<p>Par défaut, la page n'est visible que depuis votre ordinateur. Pour l'ouvrir depuis un téléphone ou un autre poste :</p>
+<pre><code>gld --listen 0.0.0.0</code></pre>
+<p>Glaude Code affiche alors une adresse contenant un <strong>jeton secret</strong> : ouvrez-la telle quelle. Sans cette adresse, la page demande le jeton ; elle porte l'icône et le manifeste, donc l'ajout à l'écran d'accueil d'un iPhone fonctionne depuis elle.</p>
+<div class="callout warn">
+  <p><strong>Ne l'exposez jamais directement sur Internet.</strong> La connexion n'est pas chiffrée par défaut, et la page peut lire et supprimer vos sessions et lancer Claude. Passez par un tunnel (SSH, Tailscale…) ou servez en HTTPS (plus bas).</p>
+</div>
+
+<h3 id="jeton">Machine partagée : fixer un jeton</h3>
+<p>Sur une machine partagée avec d'autres comptes, l'adresse locale est joignable par eux aussi. Fixez un jeton (16 caractères au moins) : il est exigé même sans <code>--listen</code>, et gld affiche l'adresse avec <code>$GLD_WEB_TOKEN</code> à la place du jeton, pour qu'il ne finisse pas dans les journaux.</p>
+<pre><code>GLD_WEB_TOKEN=$(openssl rand -hex 24) gld</code></pre>
+<p><code>gld --token=&lt;jeton&gt;</code> fait la même chose, mais l'argument est visible de tous dans <code>ps</code> : préférez la variable.</p>
+
+<h2 id="jumelage">Connecter un téléphone sans recopier le jeton</h2>
+<ol>
+  <li>Sur un appareil déjà connecté, ouvrez <strong>Connecter un appareil</strong> (icône de téléphone en haut de la barre latérale) : il affiche un <strong>code à huit chiffres</strong>, valable deux minutes et une seule fois.</li>
+  <li>Sur le téléphone, ouvrez Glaude Code (l'application de l'écran d'accueil ou le navigateur) et touchez <strong>Connecter cet appareil</strong>, sous le champ du jeton ou du mot de passe.</li>
+  <li>Tapez le code : la connexion se fait là où il est tapé, donc dans l'application.</li>
+</ol>
+<p>Le même code existe en <strong>QR</strong>, mais l'appareil photo ouvre alors le navigateur, pas l'application.</p>
+<ul>
+  <li>Le téléphone reçoit <strong>sa propre session</strong>. En mode jeton, elle dure tant qu'il revient au moins une fois tous les 90 jours, se révoque depuis la même fenêtre et tombe si le jeton change. Avec des comptes, c'est une session du compte qui a affiché le code, visible dans <em>Profil › Sessions</em>.</li>
+  <li>Dix codes faux par minute bloquent l'adresse une minute.</li>
+</ul>
+
+<h3 id="public-url">Adresse publique</h3>
+<p>Le QR code reprend l'adresse de la page qui l'affiche. Si vous l'affichez depuis <code>127.0.0.1</code> ou l'IP locale alors que le téléphone passe par un nom de domaine (proxy, tunnel), donnez cette adresse publique :</p>
+<pre><code>gld --listen 0.0.0.0 --public-url https://gld.exemple.org   # ou GLD_PUBLIC_URL=https://gld.exemple.org</code></pre>
+<p>Avec une adresse publique en <code>https://</code> sur un <em>nom</em> (ni IP, ni <code>localhost</code>), gld envoie <code>Strict-Transport-Security: max-age=31536000</code> : le navigateur refusera ensuite tout accès en HTTP clair à ce nom, quel que soit le port, pendant un an. Ne déclarez pas comme adresse publique un nom qui sert aussi un autre service en HTTP.</p>
+
+<h2 id="https">HTTPS avec mkcert</h2>
+<p>Sur iPhone et iPad, l'application installée n'a ni notifications (push compris), ni copie native, ni clé de sécurité tant qu'elle est servie en HTTP. gld peut servir lui-même en HTTPS avec un certificat auquel l'appareil fait confiance, par exemple créé avec <a href="https://github.com/FiloSottile/mkcert">mkcert</a> : installez son autorité racine sur l'iPhone, puis activez-la dans <em>Réglages › Général › Informations › Réglages de confiance des certificats</em>.</p>
+<pre><code>mkcert 192.168.0.10 mon-pc.local
+gld --listen 0.0.0.0 --tls-cert 192.168.0.10+1.pem --tls-key 192.168.0.10+1-key.pem</code></pre>
+<p>Les variables <code>GLD_WEB_TLS_CERT</code> et <code>GLD_WEB_TLS_KEY</code> équivalent aux deux options. Les clés de sécurité (WebAuthn) exigent en plus un <strong>nom de domaine</strong>, pas une adresse IP.</p>
+
+<h2 id="push">Notifications push</h2>
+<figure class="phone">
+  <img src="{{R}}shots/mobile-permissions.png" alt="Les permissions de Claude Code sur téléphone" width="390" height="844" loading="lazy">
+</figure>
+<p>Le bouton 🔔 en bas de la barre latérale, à droite de la version, active pour <strong>cet appareil</strong> une notification quand une session pose une question ou une demande d'autorisation, et quand elle attend votre message. Les deux types se règlent séparément. Elles arrivent application fermée.</p>
+<ul>
+  <li><strong>Prérequis</strong> : une page servie en HTTPS avec un certificat auquel l'appareil fait confiance, et, sur iPhone, l'application ajoutée à l'écran d'accueil.</li>
+  <li><strong>Multi-utilisateur</strong> : chaque abonné ne reçoit que les sessions des dossiers où il a le droit <code>sessions_read</code>, vérifié à chaque envoi. L'abonnement suit la session qui l'a créé : après déconnexion, révocation, expiration ou changement de mot de passe, l'appareil ne reçoit plus rien ; réactivez le bouton après reconnexion. Un compte a au plus 10 appareils abonnés.</li>
+  <li><strong>Confidentialité</strong> : les clés et abonnements sont dans <code>gld-web-push.json</code> (permissions 0600) ; seuls les services push des navigateurs (Apple, Google, Mozilla, Microsoft) sont acceptés comme destination.</li>
+  <li><strong>Limites</strong> : un dossier de configuration secondaire n'envoie qu'une fois son processus lancé ; un onglet ouvert ne coupe pas les notifications ; le clic ouvre la session dans le dossier de configuration choisi dans le navigateur (pour une session d'un autre dossier, changez d'abord de dossier).</li>
+</ul>
+
+<h2 id="locations">Restreindre l'explorateur de dossiers</h2>
+<p>L'explorateur de dossiers (nouvelle session, « Réassigner », « Déplacer ») part de votre dossier personnel et peut parcourir tout le disque. <code>--locations</code> (ou <code>GLD_WEB_LOCATIONS</code>) le limite à une liste de racines séparées par des virgules, chemins absolus ou <code>~</code> :</p>
+<pre><code>gld --locations ~/Projets,/mnt/data</code></pre>
+<p>L'explorateur s'ouvre sur la première racine et ne remonte pas au-dessus d'elle. Les liens symboliques sont résolus avant le contrôle ; un chemin demandé hors racines ramène à la première. Cela borne l'explorateur, <strong>pas</strong> les droits de Claude Code ni le reste de l'interface.</p>

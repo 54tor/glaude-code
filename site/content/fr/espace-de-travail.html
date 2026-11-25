@@ -1,0 +1,32 @@
+<h1>Espace de travail</h1>
+<p class="lead">Relire et corriger le code d'un projet dans le navigateur : arborescence git, éditeur, et un terminal en lecture seule attaché à la session Claude du dossier.</p>
+
+<h2 id="ouvrir">Ouvrir l'espace de travail</h2>
+<p>Le bouton <strong>Espace de travail</strong> de la <a href="sessions.html#projet">vue d'un projet</a> ouvre le dossier dans le navigateur.</p>
+<figure>
+  <img src="{{R}}shots/03-projet.png" alt="La vue d'un dossier de projet avec ses sessions et son état git" width="1920" height="1080" loading="lazy">
+  <figcaption>La vue d'un dossier de projet, point d'entrée de l'espace de travail.</figcaption>
+</figure>
+
+<h2 id="editeur">Arborescence et éditeur</h2>
+<ul>
+  <li>Une <strong>arborescence avec marqueurs git</strong> (fichiers modifiés, nouveaux…), un filtre et une corbeille.</li>
+  <li>Un <strong>éditeur à onglets</strong> : Monaco, le moteur de VS Code, servi par gld lui-même, sans CDN.</li>
+  <li><kbd>Ctrl</kbd>+<kbd>S</kbd> enregistre ; <kbd>Ctrl</kbd>+<kbd>P</kbd> ouvre un fichier par son nom.</li>
+</ul>
+<p>Un menu (<em>Fichier, Édition, Rechercher, Affichage, Aller à, Terminal</em>), une barre d'actions de l'éditeur, une barre d'outils de l'arborescence et une barre d'état (curseur, fins de ligne, branche, état de la surveillance) donnent accès à tout sans connaître les raccourcis.</p>
+
+<h2 id="agent">Quand l'agent modifie le fichier ouvert</h2>
+<p>Si l'agent a modifié le fichier entre-temps, un bandeau vous demande quoi faire : <strong>recharger</strong>, <strong>écraser</strong> ou <strong>comparer</strong>.</p>
+
+<h2 id="corbeille">Supprimer sans risque</h2>
+<p>Supprimer un fichier l'envoie dans une corbeille <code>.gld-trash/</code> du projet, ignorée par git. La corbeille se consulte depuis la barre d'outils de l'arborescence : restauration et purge s'y font.</p>
+
+<h2 id="terminal">Le terminal en lecture seule</h2>
+<p>gld ne propose volontairement <strong>aucun shell</strong>. La zone terminal, toujours visible, s'attache en <strong>lecture seule</strong> à une session Claude vivante du dossier. Elle se règle avec <code>GLD_WEB_TERMINAL=1</code> et ne s'attache qu'après que vous l'avez ouverte une première fois.</p>
+
+<h2 id="droits">Droits en mode multi-utilisateur</h2>
+<p>Il faut <code>fs_read</code> pour lire et <code>fs_write</code> pour écrire, plus <code>exec</code> et <code>sessions_read</code> pour le terminal. Aucun n'est donné par défaut.</p>
+<div class="callout warn">
+  <p>Il n'y a pas de liste de fichiers interdits : <code>fs_read</code> lit aussi <code>.env</code> et les clés du projet. N'accordez-le qu'à des personnes de confiance. Voir <a href="multi-utilisateur.html#droits">Comptes et multi-utilisateur</a>.</p>
+</div>

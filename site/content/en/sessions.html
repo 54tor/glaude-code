@@ -1,0 +1,90 @@
+<h1>Sessions</h1>
+<p class="lead">Find "yesterday's session", reread it, resume it or write to it without opening a terminal, and lose nothing when the machine restarts.</p>
+
+<h2 id="retrouver">Find a session</h2>
+<figure>
+  <img src="{{R}}shots/bureau-sessions.png" alt="All sessions, grouped by date and by project" width="1920" height="1080" loading="lazy">
+  <figcaption>All sessions, grouped by date and by project.</figcaption>
+</figure>
+<ul>
+  <li>The home page shows your sessions from the <strong>last 7 days</strong>, grouped by project. A <strong>green dot</strong> marks the ones that are open right now.</li>
+  <li>The <strong>search</strong> (<kbd>/</kbd> key) looks through titles <em>and</em> conversation text.</li>
+  <li>The <strong>Open sessions</strong> view shows sessions active within the last hour: resuming them now costs less, because Claude's context cache is still warm.</li>
+  <li>Each session shows its size in tokens; the project folder is displayed under the title.</li>
+</ul>
+
+<h2 id="relire">Reread and resume</h2>
+<figure>
+  <img src="{{R}}shots/bureau-conversation.png" alt="Rereading a session with its tools collapsed and the reply box" width="1920" height="1080" loading="lazy">
+  <figcaption>The reader: conversation, collapsed tool calls, reply box at the bottom.</figcaption>
+</figure>
+<ol>
+  <li>Click a session to <strong>reread it in full</strong>. Tool calls are collapsed to keep the conversation readable.</li>
+  <li>Click <strong>Resume</strong> to reopen it in a terminal, with a starting message if you like.</li>
+  <li>To act on one or several sessions: right-click, or <kbd>Shift</kbd>+click to select a range. You can <strong>rename</strong>, <strong>export as Markdown</strong>, <strong>move</strong> (to another project folder) or <strong>delete</strong>.</li>
+</ol>
+<p>A deleted session is not lost: it goes through a trash.</p>
+
+<h2 id="projet">The project view</h2>
+<p>Clicking a folder in the sidebar opens the project view: all its sessions, grouped by date, and what you need to drive it.</p>
+<figure>
+  <img src="{{R}}shots/03-projet.png" alt="The project view: git state, notepad, project memory and sessions" width="1920" height="1080" loading="lazy">
+  <figcaption>The project view: git state, notepad, project memory and sessions.</figcaption>
+</figure>
+<ul>
+  <li><strong>Git state</strong>: branch, modified and untracked files, commits ahead, and a <strong>Push</strong> button.</li>
+  <li><strong>Notepad</strong>: a checklist specific to the project. Each note can become a <strong>new session</strong> (<em>New session with the note</em>) or be sent to a session that is already open (<em>Send to an open session</em>).</li>
+  <li><strong>Project memory</strong>: number of files and tokens loaded at each session (see <a href="memoire.html">Memory and rules</a>).</li>
+  <li>The project's <strong>Permissions</strong> and the <a href="espace-de-travail.html">Workspace</a> in one click; <strong>Resume the recent ones</strong> reopens the folder's latest sessions.</li>
+</ul>
+
+<h2 id="ecrire">Write to a session without a terminal</h2>
+<p>From the reader, type a message: Claude replies in the page. If the session is already running in a tmux terminal, the <strong>Send to the session</strong> button writes straight into it, and you watch what Claude is doing live.</p>
+<div class="callout warn">
+  <p><strong>Cost.</strong> Each message sent this way reloads the whole context: expect roughly <strong>$1 to $2</strong> per message on a cold session. The "warm cache" view exists precisely to spot the cheap sessions to restart, and Glaude Code announces the cost of a send on a cold session.</p>
+</div>
+
+<h3 id="envoi">Send while Claude is working</h3>
+<p>A message goes out immediately, even while Claude is working. The send button's menu offers:</p>
+<ul>
+  <li><strong>Send, interrupting</strong>: the current reply stops and the message goes through.</li>
+  <li><strong>Wait until idle</strong> (checkbox remembered per session): the message is only sent once Claude is waiting.</li>
+</ul>
+<p>A pending question (Claude asks you for a choice or an authorization) always queues the message: it goes out once the question is handled. The <strong>Background</strong> button sends <kbd>Ctrl</kbd>+<kbd>B</kbd> to the tmux session to move the running task to the background.</p>
+
+<h3 id="nouvelle">Start a new session</h3>
+<p>The <strong>New session</strong> button (first in the navigation bar) asks for the starting message and the folder: the browser lists your recent projects first. To limit which folders can be browsed, see <a href="mobile.html#locations">Restrict the folder browser</a>.</p>
+
+<h2 id="redemarrage">Lose nothing on restart</h2>
+<p>Glaude Code records the open sessions <strong>every 2 minutes</strong>. After the machine restarts, <strong>Reopen all</strong> relaunches them, each in its own tab. From the command line:</p>
+<pre><code>gld matin             # reopens a project's sessions
+gld matin --resume    # reopens the last save</code></pre>
+
+<h2 id="raccourcis">Keyboard shortcuts</h2>
+<p>In the session list:</p>
+<div class="table-scroll">
+<table>
+  <thead><tr><th>Key</th><th>Action</th></tr></thead>
+  <tbody>
+    <tr><td><kbd>/</kbd></td><td>Search</td></tr>
+    <tr><td><kbd>j</kbd> / <kbd>k</kbd></td><td>Next / previous session</td></tr>
+    <tr><td><kbd>Enter</kbd></td><td>Read</td></tr>
+    <tr><td><kbd>t</kbd></td><td>Resume in a terminal</td></tr>
+    <tr><td><kbd>m</kbd></td><td>Resume with a message</td></tr>
+    <tr><td><kbd>r</kbd></td><td>Rename</td></tr>
+    <tr><td><kbd>x</kbd></td><td>Select</td></tr>
+    <tr><td><kbd>e</kbd></td><td>Export as Markdown</td></tr>
+    <tr><td><kbd>Del</kbd></td><td>Delete</td></tr>
+    <tr><td><kbd>Esc</kbd></td><td>Clear the selection</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2 id="plusieurs-dossiers">Several configuration folders</h2>
+<p>If you have several Claude configuration folders (for example one for work, one for personal use), the selector at the top of the sidebar lets you add some, remove some from the list and switch between them. Each folder has its own sessions, memory and settings.</p>
+
+<h2 id="revues">Security reviews</h2>
+<p>Sessions launched by skills (security reviews) are hidden from the other views and from saved workspaces, and grouped in a <strong>Security reviews</strong> view (at the bottom of the sidebar), with a <strong>Clean up</strong> button.</p>
+<figure>
+  <img src="{{R}}shots/12-revues-securite.png" alt="The Security reviews view, which groups the sessions launched by skills" width="1920" height="1080" loading="lazy">
+</figure>

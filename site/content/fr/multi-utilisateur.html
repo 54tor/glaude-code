@@ -1,0 +1,118 @@
+<h1>Comptes et multi-utilisateur</h1>
+<p class="lead">Par défaut, un seul jeton donne accès à tout. Le mode multi-utilisateur, <strong>optionnel</strong>, permet à plusieurs personnes de se connecter chacune avec leur compte, un second facteur obligatoire et des droits indépendants par dossier de configuration Claude.</p>
+
+<div class="callout warn">
+  <p>Lisez d'abord <a href="#limites-droits">ce que les droits protègent, et ce qu'ils ne protègent pas</a> : <code>exec</code> et <code>config_write</code> équivalent au compte système qui fait tourner gld.</p>
+</div>
+
+<h2 id="activer">Activer</h2>
+<p>Rien ne change tant qu'aucun compte n'existe. Le mode s'active à la création du <strong>premier compte</strong>, en ligne de commande, jamais depuis l'interface web :</p>
+<pre><code>gld user add --admin alice</code></pre>
+<p>Le mot de passe est demandé deux fois, sans écho : 12 caractères au minimum, et les mots de passe de la liste embarquée des plus courants sont refusés. Le serveur en cours d'exécution le remarque en 2 secondes au plus ; le formulaire de connexion remplace alors le jeton pour le navigateur.</p>
+<p>Un administrateur n'a <strong>aucun accès</strong> à un dossier de configuration par défaut : donnez-vous des droits.</p>
+<pre><code>gld user grant alice main mem_read mem_write usage_read sessions_read</code></pre>
+<p><code>main</code> désigne le dossier principal ; pour un autre, donnez son nom. L'écran <strong>Utilisateurs</strong> de l'interface (administrateurs) fait la même chose ensuite.</p>
+<div class="table-scroll">
+<table>
+  <thead><tr><th>Commande</th><th>Effet</th></tr></thead>
+  <tbody>
+    <tr><td><code>gld user add [--admin] &lt;nom&gt;</code></td><td>crée un compte</td></tr>
+    <tr><td><code>gld user list</code></td><td>liste les comptes</td></tr>
+    <tr><td><code>gld user disable|enable &lt;nom&gt;</code></td><td>désactive ou réactive</td></tr>
+    <tr><td><code>gld user passwd &lt;nom&gt;</code></td><td>change le mot de passe</td></tr>
+    <tr><td><code>gld user reset-mfa &lt;nom&gt;</code></td><td>efface TOTP, clés de sécurité et codes de secours, ferme les sessions</td></tr>
+    <tr><td><code>gld user grant [--yes] &lt;nom&gt; &lt;home&gt; &lt;droits…&gt;</code></td><td>accorde des droits</td></tr>
+    <tr><td><code>gld user revoke &lt;nom&gt; &lt;home&gt; &lt;droits…&gt;</code></td><td>retire des droits</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2 id="connexion">Se connecter</h2>
+<figure>
+  <img src="{{R}}shots/23-multi-utilisateur-connexion.png" alt="L'écran de connexion avec nom et mot de passe" width="1920" height="1080" loading="lazy">
+</figure>
+<ol>
+  <li><strong>Nom et mot de passe.</strong></li>
+  <li><strong>Second facteur, obligatoire</strong> : code TOTP, clé de sécurité WebAuthn (clé matérielle, passkey) ou l'un des 10 codes de secours (à usage unique, affichés une fois).</li>
+  <li>Un compte sans facteur en enrôle un à la première connexion et reçoit ses codes de secours.</li>
+</ol>
+<figure>
+  <img src="{{R}}shots/24-multi-utilisateur-second-facteur.png" alt="L'écran du second facteur" width="1920" height="1080" loading="lazy">
+</figure>
+<div class="callout warn">
+  <p>L'enrôlement du premier facteur n'exige que le mot de passe : créez le compte juste avant la première connexion de la personne (ou enrôlez-la vous-même), et ne laissez pas traîner un compte sans facteur.</p>
+</div>
+<ul>
+  <li>Ajouter ou retirer un facteur, changer son mot de passe ou régénérer ses codes demande une <strong>réauthentification</strong> : mot de passe <em>et</em> code.</li>
+  <li>Les sessions s'expirent après 12 h d'inactivité, et au plus tard après 30 jours. Désactiver un compte, réinitialiser ses facteurs ou changer son mot de passe ferme ses sessions.</li>
+  <li><strong>Anti-essais répétés</strong> : après des échecs répétés, la connexion est bloquée temporairement, avec un message identique quelle que soit la cause.</li>
+</ul>
+<figure>
+  <img src="{{R}}shots/28-profil-securite.png" alt="Le profil : facteurs, sessions et mot de passe" width="1920" height="1080" loading="lazy">
+  <figcaption>Le profil : facteurs d'authentification, sessions ouvertes, mot de passe.</figcaption>
+</figure>
+
+<h2 id="droits">Les neuf droits</h2>
+<p>Neuf droits, indépendants, par couple (compte, dossier de configuration). Un droit absent vaut refusé.</p>
+<div class="table-scroll">
+<table>
+  <thead><tr><th>Droit</th><th>Ouvre</th></tr></thead>
+  <tbody>
+    <tr><td><code>mem_read</code></td><td>Mémoire, règles, snippets (lecture), notes, corbeille (lecture), santé, lecture de la configuration du dossier</td></tr>
+    <tr><td><code>mem_write</code></td><td>Écrire, déplacer, fusionner, supprimer CLAUDE.md, règles, mémoire, notes ; purger la corbeille</td></tr>
+    <tr><td><code>mem_sync</code></td><td>Synchroniser entre dossiers de configuration (exige <code>mem_read</code> sur la source, <code>mem_write</code> sur la destination)</td></tr>
+    <tr><td><code>usage_read</code></td><td>Compte et consommation, jamais le contenu des conversations</td></tr>
+    <tr><td><code>sessions_read</code></td><td>Transcriptions, état des sessions, recherche</td></tr>
+    <tr><td><code>config_write</code></td><td>Réglages et skills (hooks, serveurs MCP, permissions), snippets, édition brute, restauration d'une sauvegarde</td></tr>
+    <tr><td><code>exec</code></td><td>Chat, nouvelle session, terminal web, envoi de touches, push git, renommage et suppression de sessions, parcours du disque</td></tr>
+    <tr><td><code>fs_read</code></td><td>Lire l'arborescence et les fichiers d'un projet, <code>.env</code> et clés compris</td></tr>
+    <tr><td><code>fs_write</code></td><td>Écrire, créer, renommer et supprimer des fichiers d'un projet. N'implique pas <code>fs_read</code></td></tr>
+  </tbody>
+</table>
+</div>
+<figure>
+  <img src="{{R}}shots/27-admin-droits.png" alt="L'écran d'administration des droits par compte et par dossier" width="1920" height="1080" loading="lazy">
+  <figcaption>Les droits par compte et par dossier de configuration.</figcaption>
+</figure>
+<ul>
+  <li>Un administrateur gère les comptes et les droits mais n'a <strong>aucun accès implicite</strong> aux dossiers.</li>
+  <li>Le serveur refuse d'accorder <code>mem_write</code> ou <code>config_write</code> à un compte sans <code>mem_read</code> sur le même dossier.</li>
+  <li>Les droits sont rattachés à l'<strong>identifiant</strong> d'un dossier de configuration, pas à son nom.</li>
+</ul>
+
+<h3 id="limites-droits">Ce que les droits protègent, et ce qu'ils ne protègent pas</h3>
+<div class="callout warn">
+  <p><strong><code>exec</code> et <code>config_write</code> équivalent au compte système qui fait tourner gld.</strong> Écrire un hook, un serveur MCP ou un skill, ou ouvrir le chat ou le terminal web, exécute du code sous cet utilisateur : la personne peut lire et écrire la base d'authentification et la clé. N'accordez ces deux droits qu'à des personnes de confiance.</p>
+  <p><code>mem_write</code> n'exécute rien, mais les fichiers de mémoire et de règles sont des <strong>instructions</strong> que chaque session Claude du dossier charge. L'accorder revient à pouvoir orienter ce que font les sessions des autres.</p>
+</div>
+<p>Un co-utilisateur limité à la mémoire, aux usages et à la lecture des sessions n'a aucun chemin vers la base des comptes.</p>
+
+<h2 id="admin">Administration et journal</h2>
+<figure>
+  <img src="{{R}}shots/25-admin-comptes.png" alt="L'écran Utilisateurs : comptes, état et actions" width="1920" height="1080" loading="lazy">
+  <figcaption>L'écran Utilisateurs.</figcaption>
+</figure>
+<figure>
+  <img src="{{R}}shots/26-admin-journal.png" alt="Le journal d'événements d'authentification" width="1920" height="1080" loading="lazy">
+  <figcaption>Le journal d'événements.</figcaption>
+</figure>
+
+<h2 id="donnees">Où sont les données</h2>
+<ul>
+  <li>Le dossier d'authentification est <code>GLD_AUTH_DIR</code> s'il est fixé, sinon le dossier de configuration de l'OS suivi de <code>gld</code> (Linux <code>~/.config/gld</code>). Il contient la base <code>auth.db</code> (SQLite). Il est <strong>distinct</strong> de <code>CLAUDE_CONFIG_DIR</code> : sauvegarder ou synchroniser un dossier de configuration n'emporte pas les comptes.</li>
+  <li>Les secrets TOTP sont chiffrés et les lignes sensibles signées avec une clé maîtresse (variable <code>GLD_AUTH_KEY</code>, coffre-fort de l'OS, ou fichier <code>auth.key</code> à défaut).</li>
+  <li>gld ne revient <strong>jamais silencieusement au mode ouvert</strong> : si la base est supprimée ou altérée pendant que gld tourne, le service est refusé (503) jusqu'au redémarrage.</li>
+  <li><strong>Perte de la clé</strong> : <code>gld user reset-mfa</code> ne peut pas aider. Retrouvez la clé (sauvegarde, valeur d'origine de <code>GLD_AUTH_KEY</code>) ; sinon, déplacez la base hors du dossier et recréez le premier compte : comptes, facteurs et droits sont à refaire.</li>
+</ul>
+
+<h2 id="jeton">Et le jeton ?</h2>
+<p>Avec des comptes, le jeton ne sert plus au navigateur : il ne vaut qu'en en-tête <code>Authorization: Bearer</code> (automatisation), et <strong>seulement s'il est fixé par <code>GLD_WEB_TOKEN</code></strong>. Il donne tous les droits sur chaque dossier, jamais l'administration.</p>
+
+<h2 id="multi-home">Plusieurs dossiers de configuration</h2>
+<figure>
+  <img src="{{R}}shots/21-multi-home-pro.png" alt="Un second dossier de configuration Claude avec ses propres sessions" width="1920" height="1080" loading="lazy">
+</figure>
+<p>Chaque dossier de configuration (« home ») a ses sessions, sa mémoire et ses droits propres. Créer ou retirer un dossier est réservé aux administrateurs ; les autres ne voient que ceux où ils ont au moins un droit.</p>
+
+<h2 id="api">API</h2>
+<p>L'API HTTP (REST sous <code>/v1</code>, erreurs <code>{"error":{"code","message"}}</code>) est décrite dans le fichier OpenAPI du <a href="https://github.com/54tor/glaude-code/blob/main/docs/reference/openapi.yaml">dépôt</a>. Le guide complet du mode multi-utilisateur (variables, limites, migrations) est dans <a href="https://github.com/54tor/glaude-code/blob/main/docs/auth.md">docs/auth.md</a>.</p>

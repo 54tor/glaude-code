@@ -1,0 +1,46 @@
+<h1>Mémoire et règles</h1>
+<p class="lead">Voir ce que Claude charge réellement au début de chaque session, ce que ça coûte, et le ranger sans risquer de rien perdre.</p>
+
+<h2 id="page">La page Mémoire</h2>
+<p>Elle regroupe vos <code>CLAUDE.md</code>, vos règles et la mémoire de chaque projet.</p>
+<figure>
+  <img src="{{R}}shots/05-memoire.png" alt="La page Mémoire : CLAUDE.md, règles et mémoire de projet avec leur coût en tokens" width="1920" height="1080" loading="lazy">
+  <figcaption>La page Mémoire : fichiers, règles et mémoire de projet, avec le coût de chacun.</figcaption>
+</figure>
+<ul>
+  <li><strong>Lire, modifier, déplacer, copier</strong> un fichier ou une entrée.</li>
+  <li><strong>Désactiver une règle</strong> sans la supprimer.</li>
+  <li>Voir <strong>combien de tokens</strong> chaque fichier ajoute à chaque session : c'est le coût de contexte payé à chaque démarrage.</li>
+</ul>
+
+<h2 id="sante">L'onglet Santé</h2>
+<p>Il repère automatiquement :</p>
+<ul>
+  <li>les <strong>liens cassés</strong> (une entrée qui pointe vers un fichier absent) ;</li>
+  <li>les <strong>index trop longs</strong> ;</li>
+  <li>les <strong>doublons</strong> ;</li>
+  <li>les <strong>contradictions</strong> entre entrées.</li>
+</ul>
+
+<h2 id="claude">Demander à Claude de ranger</h2>
+<p>Vous pouvez demander à Claude (modèle Haiku, quelques dixièmes de centime) de <strong>réécrire</strong> ou de <strong>fusionner</strong> des entrées. Le résultat est un brouillon que vous relisez avant qu'il soit écrit.</p>
+<figure>
+  <img src="{{R}}shots/04-memoire-modale.png" alt="Fenêtre d'édition d'une entrée de mémoire" width="1920" height="1080" loading="lazy">
+  <figcaption>L'édition d'une entrée de mémoire.</figcaption>
+</figure>
+
+<h2 id="corbeille">Corbeille : rien n'est perdu</h2>
+<p>Tout fichier supprimé ou remplacé passe d'abord par une <strong>corbeille</strong> d'où il se restaure en un clic. La purge de la corbeille est une action distincte.</p>
+
+<h2 id="export">Exporter et importer</h2>
+<p>Vous pouvez <strong>exporter</strong> une entrée, une sélection ou toutes les entrées de mémoire des projets dans un fichier JSON, et l'<strong>importer</strong> chez quelqu'un d'autre. Le destinataire :</p>
+<ol>
+  <li>choisit le projet qui reçoit chaque groupe d'entrées ;</li>
+  <li>coche les entrées à importer ;</li>
+  <li>tranche chaque conflit de nom : <em>ignorer</em>, <em>remplacer</em> ou <em>garder les deux</em>.</li>
+</ol>
+
+<h2 id="droits">Droits en mode multi-utilisateur</h2>
+<div class="callout warn">
+  <p>Les fichiers de mémoire et de règles sont des <strong>instructions</strong> : chaque session Claude du dossier les charge. Le droit <code>mem_write</code> revient donc à pouvoir orienter ce que font les sessions des autres. Détails dans <a href="multi-utilisateur.html#droits">Comptes et multi-utilisateur</a>.</p>
+</div>

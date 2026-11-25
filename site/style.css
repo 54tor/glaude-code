@@ -9,7 +9,7 @@
   --code-bg: #1c1b19;
   --code-text: #ecebe6;
   --radius: 12px;
-  --max: 1120px;
+  --max: 1200px;
   color-scheme: light dark;
 }
 
@@ -104,7 +104,7 @@ td:last-child, th:last-child { background: color-mix(in srgb, var(--accent) 10%,
 .note { color: var(--muted); font-size: 0.85rem; margin-top: 12px; }
 
 .cards { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
-.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; }
+.card { display: block; color: inherit; text-decoration: none; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; }
 .card h3 { margin: 0 0 8px; font-size: 1.1rem; }
 .card p { margin: 0; color: var(--muted); }
 
@@ -121,3 +121,53 @@ pre {
 
 footer { border-top: 1px solid var(--line); padding: 24px 0 40px; color: var(--muted); font-size: 0.9rem; }
 footer .wrap { display: flex; flex-wrap: wrap; gap: 16px; justify-content: space-between; }
+
+a.card:hover { border-color: var(--accent); }
+a.card:focus-visible, .pills a:focus-visible, .side a:focus-visible, .pager a:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+.pills { display: flex; gap: 6px; padding-bottom: 12px; font-size: 0.9rem; overflow-x: auto; }
+.home .pills { flex-wrap: wrap; justify-content: center; overflow: visible; }
+.pills a { flex: none; padding: 5px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--text); text-decoration: none; }
+.pills a[aria-current="page"] { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+.side { display: none; }
+
+.doc { max-width: 860px; padding: 16px 0 48px; min-width: 0; }
+.doc h1 { font-size: clamp(1.9rem, 5vw, 2.6rem); line-height: 1.15; margin: 0 0 12px; letter-spacing: -0.02em; }
+.doc .lead { color: var(--muted); font-size: 1.15rem; margin: 0 0 24px; }
+.doc h2 { font-size: 1.5rem; margin: 40px 0 12px; padding-top: 24px; border-top: 1px solid var(--line); scroll-margin-top: 16px; }
+.doc h3 { font-size: 1.15rem; margin: 28px 0 8px; }
+.doc p, .doc li { overflow-wrap: anywhere; }
+.doc ul, .doc ol { padding-left: 1.3em; }
+.doc li { margin: 6px 0; }
+.doc :not(pre) > code { background: color-mix(in srgb, var(--text) 8%, transparent); padding: 1px 6px; border-radius: 6px; }
+.doc kbd { font: 0.85em ui-monospace, "SF Mono", Menlo, Consolas, monospace; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 6px; padding: 1px 6px; background: var(--surface); }
+.doc figure { margin: 24px 0; }
+.doc figure img { border: 1px solid var(--line); border-radius: var(--radius); box-shadow: 0 8px 30px rgb(0 0 0 / 0.1); }
+.doc figure.phone img { max-width: 280px; margin: 0 auto; }
+.doc figcaption { color: var(--muted); font-size: 0.88rem; margin-top: 8px; text-align: center; }
+.doc .table-scroll { margin: 16px 0; }
+.doc table { min-width: 560px; }
+.doc td:last-child, .doc th:last-child { background: none; }
+.callout { border-left: 4px solid var(--accent); background: var(--surface); border-radius: 0 var(--radius) var(--radius) 0; padding: 12px 16px; margin: 20px 0; }
+.callout.warn { border-left-color: #c2410c; }
+.callout > :first-child { margin-top: 0; }
+.callout > :last-child { margin-bottom: 0; }
+
+.toc { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 18px; margin: 0 0 24px; font-size: 0.95rem; }
+.toc ul { margin: 6px 0 0; padding-left: 1.2em; columns: 2 220px; }
+.toc li { margin: 2px 0; }
+
+.pager { display: flex; justify-content: space-between; gap: 12px; margin: 32px 0 0; max-width: 780px; }
+.pager a { display: block; flex: 1; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); padding: 12px 16px; text-decoration: none; color: var(--text); font-weight: 600; }
+.pager a.next { text-align: right; margin-left: auto; }
+.pager small { display: block; color: var(--muted); font-weight: 400; }
+
+@media (min-width: 900px) {
+  .doc .pills, body.doc .pills { display: none; }
+  body.doc .layout { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 40px; align-items: start; }
+  .side { display: flex; flex-direction: column; gap: 2px; position: sticky; top: 16px; padding: 8px 0 24px; font-size: 0.95rem; }
+  .side strong { padding: 0 10px 6px; color: var(--muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; }
+  .side a { padding: 6px 10px; border-radius: 8px; text-decoration: none; color: var(--text); }
+  .side a:hover { background: var(--surface); }
+  .side a[aria-current="page"] { background: var(--accent); color: var(--accent-text); font-weight: 600; }
+}

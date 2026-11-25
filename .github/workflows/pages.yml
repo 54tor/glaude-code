@@ -25,13 +25,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Assemble site
-        run: |
-          set -eu
-          mkdir -p _site/shots
-          cp -r site/. _site/
-          for shot in bureau-sessions bureau-conversation mobile-sessions mobile-conversation mobile-permissions; do
-            cp "docs/screenshots/${shot}.png" _site/shots/
-          done
+        run: python3 site/build.py _site
       - name: Check local references
         run: |
           set -eu

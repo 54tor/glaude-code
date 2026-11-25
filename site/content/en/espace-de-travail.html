@@ -1,0 +1,32 @@
+<h1>Workspace</h1>
+<p class="lead">Review and fix a project's code in the browser: git tree, editor, and a read-only terminal attached to the folder's Claude session.</p>
+
+<h2 id="ouvrir">Open the workspace</h2>
+<p>The <strong>Workspace</strong> button in the <a href="sessions.html#projet">project view</a> opens the folder in the browser.</p>
+<figure>
+  <img src="{{R}}shots/03-projet.png" alt="A project folder's view with its sessions and git state" width="1920" height="1080" loading="lazy">
+  <figcaption>A project folder's view, the entry point to the workspace.</figcaption>
+</figure>
+
+<h2 id="editeur">Tree and editor</h2>
+<ul>
+  <li>A <strong>tree with git markers</strong> (modified files, new ones…), a filter and a trash.</li>
+  <li>A <strong>tabbed editor</strong>: Monaco, the VS Code engine, served by gld itself, with no CDN.</li>
+  <li><kbd>Ctrl</kbd>+<kbd>S</kbd> saves; <kbd>Ctrl</kbd>+<kbd>P</kbd> opens a file by name.</li>
+</ul>
+<p>A menu (<em>File, Edit, Search, View, Go to, Terminal</em>), an editor action bar, a tree toolbar and a status bar (cursor, line endings, branch, watcher state) give access to everything without knowing the shortcuts.</p>
+
+<h2 id="agent">When the agent modifies the open file</h2>
+<p>If the agent changed the file in the meantime, a banner asks what to do: <strong>reload</strong>, <strong>overwrite</strong> or <strong>compare</strong>.</p>
+
+<h2 id="corbeille">Delete safely</h2>
+<p>Deleting a file sends it to a <code>.gld-trash/</code> trash in the project, ignored by git. The trash is browsed from the tree toolbar: restoring and emptying happen there.</p>
+
+<h2 id="terminal">The read-only terminal</h2>
+<p>gld deliberately offers <strong>no shell</strong>. The terminal area, always visible, attaches <strong>read-only</strong> to a live Claude session in the folder. It is set with <code>GLD_WEB_TERMINAL=1</code> and only attaches after you have opened it a first time.</p>
+
+<h2 id="droits">Rights in multi-user mode</h2>
+<p><code>fs_read</code> is needed to read and <code>fs_write</code> to write, plus <code>exec</code> and <code>sessions_read</code> for the terminal. None is granted by default.</p>
+<div class="callout warn">
+  <p>There is no list of forbidden files: <code>fs_read</code> also reads <code>.env</code> and the project's keys. Only grant it to people you trust. See <a href="multi-utilisateur.html#droits">Accounts and multi-user</a>.</p>
+</div>

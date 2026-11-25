@@ -1,0 +1,68 @@
+<h1>Équipes d'agents</h1>
+<p class="lead">Les équipes d'agents natives de Claude Code, pilotées depuis la page <strong>Teams</strong> : un chef de projet qui crée des coéquipiers, et vous qui suivez, écrivez et répondez à leurs demandes depuis le navigateur.</p>
+
+<div class="callout warn">
+  <p><strong>Fonction expérimentale.</strong> Les équipes d'agents sont une fonction expérimentale de Claude Code, et leur pilotage par Glaude Code n'a pas encore été vérifié de bout en bout sur un lancement réel. Essayez-les d'abord sur un dépôt jetable.</p>
+</div>
+
+<h2 id="catalogue">Le catalogue</h2>
+<p>Glaude Code fournit <strong>21 agents</strong> et <strong>11 équipes</strong> prêtes à l'emploi. Un agent a un identifiant de rôle (<code>testeur</code>, <code>chef</code>…) et un libellé (« Testeur », « Chef de projet »), sans prénom ; un prénom est tiré à chaque lancement pour chaque coéquipier.</p>
+<figure>
+  <img src="{{R}}shots/13-equipes.png" alt="La page Teams : les 11 équipes du catalogue, la composition, l'objectif et le bouton Lancer" width="1920" height="1080" loading="lazy">
+  <figcaption>La page Teams : équipes du catalogue, composition, objectif et dossier.</figcaption>
+</figure>
+<div class="table-scroll">
+<table>
+  <thead><tr><th>Équipe</th><th>Agents</th></tr></thead>
+  <tbody>
+    <tr><td>Fonctionnalité</td><td>Architecte, développement backend, développement frontend, testeur, relecteur</td></tr>
+    <tr><td>Correctif de bug</td><td>Explorateur, développement backend, testeur</td></tr>
+    <tr><td>Enquête sur un bug</td><td>Trois enquêteurs</td></tr>
+    <tr><td>Audit sécurité</td><td>Sécurité authentification, injections, secrets, dépendances</td></tr>
+    <tr><td>Revue de code</td><td>Relecteur, performance, sécurité authentification</td></tr>
+    <tr><td>Refactoring</td><td>Explorateur, refactoring, testeur, relecteur</td></tr>
+    <tr><td>Documentation</td><td>Explorateur, rédaction</td></tr>
+    <tr><td>Interface et UX</td><td>UX et accessibilité, développement frontend, QA navigateur</td></tr>
+    <tr><td>Migration de données</td><td>Données et migrations, développement backend, testeur</td></tr>
+    <tr><td>Mise en production</td><td>DevOps, testeur, rédaction</td></tr>
+    <tr><td>Découverte d'un code inconnu</td><td>Explorateur, architecte, rédaction</td></tr>
+  </tbody>
+</table>
+</div>
+<p>Les agents « lecture » ne reçoivent que les outils de lecture (<code>Read</code>, <code>Grep</code>, <code>Glob</code>) ; les agents « écriture » ont les outils par défaut.</p>
+
+<h2 id="lancer">Lancer une équipe</h2>
+<ol>
+  <li>Cochez une ou plusieurs équipes : la <strong>composition</strong> lancée est l'union des équipes cochées, sans doublon.</li>
+  <li>Écrivez l'<strong>objectif</strong> (4 000 caractères au plus) et choisissez le <strong>dossier</strong>.</li>
+  <li>Cliquez sur <strong>Lancer</strong> : gld ouvre la session du chef dans tmux, avec la liste des coéquipiers à créer.</li>
+</ol>
+<p>Prérequis : <strong>tmux</strong> et un lanceur de terminal (par exemple <code>terminator</code>, <code>kitty</code>, <code>wezterm</code>, <code>gnome-terminal</code>, <code>konsole</code>, <code>xfce4-terminal</code> ou <code>tilix</code>) sous le compte qui fait tourner gld. Sans eux, le lancement est refusé, comme sous Windows natif. Un lancement sur une version de Claude Code qui ne gère pas les équipes est signalé « indisponible ».</p>
+<p>Le mode de permissions est celui par défaut de Claude Code : <strong>rien n'est approuvé automatiquement</strong>.</p>
+
+<h2 id="suivre">Suivre et répondre</h2>
+<ul>
+  <li>L'interface affiche chaque coéquipier sous la forme « Prénom · Libellé de rôle » ; le chef est « Chef de projet ».</li>
+  <li><strong>Messages directs</strong> : écrivez au chef (par défaut) ou à un coéquipier. Le message part tout de suite si la cible est inactive et sans dialogue en attente ; sinon il est mis en file (20 au plus par équipe, ordre conservé).</li>
+  <li><strong>Demandes de permission</strong> : celles d'un coéquipier s'affichent dans le pane du chef. Vous y répondez depuis la page ; la touche n'est acceptée que si une demande est réellement à l'écran.</li>
+  <li>L'écran affiche « Répondre dans le terminal » quand le chef attend sans demande lisible.</li>
+</ul>
+<p>Pour fermer l'équipe, utilisez le bouton de fermeture : il ferme la session du chef et supprime le journal et la file de l'équipe.</p>
+
+<h2 id="perso">Vos propres agents et équipes</h2>
+<p><strong>Nouvel agent</strong> et <strong>Nouvelle team</strong> créent les vôtres (jusqu'à 200 agents et 100 équipes). Modifier un élément fourni crée une <strong>copie personnelle</strong> : les éléments fournis ne sont jamais écrits. Un agent utilisé par une équipe ne peut pas être supprimé.</p>
+
+<h2 id="limites">Limites</h2>
+<ul>
+  <li>Une équipe par session ; elle prend fin avec la session du chef. Pas d'équipes imbriquées.</li>
+  <li>3 à 5 coéquipiers sont conseillés : l'interface avertit au-delà de 5, sans bloquer.</li>
+  <li><strong>Le coût en tokens croît avec le nombre de coéquipiers.</strong></li>
+  <li>La file de messages est en mémoire : elle est perdue au redémarrage de gld.</li>
+</ul>
+
+<h2 id="droits">Droits en mode multi-utilisateur</h2>
+<ul>
+  <li><code>sessions_read</code> : voir le catalogue, les équipes et l'écran du chef.</li>
+  <li><code>exec</code> : lancer, écrire, répondre aux demandes, fermer.</li>
+  <li><code>config_write</code> : créer, modifier ou supprimer vos agents et équipes.</li>
+</ul>

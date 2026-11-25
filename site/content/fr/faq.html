@@ -1,0 +1,35 @@
+<h1>Questions fréquentes</h1>
+<p class="lead">Données, sécurité, sauvegardes, coûts : les réponses courtes, avec le renvoi vers la page qui détaille.</p>
+
+<h2 id="donnees">Mes conversations partent-elles quelque part ?</h2>
+<p>Non. Glaude Code lit les fichiers locaux de Claude Code (<code>~/.claude</code>). Seules les actions qui font appel à Claude (écrire à une session, réécrire une entrée de mémoire, compter des tokens) passent par <strong>votre propre</strong> Claude Code. Aucun compte claude.ai n'est requis et rien ne transite par un tiers.</p>
+
+<h2 id="casser">Puis-je casser ma configuration ?</h2>
+<p>Chaque écriture est précédée d'une <strong>sauvegarde</strong> et d'un <strong>aperçu</strong> des changements. Les fichiers de mémoire et de règles supprimés vont à la <strong>corbeille</strong>, d'où ils se restaurent en un clic. Voir <a href="reglages.html">Skills, snippets et réglages</a> et <a href="memoire.html">Mémoire et règles</a>.</p>
+
+<h2 id="port">Le port 8799 est déjà pris.</h2>
+<p>Lancez <code>GLD_WEB_PORT=8800 gld</code>.</p>
+
+<h2 id="cout">Combien coûte un message envoyé depuis la page ?</h2>
+<p>Chaque message recharge tout le contexte : environ 1 à 2 $ sur une session <strong>froide</strong>, bien moins sur une session au cache encore chaud (active depuis moins d'une heure). Glaude Code annonce le coût d'un envoi sur session froide, et la vue <em>En cours et cache chaud</em> liste les sessions les moins chères à reprendre. Voir <a href="sessions.html#ecrire">Sessions</a>.</p>
+
+<h2 id="windows">Ça marche sous Windows ?</h2>
+<p>Oui via <strong>WSL2</strong>, qui est la voie recommandée. Le binaire natif Windows est compilé mais n'a pas encore été testé sur une vraie machine. Voir <a href="demarrer.html#windows">Installer et démarrer</a>.</p>
+
+<h2 id="telephone">Comment l'ouvrir depuis mon téléphone ?</h2>
+<p>Lancez <code>gld --listen 0.0.0.0</code>, ouvrez l'adresse affichée, puis jumelez le téléphone avec un code à huit chiffres. Les notifications exigent HTTPS. Ne l'exposez jamais directement sur Internet. Voir <a href="mobile.html">Téléphone et accès distant</a>.</p>
+
+<h2 id="invite">Un invité peut-il voir mes autres sessions ou mes fichiers ?</h2>
+<p>Non : il ne voit que la session partagée, sans pouvoir répondre aux permissions ni lire les fichiers de configuration, et les chemins absolus, le nom de votre compte et votre identité git y sont masqués. Mais une session sans demande de permission exécute ses messages directement : ne la partagez qu'avec quelqu'un de confiance. Voir <a href="partage.html#precautions">Partager une session</a>.</p>
+
+<h2 id="redemarrage">J'ai redémarré ma machine, où sont mes sessions ?</h2>
+<p>Glaude Code note les sessions ouvertes toutes les 2 minutes : cliquez sur <strong>Tout rouvrir</strong>, ou lancez <code>gld matin --resume</code>. Voir <a href="sessions.html#redemarrage">Sessions</a>.</p>
+
+<h2 id="equipe">Plusieurs personnes peuvent-elles l'utiliser ?</h2>
+<p>Oui, en mode <a href="multi-utilisateur.html">multi-utilisateur</a> : un compte par personne, un second facteur obligatoire et neuf droits indépendants par dossier de configuration. Les droits <code>exec</code> et <code>config_write</code> équivalent au compte système qui fait tourner gld.</p>
+
+<h2 id="langue">Comment changer la langue ?</h2>
+<p>Via le réglage <code>language</code> de <code>~/.claude/settings.json</code>, modifiable dans la page Configuration. Voir <a href="demarrer.html#langue">Installer et démarrer</a>.</p>
+
+<h2 id="aide">Un bug, une idée ?</h2>
+<p>Ouvrez une issue sur <a href="https://github.com/54tor/glaude-code/issues">GitHub</a>. Le code est sous licence MIT.</p>

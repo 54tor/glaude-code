@@ -1,0 +1,90 @@
+<h1>Sessions</h1>
+<p class="lead">Retrouver « la session d'hier », la relire, la reprendre ou lui écrire sans ouvrir de terminal, et ne rien perdre quand la machine redémarre.</p>
+
+<h2 id="retrouver">Retrouver une session</h2>
+<figure>
+  <img src="{{R}}shots/bureau-sessions.png" alt="Toutes les sessions, rangées par date et par projet" width="1920" height="1080" loading="lazy">
+  <figcaption>Toutes les sessions, rangées par date et par projet.</figcaption>
+</figure>
+<ul>
+  <li>La page d'accueil montre vos sessions des <strong>7 derniers jours</strong>, rangées par projet. Un <strong>point vert</strong> signale celles qui sont ouvertes en ce moment.</li>
+  <li>La <strong>recherche</strong> (touche <kbd>/</kbd>) fouille les titres <em>et</em> le texte des conversations.</li>
+  <li>La vue <strong>En cours et cache chaud</strong> montre les sessions actives depuis moins d'une heure : les reprendre maintenant coûte moins cher, car le cache de contexte de Claude est encore chaud.</li>
+  <li>Chaque session indique sa taille en tokens ; le dossier du projet est affiché sous le titre.</li>
+</ul>
+
+<h2 id="relire">Relire et reprendre</h2>
+<figure>
+  <img src="{{R}}shots/bureau-conversation.png" alt="Relecture d'une session avec ses outils repliés et la zone de réponse" width="1920" height="1080" loading="lazy">
+  <figcaption>Le lecteur : conversation, appels d'outils repliés, zone de réponse en bas.</figcaption>
+</figure>
+<ol>
+  <li>Cliquez sur une session pour la <strong>relire en entier</strong>. Les appels d'outils sont repliés pour garder la conversation lisible.</li>
+  <li>Cliquez sur <strong>Reprendre</strong> pour la rouvrir dans un terminal, avec un message de départ si vous le souhaitez.</li>
+  <li>Pour agir sur une ou plusieurs sessions : clic droit, ou <kbd>Maj</kbd>+clic pour en sélectionner une série. Vous pouvez <strong>renommer</strong>, <strong>exporter en Markdown</strong>, <strong>déplacer</strong> (vers un autre dossier de projet) ou <strong>supprimer</strong>.</li>
+</ol>
+<p>Une session supprimée n'est pas perdue de vue : elle passe par une corbeille.</p>
+
+<h2 id="projet">La vue d'un projet</h2>
+<p>Cliquer sur un dossier de la barre latérale ouvre la vue du projet : toutes ses sessions, rangées par date, et de quoi le piloter.</p>
+<figure>
+  <img src="{{R}}shots/03-projet.png" alt="La vue d'un projet : état git, bloc-notes, mémoire du projet et sessions" width="1920" height="1080" loading="lazy">
+  <figcaption>La vue d'un projet : état git, bloc-notes, mémoire du projet et sessions.</figcaption>
+</figure>
+<ul>
+  <li><strong>État git</strong> : branche, fichiers modifiés et non suivis, commits en avance, et un bouton <strong>Pousser</strong>.</li>
+  <li><strong>Bloc-notes</strong> : une liste de tâches à cocher propre au projet. Chaque note peut devenir une <strong>nouvelle session</strong> (<em>Nouvelle session avec la note</em>) ou être envoyée à une session déjà ouverte (<em>Envoyer à une session ouverte</em>).</li>
+  <li><strong>Mémoire du projet</strong> : nombre de fichiers et tokens chargés à chaque session (voir <a href="memoire.html">Mémoire et règles</a>).</li>
+  <li><strong>Permissions</strong> du projet et <a href="espace-de-travail.html">Espace de travail</a> en un clic ; <strong>Reprendre les récentes</strong> rouvre les dernières sessions du dossier.</li>
+</ul>
+
+<h2 id="ecrire">Écrire à une session sans terminal</h2>
+<p>Depuis le lecteur, tapez un message : Claude répond dans la page. Si la session tourne déjà dans un terminal tmux, le bouton <strong>Envoyer à la session</strong> écrit directement dedans, et vous voyez en direct ce que Claude fait.</p>
+<div class="callout warn">
+  <p><strong>Coût.</strong> Chaque message envoyé ainsi recharge tout le contexte : comptez environ <strong>1 à 2 $</strong> par message sur une session froide. La vue « cache chaud » sert précisément à repérer les sessions bon marché à relancer, et Glaude Code annonce le coût d'un envoi sur session froide.</p>
+</div>
+
+<h3 id="envoi">Envoyer pendant que Claude travaille</h3>
+<p>Un message part tout de suite, même pendant que Claude travaille. Le menu du bouton d'envoi propose :</p>
+<ul>
+  <li><strong>Envoyer en interrompant</strong> : la réponse en cours s'arrête, le message passe.</li>
+  <li><strong>Attendre le repos</strong> (case mémorisée par session) : le message n'est envoyé qu'au moment où Claude attend.</li>
+</ul>
+<p>Une question en attente (Claude vous demande un choix ou une autorisation) met toujours le message en file : il part quand la question est traitée. Le bouton <strong>Arrière-plan</strong> envoie <kbd>Ctrl</kbd>+<kbd>B</kbd> à la session tmux pour passer la tâche en cours en arrière-plan.</p>
+
+<h3 id="nouvelle">Démarrer une nouvelle session</h3>
+<p>Le bouton <strong>Nouvelle session</strong> (premier de la barre de navigation) demande le message de départ et le dossier : l'explorateur propose d'abord vos projets récents. Pour limiter les dossiers parcourables, voir <a href="mobile.html#locations">Restreindre l'explorateur de dossiers</a>.</p>
+
+<h2 id="redemarrage">Ne rien perdre au redémarrage</h2>
+<p>Glaude Code note <strong>toutes les 2 minutes</strong> les sessions ouvertes. Après un redémarrage de la machine, <strong>Tout rouvrir</strong> les relance, chacune dans son onglet. En ligne de commande :</p>
+<pre><code>gld matin             # rouvre les sessions d'un projet
+gld matin --resume    # rouvre la dernière sauvegarde</code></pre>
+
+<h2 id="raccourcis">Raccourcis clavier</h2>
+<p>Dans la liste des sessions :</p>
+<div class="table-scroll">
+<table>
+  <thead><tr><th>Touche</th><th>Action</th></tr></thead>
+  <tbody>
+    <tr><td><kbd>/</kbd></td><td>Rechercher</td></tr>
+    <tr><td><kbd>j</kbd> / <kbd>k</kbd></td><td>Session suivante / précédente</td></tr>
+    <tr><td><kbd>Entrée</kbd></td><td>Lire</td></tr>
+    <tr><td><kbd>t</kbd></td><td>Reprendre dans un terminal</td></tr>
+    <tr><td><kbd>m</kbd></td><td>Reprendre avec un message</td></tr>
+    <tr><td><kbd>r</kbd></td><td>Renommer</td></tr>
+    <tr><td><kbd>x</kbd></td><td>Sélectionner</td></tr>
+    <tr><td><kbd>e</kbd></td><td>Exporter en Markdown</td></tr>
+    <tr><td><kbd>Suppr</kbd></td><td>Supprimer</td></tr>
+    <tr><td><kbd>Échap</kbd></td><td>Vider la sélection</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2 id="plusieurs-dossiers">Plusieurs dossiers de configuration</h2>
+<p>Si vous avez plusieurs dossiers de configuration Claude (par exemple un pour le travail, un pour le personnel), le sélecteur en haut de la barre latérale permet d'en ajouter, d'en retirer de la liste et de passer de l'un à l'autre. Chaque dossier a ses sessions, sa mémoire et ses réglages.</p>
+
+<h2 id="revues">Revues de sécurité</h2>
+<p>Les sessions lancées par des skills (revues de sécurité) sont masquées des autres vues et des sauvegardes, et regroupées dans une vue <strong>Revues de sécurité</strong> (en bas de la barre latérale), avec un bouton <strong>Nettoyer</strong>.</p>
+<figure>
+  <img src="{{R}}shots/12-revues-securite.png" alt="La vue Revues de sécurité, qui regroupe les sessions lancées par des skills" width="1920" height="1080" loading="lazy">
+</figure>

@@ -1,0 +1,72 @@
+<h1>Share a session</h1>
+<p class="lead">Show a session to a colleague without copy-pasting: an invitation link, live following, read-only or read-write, revocable at any time.</p>
+
+<h2 id="inviter">Invite someone</h2>
+<ol>
+  <li>Open the session menu (<strong>…</strong>) and choose <strong>Share…</strong>.</li>
+  <li>Click <strong>Invite someone</strong> (the name is optional: "Guest N" otherwise).</li>
+  <li>The link is copied; paste it into your messaging app.</li>
+</ol>
+<figure>
+  <img src="{{R}}shots/16-partage-session-hote.png" alt="A session's sharing window, host side" width="1920" height="1080" loading="lazy">
+  <figcaption>The sharing window, host side.</figcaption>
+</figure>
+<ul>
+  <li>A session can have <strong>up to 10 invitations</strong>, each with its own link, name, mode and revocation.</li>
+  <li>Each link is <strong>single-use</strong>: whoever opens it first and presses the button reserves it. Any other browser or device is refused.</li>
+  <li><strong>Regenerate link</strong> makes the old one unusable without touching the other guests.</li>
+  <li>The mode is <strong>read-only</strong> at creation; you grant write access afterwards, guest by guest.</li>
+</ul>
+
+<h2 id="suivre">Keep track of guests</h2>
+<p>The <strong>Shared session</strong> button in the header (visible as soon as a share exists) opens the list of all invitations: the state of each (connected, away since…, link not used), mode, link, revocation, and the <strong>pending guest messages</strong>, which you can remove. The badge counts connected guests and pending messages, with no notification.</p>
+<figure>
+  <img src="{{R}}shots/17-invitations-hote.png" alt="A session's invitation list, host side" width="1920" height="1080" loading="lazy">
+</figure>
+
+<h2 id="invite">What the guest sees and does</h2>
+<figure>
+  <img src="{{R}}shots/18-mode-invite.png" alt="A guest's view" width="1920" height="1080" loading="lazy">
+  <figcaption>The guest view: the live conversation and the send queue.</figcaption>
+</figure>
+<p>The guest sees the <strong>whole conversation</strong>, including tool outputs and background tasks, and follows it live. With write access, they can write to the <strong>send queue</strong>: gld forwards their messages when the session is idle and no question is displayed on screen. They reach the session prefixed with <code>[Guest &lt;name&gt;]</code>. They can cite project files with <code>@</code>.</p>
+<p>They <strong>cannot</strong>:</p>
+<ul>
+  <li>answer permission requests;</li>
+  <li>open documents or see your other sessions;</li>
+  <li>read configuration files (<code>.json</code>, <code>.yaml</code>, <code>.toml</code>, <code>.ini</code>, <code>.xml</code>…).</li>
+</ul>
+<p>In what they read, the absolute paths of your machine, your Claude account name and your git identity are <strong>masked</strong>; their activity line only shows the tool in progress. They do, however, see the session <strong>title</strong> as is: rename the session before sharing if needed.</p>
+
+<h2 id="gerer">Manage a guest</h2>
+<ul>
+  <li><strong>Switch to read-only</strong>: they can no longer write and their messages still in the queue are deleted (except the one being sent); they can still remove their own.</li>
+  <li><strong>Grant write access again.</strong></li>
+  <li><strong>Revoke</strong>: they lose access immediately and their queued messages are deleted.</li>
+  <li><strong>End sharing</strong> revokes all guests.</li>
+</ul>
+<p>A browser can join <strong>several shared sessions</strong> (one invitation per session and per browser): the <code>/guest</code> page lists them (and redirects if there is only one), and an <strong>Other shared sessions</strong> menu lets them switch between them.</p>
+
+<h2 id="file">The send queue</h2>
+<p>It lives on the server, for all sessions: it survives closing the tab. A message being sent at the moment gld restarts shows as <strong>uncertain</strong> and is never resent automatically; you can relaunch it from the queue.</p>
+<p>Limits: 50 messages per session, 32 KB per message, 10 additions per minute per invitation.</p>
+
+<h2 id="precautions">Precautions and limits</h2>
+<div class="callout warn">
+  <p><strong>Sessions without permission prompts.</strong> A session launched in auto-accept or bypass mode runs the guest's messages directly: only share it with someone you trust.</p>
+</div>
+<ul>
+  <li><strong>HTTPS.</strong> Without HTTPS, the guest's cookie is not marked <code>Secure</code>: use an HTTPS address if you expose gld.</li>
+  <li><strong>Duration.</strong> The guest's cookie lasts 30 days. After <strong>Leave</strong>, the link is consumed: regenerate one.</li>
+  <li><strong>Testing your own link.</strong> If you open it with host access (token, paired device, an account with the <code>exec</code> right on this configuration folder), gld refuses it without consuming it; test it in a private window. In open local mode with no token, opening it consumes it (this browser gets a guest cookie) but does not lock your host interface.</li>
+  <li><strong>No tunnel.</strong> gld creates none: your colleague must already be able to reach gld (<code>--listen</code>, reverse proxy or VPN). See <a href="mobile.html">Phone and remote access</a>.</li>
+  <li>Sharing works in local mode with no token, in token mode (one user) and in <a href="multi-utilisateur.html">multi-user</a> mode.</li>
+</ul>
+
+<h3 id="essai">Try it without configuring anything</h3>
+<p>A <a href="https://try.cloudflare.com/">trycloudflare</a> quick tunnel (no account) is enough for a trial:</p>
+<pre><code>cloudflared tunnel --url http://127.0.0.1:8799</code></pre>
+<p>It prints an <code>https://….trycloudflare.com</code> address; give it to gld as well (<code>--public-url</code>) so that invitation links use it.</p>
+<div class="callout warn">
+  <p>The address changes on every launch (links already sent stop working) and <strong>all of gld becomes reachable from the Internet</strong>: enable a token or accounts first, and stop the tunnel after the test. This is a trial route, not an installation: it has not been validated with gld.</p>
+</div>

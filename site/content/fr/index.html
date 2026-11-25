@@ -1,26 +1,5 @@
-<!doctype html>
-<html lang="fr">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Glaude Code — le poste de pilotage web de Claude Code</title>
-<meta name="description" content="Retrouvez, relisez et reprenez vos sessions Claude Code depuis le navigateur ou le téléphone, partagez-les et gardez la main sur mémoire, règles et réglages. Tout reste sur votre machine.">
-<link rel="canonical" href="https://54tor.github.io/glaude-code/">
-<link rel="alternate" hreflang="fr" href="https://54tor.github.io/glaude-code/">
-<link rel="alternate" hreflang="en" href="https://54tor.github.io/glaude-code/en/">
-<link rel="alternate" hreflang="x-default" href="https://54tor.github.io/glaude-code/">
-<link rel="icon" href="logo.png">
-<link rel="stylesheet" href="style.css">
-</head>
-<body>
-<header class="wrap top">
-  <a class="brand" href="./"><img src="logo.png" alt="">Glaude Code</a>
-  <nav class="lang" aria-label="Langue"><span aria-current="true">FR</span><a href="en/" hreflang="en" lang="en">EN</a></nav>
-</header>
-
-<main>
   <div class="wrap hero">
-    <img class="logo" src="logo.png" alt="">
+    <img class="logo" src="{{R}}logo.png" alt="">
     <h1>Le poste de pilotage web de Claude Code</h1>
     <p>Retrouvez, relisez et reprenez vos sessions, pilotez-les depuis votre navigateur ou votre téléphone, partagez-les avec un collègue, et gardez la main sur votre mémoire, vos règles, vos skills et vos réglages. Tout reste sur votre machine : Glaude Code lit simplement le dossier <code>~/.claude</code>.</p>
     <div class="actions">
@@ -30,13 +9,13 @@
 
     <div class="shots">
       <div class="desk">
-        <img src="shots/bureau-sessions.png" alt="Toutes les sessions, rangées par date et par projet" width="1920" height="1080">
-        <img src="shots/bureau-conversation.png" alt="Relecture d'une session avec ses outils repliés et la zone de réponse" width="1920" height="1080" loading="lazy">
+        <img src="{{R}}shots/bureau-sessions.png" alt="Toutes les sessions, rangées par date et par projet" width="1920" height="1080">
+        <img src="{{R}}shots/bureau-conversation.png" alt="Relecture d'une session avec ses outils repliés et la zone de réponse" width="1920" height="1080" loading="lazy">
       </div>
       <div class="phone">
-        <img src="shots/mobile-sessions.png" alt="La liste des sessions sur téléphone" width="390" height="844" loading="lazy">
-        <img src="shots/mobile-conversation.png" alt="Une session sur téléphone" width="390" height="844" loading="lazy">
-        <img src="shots/mobile-permissions.png" alt="Les permissions de Claude Code sur téléphone" width="390" height="844" loading="lazy">
+        <img src="{{R}}shots/mobile-sessions.png" alt="La liste des sessions sur téléphone" width="390" height="844" loading="lazy">
+        <img src="{{R}}shots/mobile-conversation.png" alt="Une session sur téléphone" width="390" height="844" loading="lazy">
+        <img src="{{R}}shots/mobile-permissions.png" alt="Les permissions de Claude Code sur téléphone" width="390" height="844" loading="lazy">
       </div>
     </div>
   </div>
@@ -59,14 +38,16 @@
     <div class="wrap">
       <h2>Ce que vous pouvez faire</h2>
       <div class="cards">
-        <article class="card"><h3>Retrouver et reprendre</h3><p>Sessions rangées par projet, recherche dans les conversations, point vert sur celles qui tournent, reprise dans un terminal en un clic.</p></article>
-        <article class="card"><h3>Écrire sans terminal</h3><p>Tapez un message depuis la page : Claude répond, et vous voyez en direct ce qu'il fait dans la session tmux.</p></article>
-        <article class="card"><h3>Partager une session</h3><p>Lien d'invitation à usage unique, suivi en direct, lecture seule ou écriture, révocable, jusqu'à 10 invités.</p></article>
-        <article class="card"><h3>Ne rien perdre au redémarrage</h3><p>Les sessions ouvertes sont notées toutes les 2 minutes ; <strong>Tout rouvrir</strong> les relance chacune dans son onglet.</p></article>
-        <article class="card"><h3>Ranger mémoire et règles</h3><p>Tokens coûtés par fichier, liens cassés, doublons, contradictions, corbeille, export et import.</p></article>
-        <article class="card"><h3>Skills, snippets, réglages</h3><p>Permissions et réglages en cases à cocher, aperçu du changement et sauvegarde avant chaque écriture.</p></article>
-        <article class="card"><h3>Espace de travail</h3><p>Arborescence git, éditeur Monaco servi sans CDN, enregistrement, terminal en lecture seule.</p></article>
-        <article class="card"><h3>Sur téléphone</h3><p>Application installable, notifications push quand une session pose une question ou attend votre message (HTTPS requis).</p></article>
+        <a class="card" href="sessions.html"><h3>Retrouver et reprendre</h3><p>Sessions rangées par projet, recherche dans les conversations, point vert sur celles qui tournent, reprise dans un terminal en un clic.</p></a>
+        <a class="card" href="sessions.html"><h3>Écrire sans terminal</h3><p>Tapez un message depuis la page : Claude répond, et vous voyez en direct ce qu'il fait dans la session tmux.</p></a>
+        <a class="card" href="partage.html"><h3>Partager une session</h3><p>Lien d'invitation à usage unique, suivi en direct, lecture seule ou écriture, révocable, jusqu'à 10 invités.</p></a>
+        <a class="card" href="sessions.html#redemarrage"><h3>Ne rien perdre au redémarrage</h3><p>Les sessions ouvertes sont notées toutes les 2 minutes ; <strong>Tout rouvrir</strong> les relance chacune dans son onglet.</p></a>
+        <a class="card" href="memoire.html"><h3>Ranger mémoire et règles</h3><p>Tokens coûtés par fichier, liens cassés, doublons, contradictions, corbeille, export et import.</p></a>
+        <a class="card" href="reglages.html"><h3>Skills, snippets, réglages</h3><p>Permissions et réglages en cases à cocher, aperçu du changement et sauvegarde avant chaque écriture.</p></a>
+        <a class="card" href="espace-de-travail.html"><h3>Espace de travail</h3><p>Arborescence git, éditeur Monaco servi sans CDN, enregistrement, terminal en lecture seule.</p></a>
+        <a class="card" href="mobile.html"><h3>Sur téléphone</h3><p>Application installable, notifications push quand une session pose une question ou attend votre message (HTTPS requis).</p></a>
+        <a class="card" href="equipes.html"><h3>Équipes d'agents</h3><p>Un chef de projet et des coéquipiers lancés depuis la page, avec un catalogue de 21 agents et 11 équipes (fonction expérimentale de Claude Code).</p></a>
+        <a class="card" href="multi-utilisateur.html"><h3>Plusieurs comptes</h3><p>Mot de passe, second facteur obligatoire et neuf droits indépendants par compte et par dossier de configuration Claude.</p></a>
       </div>
     </div>
   </section>
@@ -108,16 +89,6 @@ chmod +x gld-linux-amd64 &amp;&amp; mv gld-linux-amd64 ~/.local/bin/gld</code></
 <pre><code>gld</code></pre></li>
         <li>Ouvrir <strong>http://127.0.0.1:8799</strong> dans le navigateur. C'est tout.</li>
       </ol>
-      <p>Compiler depuis les sources, Windows (WSL2), accès depuis un autre appareil, multi-utilisateur : voir le <a href="https://github.com/54tor/glaude-code#readme">README</a>.</p>
+      <p>Compiler depuis les sources, Windows (WSL2), langue : <a href="demarrer.html">installer et démarrer</a>. Autres appareils : <a href="mobile.html">téléphone et accès distant</a>. Plusieurs personnes : <a href="multi-utilisateur.html">comptes et multi-utilisateur</a>.</p>
     </div>
   </section>
-</main>
-
-<footer>
-  <div class="wrap">
-    <span>Glaude Code — licence MIT</span>
-    <a href="https://github.com/54tor/glaude-code">github.com/54tor/glaude-code</a>
-  </div>
-</footer>
-</body>
-</html>

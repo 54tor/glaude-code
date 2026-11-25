@@ -1,0 +1,61 @@
+<h1>Installer et démarrer</h1>
+<p class="lead">Un seul binaire, qui embarque l'interface. Seul Claude Code doit déjà être installé : Glaude Code (la commande <code>gld</code>) lit le dossier <code>~/.claude</code> et n'envoie rien ailleurs.</p>
+
+<h2 id="binaire">Installer le binaire de la release</h2>
+<p>Choisissez le fichier de votre système sur <a href="https://github.com/54tor/glaude-code/releases/latest">la dernière release</a> : <code>gld-linux-amd64</code>, <code>gld-linux-arm64</code>, <code>gld-darwin-arm64</code>, <code>gld-darwin-amd64</code>, <code>gld-windows-amd64.exe</code>… La liste complète et le fichier <code>SHA256SUMS</code> sont sur la page. Ni Go, ni Node.js, ni <code>make</code> ne sont nécessaires.</p>
+<p>Exemple pour Linux amd64, avec vérification de l'origine et de l'empreinte :</p>
+<pre><code>curl -LO https://github.com/54tor/glaude-code/releases/latest/download/gld-linux-amd64
+curl -LO https://github.com/54tor/glaude-code/releases/latest/download/SHA256SUMS
+gh attestation verify gld-linux-amd64 --repo 54tor/glaude-code
+sha256sum --ignore-missing -c SHA256SUMS
+chmod +x gld-linux-amd64 &amp;&amp; mv gld-linux-amd64 ~/.local/bin/gld
+gld --version</code></pre>
+<p>Le dossier <code>~/.local/bin</code> doit être dans votre <code>PATH</code>.</p>
+
+<h2 id="sources">Compiler depuis les sources</h2>
+<p>Il faut <a href="https://go.dev/dl/">Go</a> 1.25 ou plus récent, <a href="https://nodejs.org/">Node.js</a> et Claude Code déjà installé.</p>
+<pre><code>git clone https://github.com/54tor/glaude-code
+cd glaude-code
+make install</code></pre>
+<p>La commande <code>gld</code> est installée dans <code>~/.local/bin</code>.</p>
+
+<h2 id="lancer">Lancer</h2>
+<pre><code>gld</code></pre>
+<p>Ouvrez ensuite <strong>http://127.0.0.1:8799</strong> dans votre navigateur. C'est tout : par défaut, la page n'est visible que depuis votre ordinateur.</p>
+<figure>
+  <img src="{{R}}shots/01-sessions.png" alt="La page d'accueil de Glaude Code : sessions des 7 derniers jours rangées par projet" width="1920" height="1080" loading="lazy">
+  <figcaption>La page d'accueil : vos sessions des 7 derniers jours, rangées par projet.</figcaption>
+</figure>
+<p>Pour l'ouvrir depuis un téléphone ou un autre poste, voir <a href="mobile.html">Téléphone et accès distant</a>.</p>
+
+<h2 id="port">Port déjà pris</h2>
+<p>Si le port 8799 est occupé, choisissez-en un autre :</p>
+<pre><code>GLD_WEB_PORT=8800 gld</code></pre>
+
+<h2 id="langue">Choisir la langue</h2>
+<p>Glaude Code parle français et anglais. La langue vient du réglage <code>language</code> de <code>~/.claude/settings.json</code>, le même que celui de Claude Code ; vous le modifiez dans la page <a href="reglages.html">Configuration</a>.</p>
+<ul>
+  <li><code>French</code> ou <code>fr</code> donne le français, <code>English</code> ou <code>en</code> l'anglais.</li>
+  <li>Toute autre langue donne l'interface en anglais ; les titres automatiques, explications et rédactions demandés à Claude suivent votre réglage.</li>
+  <li>Sans réglage, l'interface suit la langue du navigateur, les commandes <code>gld-*</code> suivent <code>LC_ALL</code> puis <code>LANG</code>, et le serveur parle français.</li>
+  <li>Le contenu de vos sessions, mémoires, skills et snippets n'est jamais traduit.</li>
+</ul>
+
+<h2 id="windows">Windows</h2>
+<div class="callout warn">
+  <p>Le support Windows est compilé mais pas encore testé sur une vraie machine. Sans tmux, <code>gld.exe</code> ne peut pas écrire dans une session déjà ouverte (seule la reprise avec un message marche) et les <a href="equipes.html">équipes d'agents</a> sont refusées. <strong>WSL2 est la voie recommandée.</strong></p>
+</div>
+<h3 id="wsl2">Avec WSL2 (recommandé)</h3>
+<p>Sous WSL2, la version Linux fonctionne telle quelle, tmux compris. Tout s'installe dans la distribution Linux, pas côté Windows.</p>
+<ol>
+  <li>Dans PowerShell : <code>wsl --install</code>, puis redémarrez.</li>
+  <li>Dans WSL, installez Claude Code (l'installeur natif ne demande ni Node.js ni Python) et tmux : <code>sudo apt install tmux</code>.</li>
+  <li>Installez le binaire <code>gld-linux-amd64</code> comme ci-dessus et vérifiez que <code>~/.local/bin</code> est dans le <code>PATH</code>.</li>
+  <li>Lancez <code>gld</code> dans WSL, puis ouvrez <strong>http://127.0.0.1:8799</strong> dans le navigateur Windows (WSL2 redirige <code>localhost</code>).</li>
+</ol>
+<p>Points d'attention :</p>
+<ul>
+  <li>gld lit le <code>~/.claude</code> de la distribution. Les sessions créées côté Windows (<code>C:\Users\&lt;vous&gt;\.claude</code>) n'y sont pas : copiez le dossier, ou lancez <code>CLAUDE_CONFIG_DIR=/mnt/c/Users/&lt;vous&gt;/.claude gld</code> (accès plus lent).</li>
+  <li>« Envoyer à la session » exige que la session tourne dans un tmux de WSL ; celles lancées depuis l'interface web s'y ouvrent déjà.</li>
+  <li>Si <code>localhost</code> ne répond pas, changez de port (<code>GLD_WEB_PORT=8800 gld</code>) ou activez <code>networkingMode=mirrored</code> dans <code>.wslconfig</code>.</li>
+</ul>
