@@ -184,6 +184,36 @@ func lineHashes(rawLine []byte) []string {
 	return hashes
 }
 
+// scratchDirs : dossiers temporaires d'une session, <tmp>/claude-<uid>/<projet>/<session> (Linux, macOS)
+// ou <tmp>/claude/<projet>/<session> (Windows), avec le scratchpad et les sorties de tâches.
+func scratchDirs(projectDir, sessionID string) (bases, paths []string) {
+	for _, name := range []string{"claude-" + strconv.Itoa(os.Getuid()), "claude"} {
+		base := filepath.Join(claudeTmpDir(), name)
+		bases = append(bases, base)
+		paths = append(paths, filepath.Join(base, filepath.Base(projectDir), sessionID))
+	}
+	return
+}
+
+// purgeScratch efface les dossiers temporaires d'une session, confinés à leur racine.
+func purgeScratch(projectDir, sessionID string) (removedCount int, fails []string) {
+	if !idRe.MatchString(sessionID) {
+		return
+	}
+	bases, paths := scratchDirs(projectDir, sessionID)
+	for pathIndex, path := range paths {
+		if _, lstatErr := os.Lstat(path); lstatErr != nil {
+			continue
+		}
+		if removeErr := rRemoveAll(bases[pathIndex], path); removeErr != nil {
+			fails = append(fails, removeErr.Error())
+		} else {
+			removedCount++
+		}
+	}
+	return
+}
+
 // purgeOne efface le transcript, les sous-agents et les satellites d'une session (sans vérifier qu'elle est
 // vivante : c'est à l'appelant), et relève dans snaps les instantanés de shell qu'elle citait. Renvoie le nombre
 // d'emplacements effacés et les échecs.
@@ -200,7 +230,8 @@ func purgeOne(dir, sessionID string, snaps map[string]bool) (removedCount int, f
 			removedCount++
 		}
 	}
-	return
+	scratchRemoved, scratchFails := purgeScratch(dir, sessionID)
+	return removedCount + scratchRemoved, append(fails, scratchFails...)
 }
 
 // purgeSessions supprime transcript, sous-agents et satellites des sessions, puis solde les restes

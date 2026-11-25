@@ -170,3 +170,21 @@ func TestWithChildrenSkipsBadIDs(t *testing.T) {
 	}
 	_ = ids(out)
 }
+
+func TestPurgeOneEffaceLeDossierTemporaire(t *testing.T) {
+	cfg := fixture(t)
+	use(cfg)
+	tmp := t.TempDir()
+	t.Setenv("CLAUDE_CODE_TMPDIR", tmp)
+	scratch := filepath.Join(tmp, "claude", "-p", id1, "scratchpad")
+	put(t, filepath.Join(scratch, "note.txt"), "x", old)
+	autre := filepath.Join(tmp, "claude", "-p", id2, "note.txt")
+	put(t, autre, "x", old)
+	purgeOne(filepath.Join(cfg, "projects", "-p"), id1, map[string]bool{})
+	if exists(filepath.Join(tmp, "claude", "-p", id1)) {
+		t.Fatal("le dossier temporaire de la session doit être effacé")
+	}
+	if !exists(autre) {
+		t.Fatal("le dossier temporaire d'une autre session doit rester")
+	}
+}

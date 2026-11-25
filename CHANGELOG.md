@@ -11,6 +11,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Une page de présentation en français et en anglais (captures, comparatif, installation) est publiée sur GitHub Pages à chaque modification du site.
 
 ### Corrigé
+- Supprimer une session efface aussi son dossier temporaire (scratchpad et sorties de tâches de fond, `<tmp>/claude-<uid>/…` ou `%TEMP%\claude\…` sous Windows), qui s'accumulait jusqu'à plusieurs dizaines de Gio.
 - Les pushs en cours s'affichent dans la barre d'état (un clic rouvre leur terminal) au lieu de pastilles flottantes empilées au-dessus.
 - Un remote dont la poussée est désactivée (`no_push`, amont d'un subtree) n'alimente plus l'indicateur de synchronisation de la branche : plus de faux « ↑20 ↓1058 » ni de bouton Pousser affiché à tort.
 - Un push en échec propose le bouton « Envoyer à Claude » dans son terminal, en plus de la notification.
