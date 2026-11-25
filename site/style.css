@@ -9,7 +9,7 @@
   --code-bg: #1c1b19;
   --code-text: #ecebe6;
   --radius: 12px;
-  --max: 1200px;
+  --max: none;
   color-scheme: light dark;
 }
 
@@ -43,7 +43,7 @@ img { max-width: 100%; height: auto; display: block; }
 
 code, pre { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 0.9em; }
 
-.wrap { max-width: var(--max); margin: 0 auto; padding: 0 16px; }
+.wrap { max-width: var(--max); margin: 0 auto; padding: 0 clamp(16px, 3vw, 56px); }
 
 .top {
   display: flex;
@@ -92,7 +92,7 @@ code, pre { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; fo
 section { padding: 48px 0; border-top: 1px solid var(--line); }
 section h2 { font-size: clamp(1.5rem, 4vw, 2.1rem); margin: 0 0 24px; letter-spacing: -0.01em; }
 
-.who ul { padding-left: 1.2em; margin: 0; max-width: 760px; }
+.who ul { padding-left: 1.2em; margin: 0; }
 .who li { margin: 6px 0; }
 
 .table-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
@@ -108,7 +108,7 @@ td:last-child, th:last-child { background: color-mix(in srgb, var(--accent) 10%,
 .card h3 { margin: 0 0 8px; font-size: 1.1rem; }
 .card p { margin: 0; color: var(--muted); }
 
-.install ol { padding-left: 1.2em; max-width: 760px; }
+.install ol { padding-left: 1.2em; }
 .install li { margin: 12px 0; }
 pre {
   background: var(--code-bg);
@@ -131,7 +131,7 @@ a.card:focus-visible, .pills a:focus-visible, .side a:focus-visible, .pager a:fo
 .pills a[aria-current="page"] { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
 .side { display: none; }
 
-.doc { max-width: 860px; padding: 16px 0 48px; min-width: 0; }
+.doc { max-width: none; padding: 16px 0 48px; min-width: 0; }
 .doc h1 { font-size: clamp(1.9rem, 5vw, 2.6rem); line-height: 1.15; margin: 0 0 12px; letter-spacing: -0.02em; }
 .doc .lead { color: var(--muted); font-size: 1.15rem; margin: 0 0 24px; }
 .doc h2 { font-size: 1.5rem; margin: 40px 0 12px; padding-top: 24px; border-top: 1px solid var(--line); scroll-margin-top: 16px; }
@@ -157,14 +157,14 @@ a.card:focus-visible, .pills a:focus-visible, .side a:focus-visible, .pager a:fo
 .toc ul { margin: 6px 0 0; padding-left: 1.2em; columns: 2 220px; }
 .toc li { margin: 2px 0; }
 
-.pager { display: flex; justify-content: space-between; gap: 12px; margin: 32px 0 0; max-width: 780px; }
+.pager { display: flex; justify-content: space-between; gap: 12px; margin: 32px 0 0; }
 .pager a { display: block; flex: 1; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); padding: 12px 16px; text-decoration: none; color: var(--text); font-weight: 600; }
 .pager a.next { text-align: right; margin-left: auto; }
 .pager small { display: block; color: var(--muted); font-weight: 400; }
 
 @media (min-width: 900px) {
   .doc .pills, body.doc .pills { display: none; }
-  body.doc .layout { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 40px; align-items: start; }
+  body.doc .layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: clamp(32px, 4vw, 72px); align-items: start; }
   .side { display: flex; flex-direction: column; gap: 2px; position: sticky; top: 16px; padding: 8px 0 24px; font-size: 0.95rem; }
   .side strong { padding: 0 10px 6px; color: var(--muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; }
   .side a { padding: 6px 10px; border-radius: 8px; text-decoration: none; color: var(--text); }
