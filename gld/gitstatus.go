@@ -166,12 +166,12 @@ func parseRemoteSync(remoteNames, refsOutput, branch string) []GitRemoteSync {
 }
 
 func runGitRemotes(dir, branch string) []GitRemoteSync {
-	remoteNames, err := gitOut1(dir, "remote")
-	if err != nil || remoteNames == "" {
+	remoteNames := gitRemoteNames(dir)
+	if len(remoteNames) == 0 {
 		return nil
 	}
 	refsOutput, _ := gitOut1(dir, "for-each-ref", "--format=%(refname) %(ahead-behind:HEAD)", "refs/remotes")
-	return parseRemoteSync(remoteNames, refsOutput, branch)
+	return parseRemoteSync(strings.Join(remoteNames, " "), refsOutput, branch)
 }
 
 type gitPrefixEntry struct {

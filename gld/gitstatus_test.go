@@ -224,7 +224,7 @@ func TestParseRemoteSync(t *testing.T) {
 	}
 }
 
-// Avec un vrai dépôt : deux remotes locaux, l'un a la branche en retard, l'autre ne l'a pas.
+// Avec un vrai dépôt : deux remotes locaux, l'un a la branche en retard, l'autre ne l'a pas ; un remote no_push est ignoré.
 func TestRunGitRemotesReel(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git absent")
@@ -251,6 +251,9 @@ func TestRunGitRemotesReel(t *testing.T) {
 	git(work, "push", "-q", "a", "main")
 	git(work, "commit", "-q", "--allow-empty", "-m", "deux")
 	git(work, "fetch", "-q", "a")
+	git(work, "remote", "add", "amont", withBranch)
+	git(work, "fetch", "-q", "amont")
+	git(work, "remote", "set-url", "--push", "amont", "no_push")
 	got := runGitRemotes(work, "main")
 	want := []GitRemoteSync{{Name: "a", Ahead: 1}, {Name: "b", Missing: true}}
 	if !slices.Equal(got, want) {

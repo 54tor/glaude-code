@@ -12,6 +12,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ### Corrigé
 - Les pushs en cours s'affichent dans la barre d'état (un clic rouvre leur terminal) au lieu de pastilles flottantes empilées au-dessus.
+- Un remote dont la poussée est désactivée (`no_push`, amont d'un subtree) n'alimente plus l'indicateur de synchronisation de la branche : plus de faux « ↑20 ↓1058 » ni de bouton Pousser affiché à tort.
 - Un push en échec propose le bouton « Envoyer à Claude » dans son terminal, en plus de la notification.
 - Sur mobile, les bandeaux « Compacter » et « Cache expiré » au-dessus de la saisie tiennent sur deux lignes au lieu de quatre ; le texte complet reste en infobulle.
 - Le fond sombre des fenêtres (conversation, boîtes de dialogue) ne recouvre plus la barre d'état : elle reste visible et sans voile en bas de l'écran.
