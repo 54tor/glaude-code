@@ -713,6 +713,31 @@ paths:
         '400':
           $ref: '#/components/responses/Error'
       security: []
+  /v1/scratch:
+    get:
+      tags:
+      - backup
+      operationId: getScratch
+      x-gld-right: config_write
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+    delete:
+      tags:
+      - backup
+      operationId: deleteScratch
+      x-gld-right: config_write
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
   /v1/backup/export:
     get:
       tags:

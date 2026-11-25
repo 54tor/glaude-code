@@ -176,12 +176,12 @@ func TestPurgeOneEffaceLeDossierTemporaire(t *testing.T) {
 	use(cfg)
 	tmp := t.TempDir()
 	t.Setenv("CLAUDE_CODE_TMPDIR", tmp)
-	scratch := filepath.Join(tmp, "claude", "-p", id1, "scratchpad")
+	scratch := filepath.Join(baseTemp(), "-p", id1, "scratchpad")
 	put(t, filepath.Join(scratch, "note.txt"), "x", old)
-	autre := filepath.Join(tmp, "claude", "-p", id2, "note.txt")
+	autre := filepath.Join(baseTemp(), "-p", id2, "note.txt")
 	put(t, autre, "x", old)
 	purgeOne(filepath.Join(cfg, "projects", "-p"), id1, map[string]bool{})
-	if exists(filepath.Join(tmp, "claude", "-p", id1)) {
+	if exists(filepath.Join(baseTemp(), "-p", id1)) {
 		t.Fatal("le dossier temporaire de la session doit être effacé")
 	}
 	if !exists(autre) {

@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -187,7 +188,14 @@ func lineHashes(rawLine []byte) []string {
 // scratchDirs : dossiers temporaires d'une session, <tmp>/claude-<uid>/<projet>/<session> (Linux, macOS)
 // ou <tmp>/claude/<projet>/<session> (Windows), avec le scratchpad et les sorties de tâches.
 func scratchDirs(projectDir, sessionID string) (bases, paths []string) {
-	for _, name := range []string{"claude-" + strconv.Itoa(os.Getuid()), "claude"} {
+	if runAsOn() { // racine dictée par le settings.json de la cible : jamais utilisée pour effacer en root
+		return
+	}
+	names := []string{"claude-" + strconv.Itoa(os.Getuid())}
+	if runtime.GOOS == "windows" {
+		names = []string{"claude"}
+	}
+	for _, name := range names {
 		base := filepath.Join(claudeTmpDir(), name)
 		bases = append(bases, base)
 		paths = append(paths, filepath.Join(base, filepath.Base(projectDir), sessionID))

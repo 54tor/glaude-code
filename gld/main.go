@@ -385,6 +385,7 @@ func handler() http.Handler {
 	routesSessionHooks(mux)
 	routesSkills(mux)
 	routesBackup(mux)
+	routesScratch(mux)
 	routesIDE(mux)
 	routesSlash(mux)
 	routesImages(mux)
