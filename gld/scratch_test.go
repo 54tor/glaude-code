@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -36,4 +37,19 @@ func TestScratchOrphansEpargneLaSessionVivante(t *testing.T) {
 func baseTemp() string {
 	bases, _ := scratchDirs("", "")
 	return bases[0]
+}
+
+func TestScratchOrphansIgnoreUneBaseLienSymbolique(t *testing.T) {
+	use(fixture(t))
+	liveSessions = func() map[string]bool { return map[string]bool{} }
+	tmp := t.TempDir()
+	t.Setenv("CLAUDE_CODE_TMPDIR", tmp)
+	cible := t.TempDir()
+	put(t, filepath.Join(cible, "-p", idOrphelin, "b.txt"), "x", old)
+	if err := os.Symlink(cible, baseTemp()); err != nil {
+		t.Skip("liens symboliques indisponibles")
+	}
+	if orphans, _ := scratchOrphans(); len(orphans) != 0 {
+		t.Fatalf("valeurObtenue=%v, valeurAttendue=aucun", orphans)
+	}
 }

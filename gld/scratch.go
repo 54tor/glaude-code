@@ -26,8 +26,16 @@ func dirSizeKB(dir string) int64 {
 	return total / 1024
 }
 
+// scratchBases : racines temporaires réelles (ni lien symbolique, ni dossier d'un autre compte).
 func scratchBases() []string {
-	bases, _ := scratchDirs("", "")
+	candidates, _ := scratchDirs("", "")
+	var bases []string
+	for _, base := range candidates {
+		info, err := os.Lstat(base)
+		if err == nil && info.IsDir() && ownedByMe(info) {
+			bases = append(bases, base)
+		}
+	}
 	return bases
 }
 
@@ -44,7 +52,8 @@ func scratchOrphans() ([]scratchOrphan, error) {
 			sessionEntries, _ := os.ReadDir(filepath.Join(base, projectEntry.Name()))
 			for _, sessionEntry := range sessionEntries {
 				sessionID := sessionEntry.Name()
-				if !sessionEntry.IsDir() || !idRe.MatchString(sessionID) || live[sessionID] {
+				sessionInfo, infoErr := sessionEntry.Info()
+				if infoErr != nil || !sessionEntry.IsDir() || !ownedByMe(sessionInfo) || !idRe.MatchString(sessionID) || live[sessionID] {
 					continue
 				}
 				if _, statErr := os.Stat(filepath.Join(root, projectEntry.Name(), sessionID+".jsonl")); statErr == nil {
