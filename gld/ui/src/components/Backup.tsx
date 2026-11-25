@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Choose } from "./Choose"
+import { ScratchCleanup } from "./ScratchCleanup"
 import { SyncItems, type Picks } from "./SyncItems"
 
 const CATS = ["skills", "plugins", "settings", "memory", "mcp"]
@@ -248,6 +249,8 @@ export function Backup({ home }: { home: string }) {
           </div>
         )}
       </section>
+
+      <ScratchCleanup />
     </div>
   )
 }

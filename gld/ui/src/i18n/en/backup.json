@@ -15,8 +15,24 @@
     "skipped": "Skipped in the archive: {{list}}",
     "project": "Target project",
     "report": "Result",
+    "scratch": {
+      "title": "Orphaned temporary folders",
+      "hint": "Scratchpad and background-task output of sessions whose transcript no longer exists.",
+      "none": "No orphaned folder.",
+      "found": "{{count}} folder(s), {{size}}",
+      "clean": "Clean up",
+      "confirm": "Delete permanently",
+      "cancel": "Cancel",
+      "done": "{{count}} folder(s) deleted, {{size}} freed."
+    },
     "again": "Done",
     "status": { "ok": "Applied", "failed": "Failed", "skipped": "Skipped" },
-    "cat": { "skills": "Skills and commands", "plugins": "Plugins and marketplaces", "settings": "Settings", "memory": "Memory", "mcp": "MCP servers" }
+    "cat": {
+      "skills": "Skills and commands",
+      "plugins": "Plugins and marketplaces",
+      "settings": "Settings",
+      "memory": "Memory",
+      "mcp": "MCP servers"
+    }
   }
 }

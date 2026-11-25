@@ -552,6 +552,7 @@ export type BackupPlan = {
   targets: MemTarget[]
   skipped: string[]
 }
+export type ScratchStats = { count: number; kb: number }
 export type BackupResult = {
   id: string
   status: "ok" | "failed" | "skipped"
@@ -1109,6 +1110,8 @@ export const api = {
       { picks, targets }
     ),
   backupDrop: (id: string) => http.del(`/backup/imports/${seg(id)}`),
+  scratchStats: () => http.get<ScratchStats>("/scratch"),
+  scratchPurge: () => http.del<ScratchStats>("/scratch"),
   syncPlan: (from: string, to: string) =>
     http.post<{ items: SyncItem[] }>("/homes/sync-plans", { from, to }),
   syncApply: (

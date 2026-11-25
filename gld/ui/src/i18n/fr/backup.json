@@ -16,7 +16,23 @@
     "project": "Projet de destination",
     "report": "Résultat",
     "again": "Terminé",
+    "scratch": {
+      "title": "Dossiers temporaires orphelins",
+      "hint": "Scratchpad et sorties de tâches de sessions dont le transcript n'existe plus.",
+      "none": "Aucun dossier orphelin.",
+      "found": "{{count}} dossier(s), {{size}}",
+      "clean": "Nettoyer",
+      "confirm": "Effacer définitivement",
+      "cancel": "Annuler",
+      "done": "{{count}} dossier(s) effacé(s), {{size}} libéré(s)."
+    },
     "status": { "ok": "Appliqué", "failed": "Échec", "skipped": "Ignoré" },
-    "cat": { "skills": "Skills et commandes", "plugins": "Plugins et marketplaces", "settings": "Réglages", "memory": "Mémoire", "mcp": "Serveurs MCP" }
+    "cat": {
+      "skills": "Skills et commandes",
+      "plugins": "Plugins et marketplaces",
+      "settings": "Réglages",
+      "memory": "Mémoire",
+      "mcp": "Serveurs MCP"
+    }
   }
 }
