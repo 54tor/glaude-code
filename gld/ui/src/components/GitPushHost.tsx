@@ -9,7 +9,6 @@ import {
   useGitPushRuns,
   type GitPushRun,
 } from "@/hooks/useGitPush"
-import { GitPushPill } from "./GitPushPill"
 import { GitPushSendDialog } from "./GitPushSendDialog"
 import { GitPushTerminal } from "./GitPushTerminal"
 
@@ -17,26 +16,19 @@ const toastIdOf = (run: GitPushRun) => `git-push-${run.id}`
 const TOAST_TAIL_LINES = 3
 const TOAST_SUCCESS_MS = 6000
 
-// Monté une fois dans l'application : affiche chaque push en cours sous forme de pastille (les toasts gênaient l'interface), puis son résultat en toast, son terminal complet à la demande, et l'envoi de l'échec à Claude.
+// Monté une fois dans l'application : affiche son résultat en toast, son terminal complet à la demande, et l'envoi de l'échec à Claude.
 export function GitPushHost() {
   const runs = useGitPushRuns()
   useEffect(() => void resumeGitPushes(), [])
   const [sendRunId, setSendRunId] = useState<number | null>(null)
   const requestSend = useCallback((runId: number) => setSendRunId(runId), [])
   const closeSend = useCallback(() => setSendRunId(null), [])
-  const runningRuns = runs.filter((run) => run.status === "running")
   const runToSend = runs.find((run) => run.id === sendRunId)
   return (
     <>
       {runs.map((run) => (
         <GitPushRunView key={run.id} run={run} requestSend={requestSend} />
       ))}
-      {runningRuns.map(
-        (run, position) =>
-          !run.isTerminalOpen && (
-            <GitPushPill key={run.id} run={run} position={position} />
-          )
-      )}
       {runToSend && (
         <GitPushSendDialog
           run={runToSend}

@@ -12,6 +12,8 @@ import {
 import { toast, useNotifications, type NotifyKind } from "@/lib/notify"
 import { api } from "@/lib/api"
 import { PushButton } from "./PushSettings"
+import { setGitPushTerminalOpen, useGitPushRuns } from "@/hooks/useGitPush"
+import { Loader2 } from "lucide-react"
 
 export const MAX_VISIBLE_CHIPS = 5
 
@@ -108,6 +110,9 @@ export function StatusBar({
 }) {
   const { t } = useTranslation()
   const { visible, history } = useNotifications()
+  const runningPushes = useGitPushRuns().filter(
+    (run) => run.status === "running"
+  )
   const shown = visible.slice(-MAX_VISIBLE_CHIPS)
   const hiddenCount = visible.length - shown.length
   const unreadCount = history.filter((entry) => !entry.read).length
@@ -127,6 +132,19 @@ export function StatusBar({
         aria-live="polite"
         className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden"
       >
+        {runningPushes.map((run) => (
+          <Chip
+            key={`push-${run.id}`}
+            icon={
+              <Loader2 className="size-3.5 shrink-0 animate-spin text-success" />
+            }
+            label={t("conversation.gitPush.toastRunning", {
+              branch: run.branch,
+              remote: run.remote,
+            })}
+            onOpen={() => setGitPushTerminalOpen(run.id, true)}
+          />
+        ))}
         {shown.map((notification) => (
           <Chip
             key={notification.id}

@@ -11,6 +11,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Une page de présentation en français et en anglais (captures, comparatif, installation) est publiée sur GitHub Pages à chaque modification du site.
 
 ### Corrigé
+- Les pushs en cours s'affichent dans la barre d'état (un clic rouvre leur terminal) au lieu de pastilles flottantes empilées au-dessus.
 - Un push en échec propose le bouton « Envoyer à Claude » dans son terminal, en plus de la notification.
 - Sur mobile, les bandeaux « Compacter » et « Cache expiré » au-dessus de la saisie tiennent sur deux lignes au lieu de quatre ; le texte complet reste en infobulle.
 - Le fond sombre des fenêtres (conversation, boîtes de dialogue) ne recouvre plus la barre d'état : elle reste visible et sans voile en bas de l'écran.

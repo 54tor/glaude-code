@@ -6,7 +6,18 @@ import { api } from "@/lib/api"
 import * as push from "@/lib/push"
 import { setAuth } from "@/lib/auth"
 import { TooltipProvider } from "@/components/ui/tooltip"
+import {
+  resetGitPushes,
+  setGitPushTerminalOpen,
+  startGitPush,
+  useGitPushRuns,
+} from "@/hooks/useGitPush"
 import { MAX_VISIBLE_CHIPS, StatusBar } from "./StatusBar"
+
+vi.mock("@/hooks/useGit", () => ({ refreshGit: vi.fn() }))
+vi.mock("@/lib/gitPushStream", () => ({
+  streamGitPush: vi.fn(() => new Promise(() => {})),
+}))
 
 vi.mock("@/lib/push", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/push")>()),
@@ -89,6 +100,30 @@ describe("StatusBar", () => {
     fireEvent.click(screen.getByLabelText("Fermer la notification"))
     expect(screen.queryByText("à fermer")).toBeNull()
     expect(onOpen).not.toHaveBeenCalled()
+  })
+
+  it("un push en cours est une pastille qui rouvre son terminal au clic", () => {
+    function TerminalState() {
+      return (
+        <span data-testid="etat">
+          {String(useGitPushRuns()[0]?.isTerminalOpen)}
+        </span>
+      )
+    }
+    resetGitPushes()
+    render(
+      <>
+        <StatusBar onOpen={vi.fn()} />
+        <TerminalState />
+      </>
+    )
+    act(() => startGitPush("/depot", "origin", "main"))
+    act(() => setGitPushTerminalOpen(1, false))
+    expect(screen.getByTestId("etat").textContent).toBe("false")
+
+    fireEvent.click(screen.getByText(/Poussée de main vers origin/))
+
+    expect(screen.getByTestId("etat").textContent).toBe("true")
   })
 
   it("le bouton historique ouvre la liste", () => {
