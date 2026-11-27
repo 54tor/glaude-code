@@ -1027,6 +1027,29 @@ export const api = {
       (batch) => http.del<Said>(`/trash/sessions${qs({ item: batch })}`),
       itemLen
     ),
+  orphanFiles: () =>
+    http.get<{
+      files: {
+        name: string
+        bytes: number
+        at: number
+        owner?: string
+        trashed: boolean
+      }[]
+      days: number
+    }>("/uploads/orphans"),
+  orphanFilesTrash: (names: string[]) =>
+    inBatches(names, (batch) =>
+      http.post<Said>(`/uploads/orphans${qs({ item: batch })}`)
+    ),
+  orphanFilesRestore: (names: string[]) =>
+    inBatches(names, (batch) =>
+      http.patch<Said>(`/uploads/orphans${qs({ item: batch })}`)
+    ),
+  orphanFilesPurge: (names: string[]) =>
+    inBatches(names, (batch) =>
+      http.del<Said>(`/uploads/orphans${qs({ item: batch })}`)
+    ),
   vgroups: (body: { groups: VGroup[]; favs: string[]; projects?: Project[] }) =>
     http.put("/vgroups", body),
   dirsAdd: (dir: string, children = false) =>

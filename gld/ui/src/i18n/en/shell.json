@@ -102,6 +102,7 @@
       "newSession": "New session",
       "carousel": "Carousel of sessions waiting",
       "trash": "Session trash",
+      "orphans": "Attachments without a session",
       "favorites": "Favorites",
       "projects": "Projects",
       "addDirHint": "Add a folder without sessions: you can start a prompt there without Claude memory",
@@ -398,6 +399,19 @@
       "purge": "Delete permanently",
       "confirm_one": "Permanently delete {{count}} session? Transcript, subagents and associated files are removed.",
       "confirm_other": "Permanently delete {{count}} sessions? Transcripts, subagents and associated files are removed.",
+      "emptyAll": "Empty the trash"
+    },
+    "orphans": {
+      "description": "Uploaded files that no session cites. A trashed file stays restorable for {{days}} days.",
+      "empty": "No attachments without a session.",
+      "owner": "session {{id}}",
+      "unowned": "no session",
+      "trashed": "trashed {{ago}}",
+      "trash": "Move to trash",
+      "restore": "Restore",
+      "purge": "Delete permanently",
+      "confirm_one": "Permanently delete {{count}} file?",
+      "confirm_other": "Permanently delete {{count}} files?",
       "emptyAll": "Empty the trash"
     },
     "images": {

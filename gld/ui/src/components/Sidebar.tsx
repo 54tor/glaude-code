@@ -2,6 +2,7 @@ import { Fragment, useState, useSyncExternalStore } from "react"
 import { useTranslation } from "react-i18next"
 import { CleanupWarning } from "./CleanupWarning"
 import { SessionTrash } from "./SessionTrash"
+import { OrphanFiles } from "./OrphanFiles"
 import { NavContentSearch } from "./NavContentSearch"
 import {
   LayoutDashboard,
@@ -14,6 +15,7 @@ import {
   Puzzle,
   SlidersHorizontal,
   Shredder,
+  Paperclip,
   Trash2,
   Heart,
   History,
@@ -511,6 +513,7 @@ export function Sidebar({ searchRef, ...props }: SidebarProps) {
   const wide = useSyncExternalStore(onWide, () => matchMedia(MD).matches)
   const [isMoreOpen, setIsMoreOpen] = useState(false)
   const [isTrashOpen, setIsTrashOpen] = useState(false)
+  const [isOrphansOpen, setIsOrphansOpen] = useState(false)
   const [isCreditsOpen, setIsCreditsOpen] = useState(false)
   const isSecondaryHidden = !wide && !normalizedNavQuery && !isMoreOpen
   const body = (
@@ -610,6 +613,10 @@ export function Sidebar({ searchRef, ...props }: SidebarProps) {
             onClose={() => setIsTrashOpen(false)}
             reload={props.reload}
           />
+          <OrphanFiles
+            open={isOrphansOpen}
+            onClose={() => setIsOrphansOpen(false)}
+          />
           <nav className="px-2 pb-3" aria-label={t("shell.sidebar.navigation")}>
             {show(t("shell.sidebar.newSession")) && (
               <NavItem
@@ -651,6 +658,14 @@ export function Sidebar({ searchRef, ...props }: SidebarProps) {
                 label={t("shell.sidebar.trash")}
                 active={false}
                 onClick={() => setIsTrashOpen(true)}
+              />
+            )}
+            {show(t("shell.sidebar.orphans")) && (
+              <NavItem
+                icon={Paperclip}
+                label={t("shell.sidebar.orphans")}
+                active={false}
+                onClick={() => setIsOrphansOpen(true)}
               />
             )}
             {!wide && !normalizedNavQuery && (

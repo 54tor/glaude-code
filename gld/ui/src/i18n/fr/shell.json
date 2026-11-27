@@ -102,6 +102,7 @@
       "newSession": "Nouvelle session",
       "carousel": "Carrousel des sessions en attente",
       "trash": "Corbeille des sessions",
+      "orphans": "Pièces jointes sans session",
       "favorites": "Favoris",
       "projects": "Projets",
       "addDirHint": "Ajouter un dossier sans session : on y lance un prompt sans mémoire Claude",
@@ -398,6 +399,19 @@
       "purge": "Supprimer définitivement",
       "confirm_one": "Supprimer définitivement {{count}} session ? Transcript, sous-agents et fichiers associés partent.",
       "confirm_other": "Supprimer définitivement {{count}} sessions ? Transcript, sous-agents et fichiers associés partent.",
+      "emptyAll": "Vider la corbeille"
+    },
+    "orphans": {
+      "description": "Fichiers déposés qu'aucune session ne cite. Un fichier mis à la corbeille reste restaurable {{days}} jours.",
+      "empty": "Aucune pièce jointe sans session.",
+      "owner": "session {{id}}",
+      "unowned": "sans session",
+      "trashed": "à la corbeille {{ago}}",
+      "trash": "Mettre à la corbeille",
+      "restore": "Restaurer",
+      "purge": "Supprimer définitivement",
+      "confirm_one": "Supprimer définitivement {{count}} fichier ?",
+      "confirm_other": "Supprimer définitivement {{count}} fichiers ?",
       "emptyAll": "Vider la corbeille"
     },
     "images": {
