@@ -189,10 +189,10 @@ func routesGitPushRuns(mux *http.ServeMux) {
 	}
 	mux.HandleFunc("POST /v1/git/push-runs", func(responseWriter http.ResponseWriter, request *http.Request) {
 		var payload struct {
-			Dir       string
-			Remotes   []string
-			Tags      []string
-			ForceTags bool
+			Dir                 string
+			Remotes             []string
+			Tags                []string
+			ForceTags           bool
 			Session, SessionDir string
 		}
 		if !decodeBody(responseWriter, request, &payload, pushRunBodyMax) {

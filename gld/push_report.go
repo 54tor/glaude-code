@@ -43,7 +43,7 @@ func pushReportText(status PushRunStatus) string {
 		}
 	}
 	return L("srv.pushreport.intro", "A1", status.Branch, "A2", strings.Join(names, ", "), "A3", status.Dir, "A4", exitCode) +
-		"\n\n" + pushOutputTail(status.ID) + "\n\n" +
+		"\n\n" + L("srv.pushreport.dataNotice") + "\n```text\n" + strings.ReplaceAll(pushOutputTail(status.ID), "```", "'''") + "\n```\n\n" +
 		L("srv.pushreport.outro", "A1", status.Branch, "A2", strings.Join(names, ", "))
 }
 
