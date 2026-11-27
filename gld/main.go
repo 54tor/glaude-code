@@ -378,6 +378,7 @@ func handler() http.Handler {
 	routesUpdate(mux)
 	routesTrust(mux)
 	routesTrashSessions(mux)
+	routesOrphans(mux)
 	routesCleanupWarn(mux)
 	routesNotes(mux)
 	routesPushState(mux)
