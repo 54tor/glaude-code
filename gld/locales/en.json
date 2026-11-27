@@ -594,5 +594,7 @@
   "srv.gitpushrun.badTags": "Some selected tags do not exist in this repository",
   "srv.gitpushrun.badRemotes": "Pick at least one existing remote",
   "srv.gitpushrun.alreadyRunning": "A push of this repository is already running",
-  "srv.gitpushrun.stillRunning": "This push is still running"
+  "srv.gitpushrun.stillRunning": "This push is still running",
+  "srv.pushreport.intro": "Pushing branch “{{.A1}}” to “{{.A2}}” failed in {{.A3}} (exit code {{.A4}}). Git output, local hook included:",
+  "srv.pushreport.outro": "Analyze the output, fix the cause, commit the fix, then push branch “{{.A1}}” to “{{.A2}}” again."
 }

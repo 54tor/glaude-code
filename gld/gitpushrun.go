@@ -52,6 +52,9 @@ type PushRunStatus struct {
 	Done        bool              `json:"done"`
 	Interrupted bool              `json:"interrupted,omitempty"` // calculé à la lecture, jamais écrit
 	Started     int64             `json:"started"`
+	Session     string            `json:"session,omitempty"`    // session qui a lancé la poussée : reçoit l'échec, même fermée ou à la corbeille
+	SessionDir  string            `json:"sessionDir,omitempty"` // dossier de projet de cette session
+	Reported    bool              `json:"reported,omitempty"`   // l'échec a déjà été remis à la session
 }
 
 func pushRunsRoot() string               { return filepath.Join(cfgDir(), pushRunsDirName) }
@@ -130,12 +133,12 @@ func hasActivePushRun(dir string) bool {
 var errPushNoTmux = terr("srv.gitpushrun.noTmux")
 
 // startPushRun écrit l'état initial puis lance la session tmux qui pousse vers chaque remote, l'un après l'autre.
-func startPushRun(dir string, remotes, tags []string, forceTags bool) (PushRunStatus, error) {
+func startPushRun(dir string, remotes, tags []string, forceTags bool, origin PushRunStatus) (PushRunStatus, error) {
 	branch, _ := gitOut1(dir, "symbolic-ref", "--short", "-q", "HEAD")
 	if !onPath("tmux") {
 		return PushRunStatus{}, errPushNoTmux
 	}
-	status := PushRunStatus{ID: newPushRunID(), Dir: dir, Branch: branch, Tags: tags, ForceTags: forceTags, Started: time.Now().UnixMilli()}
+	status := PushRunStatus{ID: newPushRunID(), Dir: dir, Branch: branch, Tags: tags, ForceTags: forceTags, Started: time.Now().UnixMilli(), Session: origin.Session, SessionDir: origin.SessionDir}
 	for _, remote := range remotes {
 		status.Remotes = append(status.Remotes, PushRemoteState{Name: remote, State: pushStatePending})
 	}
@@ -190,6 +193,7 @@ func routesGitPushRuns(mux *http.ServeMux) {
 			Remotes   []string
 			Tags      []string
 			ForceTags bool
+			Session, SessionDir string
 		}
 		if !decodeBody(responseWriter, request, &payload, pushRunBodyMax) {
 			return
@@ -213,11 +217,15 @@ func routesGitPushRuns(mux *http.ServeMux) {
 			writeErr(responseWriter, http.StatusConflict, "conflict", L("srv.gitpush.detached"))
 			return
 		}
+		if payload.Session != "" && (!idRe.MatchString(payload.Session) || !safeDir(payload.SessionDir)) {
+			writeErr(responseWriter, http.StatusBadRequest, "bad_request", L("srv.chat.sessionInvalide"))
+			return
+		}
 		if hasActivePushRun(payload.Dir) {
 			writeErr(responseWriter, http.StatusConflict, "conflict", L("srv.gitpushrun.alreadyRunning"))
 			return
 		}
-		status, err := startPushRun(payload.Dir, payload.Remotes, payload.Tags, payload.ForceTags)
+		status, err := startPushRun(payload.Dir, payload.Remotes, payload.Tags, payload.ForceTags, PushRunStatus{Session: payload.Session, SessionDir: payload.SessionDir})
 		if errors.Is(err, errPushNoTmux) {
 			writeErr(responseWriter, http.StatusNotImplemented, "not_implemented", err.Error())
 			return

@@ -600,7 +600,12 @@ export function Conversation({
           className="flex min-w-0 flex-wrap items-center gap-1.5 text-xs md:shrink-0 max-md:flex-nowrap"
           title={repoDir}
         >
-          <GitRepo dir={repoDir} st={git.status[repoDir]} chip />
+          <GitRepo
+            dir={repoDir}
+            st={git.status[repoDir]}
+            origin={{ id, dir }}
+            chip
+          />
         </span>
       ))}
       <GitRepos dirs={gitSubs} status={git.status} />

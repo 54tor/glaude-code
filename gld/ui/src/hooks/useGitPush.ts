@@ -6,6 +6,7 @@ import {
   followGitPush,
   listPushRuns,
   streamGitPush,
+  type PushOrigin,
   type PushRunInfo,
 } from "@/lib/gitPushStream"
 import { refreshGit } from "@/hooks/useGit"
@@ -124,7 +125,8 @@ export function startGitPushes(
   remotes: string[],
   branch: string,
   tags: string[] = [],
-  forceTags = false
+  forceTags = false,
+  origin?: PushOrigin
 ) {
   if (isGitPushRunning(dir)) return
   const runId = openRun(dir, remotes, branch)
@@ -135,7 +137,8 @@ export function startGitPushes(
       onOutput,
       (serverId) => updateRun(runId, { serverId }),
       tags,
-      forceTags
+      forceTags,
+      origin
     )
   )
 }

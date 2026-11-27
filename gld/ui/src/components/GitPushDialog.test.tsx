@@ -86,7 +86,8 @@ describe("GitPushDialog", () => {
       ["amont", "origin"],
       "main",
       ["v1.0.0"],
-      true
+      true,
+      undefined
     )
   })
 

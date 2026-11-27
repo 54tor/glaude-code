@@ -18,6 +18,8 @@ export type PushRunInfo = {
   interrupted?: boolean
   started: number
 }
+// La session qui lance la poussée : le serveur lui remet l'échec, même fermée ou à la corbeille.
+export type PushOrigin = { id: string; dir: string }
 type OutputPage = { out: string | null; next: number; run: PushRunInfo }
 
 const POLL_INTERVAL_MS = 500
@@ -50,13 +52,16 @@ async function createPushRun(
   dir: string,
   remotes: string[],
   tags: string[],
-  forceTags: boolean
+  forceTags: boolean,
+  origin?: PushOrigin
 ): Promise<PushRunInfo> {
   const response = await http.post<{ run: PushRunInfo }>("/git/push-runs", {
     dir,
     remotes,
     tags,
     forceTags,
+    session: origin?.id,
+    sessionDir: origin?.dir,
   })
   return response.run
 }
@@ -103,9 +108,10 @@ export async function streamGitPush(
   onOutput: (chunk: Uint8Array) => void,
   onStarted?: (runId: string) => void,
   tags: string[] = [],
-  forceTags = false
+  forceTags = false,
+  origin?: PushOrigin
 ): Promise<number> {
-  const run = await createPushRun(dir, remotes, tags, forceTags)
+  const run = await createPushRun(dir, remotes, tags, forceTags, origin)
   onStarted?.(run.id)
   return followGitPush(run.id, onOutput)
 }

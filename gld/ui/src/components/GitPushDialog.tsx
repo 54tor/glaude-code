@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { api, type GitRemote, type RemoteUnpushed } from "@/lib/api"
 import { startGitPushes } from "@/hooks/useGitPush"
+import type { PushOrigin } from "@/lib/gitPushStream"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -16,12 +17,13 @@ import {
 type Props = {
   dir: string
   branch: string
+  origin?: PushOrigin
   onOpenChange: (isOpen: boolean) => void
 }
 
 // Aperçu des commits manquants sur chaque remote, puis poussée vers ceux qui sont cochés (par défaut ceux qui sont en retard).
 // Monté seulement quand il est ouvert : chaque ouverture repart d'un état vierge.
-export function GitPushDialog({ dir, branch, onOpenChange }: Props) {
+export function GitPushDialog({ dir, branch, origin, onOpenChange }: Props) {
   const { t } = useTranslation()
   const [remotes, setRemotes] = useState<GitRemote[] | null>(null)
   const [unpushed, setUnpushed] = useState<RemoteUnpushed[] | null>(null)
@@ -92,7 +94,8 @@ export function GitPushDialog({ dir, branch, onOpenChange }: Props) {
       names,
       branch,
       tags.filter((tag) => selectedTags.has(tag)),
-      isForceTags
+      isForceTags,
+      origin
     )
   }
 

@@ -151,6 +151,7 @@ func main() {
 	go autosaveTabs(tabsAutosaveEvery)
 	go watchWaiting(waitingWatchEvery)
 	go watchPush(waitingWatchEvery)
+	go watchPushReports(pushReportEvery)
 	go titleLoop(titleLoopEvery)
 	go keepWarmLoop(keepWarmEvery)
 	if queueSt != nil {

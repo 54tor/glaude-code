@@ -594,5 +594,7 @@
   "srv.gitpushrun.badTags": "Les tags cochés ne sont pas valides pour ce dépôt",
   "srv.gitpushrun.badRemotes": "Choisissez au moins un remote existant",
   "srv.gitpushrun.alreadyRunning": "Une poussée de ce dépôt est déjà en cours",
-  "srv.gitpushrun.stillRunning": "Cette poussée tourne encore"
+  "srv.gitpushrun.stillRunning": "Cette poussée tourne encore",
+  "srv.pushreport.intro": "La poussée de la branche « {{.A1}} » vers « {{.A2}} » a échoué dans {{.A3}} (code de retour {{.A4}}). Sortie de git, hook compris :",
+  "srv.pushreport.outro": "Analyse la sortie, corrige la cause, commite le correctif, puis repousse la branche « {{.A1}} » vers « {{.A2}} »."
 }

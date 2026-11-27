@@ -5,6 +5,7 @@ import type { GitState } from "@/lib/api"
 import { syncOf } from "./GitBadge"
 import { isGitPushRunning, useGitPushRuns } from "@/hooks/useGitPush"
 import { Button } from "@/components/ui/button"
+import type { PushOrigin } from "@/lib/gitPushStream"
 import { GitPushDialog } from "./GitPushDialog"
 
 // À pousser : des commits en avance sur un remote, une branche absente d'un remote, ou sans amont (jamais un HEAD détaché).
@@ -20,9 +21,11 @@ export const needsPush = (st: GitState | undefined): st is GitState => {
 export function GitPush({
   dir,
   st,
+  origin,
 }: {
   dir: string
   st: GitState | undefined
+  origin?: PushOrigin
 }) {
   const { t } = useTranslation()
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -46,6 +49,7 @@ export function GitPush({
         <GitPushDialog
           dir={dir}
           branch={st.branch}
+          origin={origin}
           onOpenChange={setIsDialogOpen}
         />
       )}
