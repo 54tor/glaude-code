@@ -5,6 +5,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 ## [Non publié]
 
 ### Corrigé
+- Pièces jointes envoyées depuis le champ de message d'une session : elles sont rattachées à cette session et effacées avec elle, au lieu de rester sur disque jusqu'à la purge de 14 jours.
 - Session tmux remontée dans l'historique (mode copie) : gld la ramène en bas avant de lire l'écran ou d'envoyer des touches, donc une question en attente est détectée et la réponse arrive dans la session.
 
 ## [0.18.1] - 2026-11-26
