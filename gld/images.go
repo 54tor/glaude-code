@@ -17,6 +17,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -132,6 +133,26 @@ func dropSessionFiles(sessionIDs []string) {
 				break
 			}
 		}
+	}
+	dropIndexedFiles(sessionIDs)
+}
+
+// dropIndexedFiles retire les fichiers sans préfixe que l'index rattache à ces sessions ; un index illisible n'est pas touché.
+func dropIndexedFiles(sessionIDs []string) {
+	owners, err := loadOwners()
+	if err != nil {
+		return
+	}
+	changed := false
+	for name, owner := range owners {
+		if idRe.MatchString(owner) && slices.Contains(sessionIDs, owner) {
+			rRemove(cfgDir(), filepath.Join(imagesDir(), name))
+			delete(owners, name)
+			changed = true
+		}
+	}
+	if changed {
+		saveOwners(owners)
 	}
 }
 
