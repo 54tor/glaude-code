@@ -15,6 +15,7 @@ import (
 	"os/exec"
 	"regexp"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -32,7 +33,7 @@ var paneRe = regexp.MustCompile(`^%[0-9]+$`)
 var tmuxRun = func(stdin string, args ...string) (string, error) {
 	commandContext, cancel := context.WithTimeout(context.Background(), cmdTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(commandContext, "tmux", args...)
+	cmd := exec.CommandContext(commandContext, "tmux", leaveCopyMode(args)...)
 	cmd.WaitDelay = time.Second
 	cmd.Env = environNoAuth()
 	applyRunAs(cmd)
@@ -46,6 +47,20 @@ var tmuxRun = func(stdin string, args ...string) (string, error) {
 		err = errors.New(strings.TrimSpace(standardError.String()))
 	}
 	return standardOutput.String(), err
+}
+
+// leaveCopyMode : un panneau remonté dans l'historique (mode copie) montre la vue défilée à capture-pane et reçoit les touches
+// comme des commandes de défilement. On le ramène en bas dans le même appel tmux, avant capture, collage ou touche.
+func leaveCopyMode(args []string) []string {
+	if len(args) == 0 || (args[0] != "send-keys" && args[0] != "capture-pane" && args[0] != "paste-buffer") {
+		return args
+	}
+	targetIndex := slices.Index(args, "-t")
+	if targetIndex < 0 || targetIndex+1 >= len(args) {
+		return args
+	}
+	leave := []string{"if-shell", "-F", "-t", args[targetIndex+1], "#{pane_in_mode}", "send-keys -X cancel", ";"}
+	return append(leave, args...)
 }
 
 // sessionPIDs : pid des sessions interactives ouvertes, par id de session (remplaçable dans les tests).

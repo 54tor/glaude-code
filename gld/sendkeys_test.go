@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -300,5 +301,17 @@ func TestOpenTabNeTransmetPasLaCleMaitresse(t *testing.T) {
 	}
 	if strings.Contains(string(environnementObtenu), "GLD_AUTH_KEY=") {
 		t.Fatal("GLD_AUTH_KEY transmise à l'émulateur")
+	}
+}
+
+func TestLeaveCopyModeAjouteLaSortieAvantCaptureEtTouches(t *testing.T) {
+	argumentsObtenus := leaveCopyMode([]string{"capture-pane", "-p", "-t", "%3"})
+	argumentsAttendus := []string{"if-shell", "-F", "-t", "%3", "#{pane_in_mode}", "send-keys -X cancel", ";", "capture-pane", "-p", "-t", "%3"}
+	if !slices.Equal(argumentsObtenus, argumentsAttendus) {
+		t.Fatalf("valeurAttendue=%v valeurObtenue=%v", argumentsAttendus, argumentsObtenus)
+	}
+	argumentsSansPanneau := []string{"list-panes", "-a"}
+	if !slices.Equal(leaveCopyMode(argumentsSansPanneau), argumentsSansPanneau) {
+		t.Fatal("list-panes ne doit pas être modifié")
 	}
 }
