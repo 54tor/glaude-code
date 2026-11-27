@@ -165,3 +165,32 @@ func TestAgePurgeKeepsRestoredFile(t *testing.T) {
 		t.Fatal("fichier ordinaire de plus de 14 jours gardé")
 	}
 }
+
+func TestTrashOrphanRefusesSessionPrefixedName(t *testing.T) {
+	use(t.TempDir())
+	nom := sessionA + "-" + nomFichier
+	chemin := deposerFichier(t, nom, 25*time.Hour)
+	if erreur := trashOrphan(nom); erreur != errOrphanName || !existe(chemin) {
+		t.Fatalf("fichier d'une session déplacé (%v)", erreur)
+	}
+}
+
+func TestTrashOrphanKeepsFileInPlaceWhenStampCannotBeWritten(t *testing.T) {
+	use(t.TempDir())
+	chemin := deposerFichier(t, nomFichier, 25*time.Hour)
+	os.MkdirAll(orphanStampPath(nomFichier), 0o700)
+	if erreur := trashOrphan(nomFichier); erreur == nil || !existe(chemin) {
+		t.Fatalf("fichier déplacé sans horodatage (%v)", erreur)
+	}
+}
+
+func TestSweepPrunesIndexEntriesOfMissingFiles(t *testing.T) {
+	use(t.TempDir())
+	deposerFichier(t, "present.png", time.Minute)
+	saveOwners(map[string]string{"present.png": sessionA, "disparu.png": sessionA})
+	sweepAttachments()
+	valeurObtenue, _ := loadOwners()
+	if _, present := valeurObtenue["disparu.png"]; present || valeurObtenue["present.png"] != sessionA {
+		t.Fatalf("index après passe : %v", valeurObtenue)
+	}
+}

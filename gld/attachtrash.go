@@ -49,17 +49,19 @@ func isUnownedCandidate(name string) bool {
 }
 
 func trashOrphan(name string) error {
-	if !validOrphanName(name) {
+	if !isUnownedCandidate(name) {
 		return errOrphanName
 	}
 	if err := rMkdirAll(cfgDir(), orphanTrashDir(), 0o700); err != nil {
 		return err
 	}
-	if err := rRename(cfgDir(), filepath.Join(imagesDir(), name), filepath.Join(orphanTrashDir(), name)); err != nil {
-		return err
-	}
+	// l'horodatage d'abord : sans lui, le fichier déplacé hériterait de son ancien mtime et serait purgé trop tôt
 	stamp := []byte(strconv.FormatInt(time.Now().Unix(), 10))
 	if err := rWriteAtomic(cfgDir(), orphanStampPath(name), stamp, 0o600); err != nil {
+		return err
+	}
+	if err := rRename(cfgDir(), filepath.Join(imagesDir(), name), filepath.Join(orphanTrashDir(), name)); err != nil {
+		rRemove(cfgDir(), orphanStampPath(name))
 		return err
 	}
 	if owners, err := loadOwners(); err == nil {
@@ -151,6 +153,16 @@ func sweepAttachments() (indexed, trashed, purged int, err error) {
 	citations := attachmentCitations()
 	entries, _ := readDirTrusted(imagesDir())
 	indexChanged := false
+	present := map[string]bool{}
+	for _, entry := range entries {
+		present[entry.Name()] = true
+	}
+	for name := range owners {
+		if !present[name] {
+			delete(owners, name)
+			indexChanged = true
+		}
+	}
 	for _, entry := range entries {
 		info, infoErr := entry.Info()
 		name := entry.Name()
