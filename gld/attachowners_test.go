@@ -78,3 +78,16 @@ func TestDropSessionFilesKeepsFileCitedByAnotherSession(t *testing.T) {
 		t.Fatalf("attendu %s, obtenu %v", sessionB, valeurObtenue)
 	}
 }
+
+func TestDropSessionFilesKeepsFileCitedByTrashedSession(t *testing.T) {
+	use(t.TempDir())
+	os.MkdirAll(imagesDir(), 0o700)
+	fichier := filepath.Join(imagesDir(), nomFichier)
+	os.WriteFile(fichier, []byte("x"), 0o600)
+	saveOwners(map[string]string{nomFichier: sessionA})
+	ecrireTranscript(t, filepath.Join(sessionTrashDir(), sessionB, sessionB+".jsonl"), ligneCitant(nomFichier))
+	dropSessionFiles([]string{sessionA})
+	if _, erreur := os.Stat(fichier); erreur != nil {
+		t.Fatal("fichier cité par une session en corbeille supprimé")
+	}
+}

@@ -11,6 +11,8 @@ import (
 )
 
 const (
+	// attachGrace : un fichier déposé dans un brouillon n'est cité par aucun transcript avant l'envoi du message ; indépendant de GLD_GRACE.
+	attachGrace    = 24 * time.Hour
 	orphanTrashSub = ".trash"
 	// ownerKept : fichier restauré à la main, rangé dans l'index pour que la passe de fond ne le remette pas à la corbeille.
 	ownerKept = "-"
@@ -152,7 +154,7 @@ func sweepAttachments() (indexed, trashed, purged int, err error) {
 	for _, entry := range entries {
 		info, infoErr := entry.Info()
 		name := entry.Name()
-		if infoErr != nil || !info.Mode().IsRegular() || !isUnownedCandidate(name) || time.Since(info.ModTime()) < grace() {
+		if infoErr != nil || !info.Mode().IsRegular() || !isUnownedCandidate(name) || time.Since(info.ModTime()) < attachGrace {
 			continue
 		}
 		if _, known := owners[name]; known {

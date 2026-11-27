@@ -57,3 +57,12 @@ func TestCitationsMultipleSessionsListsAll(t *testing.T) {
 		t.Fatalf("obtenu %v", valeurObtenue)
 	}
 }
+
+func TestCitationsIncludeTrashedSessions(t *testing.T) {
+	use(t.TempDir())
+	ecrireTranscript(t, filepath.Join(sessionTrashDir(), sessionB, sessionB+".jsonl"), ligneCitant(nomFichier))
+	valeurObtenue := attachmentCitations()
+	if !reflect.DeepEqual(map[string][]string{nomFichier: {sessionB}}, valeurObtenue) {
+		t.Fatalf("obtenu %v", valeurObtenue)
+	}
+}

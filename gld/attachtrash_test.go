@@ -27,7 +27,7 @@ func existe(chemin string) bool {
 
 func TestSweepIndexesCitedUnprefixedFile(t *testing.T) {
 	use(t.TempDir())
-	chemin := deposerFichier(t, nomFichier, 2*time.Hour)
+	chemin := deposerFichier(t, nomFichier, 25*time.Hour)
 	ecrireTranscript(t, filepath.Join(root, "p", sessionA+".jsonl"), ligneCitant(nomFichier))
 	indexes, _, _, erreur := sweepAttachments()
 	valeurObtenue, _ := loadOwners()
@@ -38,7 +38,7 @@ func TestSweepIndexesCitedUnprefixedFile(t *testing.T) {
 
 func TestSweepTrashesUncitedFileOlderThanGrace(t *testing.T) {
 	use(t.TempDir())
-	chemin := deposerFichier(t, nomFichier, 2*time.Hour)
+	chemin := deposerFichier(t, nomFichier, 25*time.Hour)
 	_, mis, _, erreur := sweepAttachments()
 	if erreur != nil || mis != 1 || existe(chemin) || !existe(filepath.Join(orphanTrashDir(), nomFichier)) {
 		t.Fatalf("mis à la corbeille=%d err=%v", mis, erreur)
@@ -56,7 +56,7 @@ func TestSweepSkipsFileYoungerThanGrace(t *testing.T) {
 
 func TestSweepSkipsPrefixedFile(t *testing.T) {
 	use(t.TempDir())
-	chemin := deposerFichier(t, sessionA+"-"+nomFichier, 2*time.Hour)
+	chemin := deposerFichier(t, sessionA+"-"+nomFichier, 25*time.Hour)
 	_, mis, _, _ := sweepAttachments()
 	if mis != 0 || !existe(chemin) {
 		t.Fatal("fichier préfixé déplacé")
@@ -65,7 +65,7 @@ func TestSweepSkipsPrefixedFile(t *testing.T) {
 
 func TestSweepStopsOnCorruptIndex(t *testing.T) {
 	use(t.TempDir())
-	chemin := deposerFichier(t, nomFichier, 2*time.Hour)
+	chemin := deposerFichier(t, nomFichier, 25*time.Hour)
 	os.WriteFile(filepath.Join(imagesDir(), ownersFile), []byte("{"), 0o600)
 	_, mis, _, erreur := sweepAttachments()
 	if erreur != errOwnersCorrupt || mis != 0 || !existe(chemin) {
@@ -75,7 +75,7 @@ func TestSweepStopsOnCorruptIndex(t *testing.T) {
 
 func TestSweepPurgesTrashedFileOlderThanKeep(t *testing.T) {
 	use(t.TempDir())
-	deposerFichier(t, nomFichier, 2*time.Hour)
+	deposerFichier(t, nomFichier, 25*time.Hour)
 	if erreur := trashOrphan(nomFichier); erreur != nil {
 		t.Fatal(erreur)
 	}
@@ -89,7 +89,7 @@ func TestSweepPurgesTrashedFileOlderThanKeep(t *testing.T) {
 
 func TestRestoreOrphanMovesFileBackAndSurvivesNextSweep(t *testing.T) {
 	use(t.TempDir())
-	chemin := deposerFichier(t, nomFichier, 2*time.Hour)
+	chemin := deposerFichier(t, nomFichier, 25*time.Hour)
 	trashOrphan(nomFichier)
 	if erreur := restoreOrphan(nomFichier); erreur != nil || !existe(chemin) {
 		t.Fatalf("restauration : %v", erreur)
@@ -111,8 +111,8 @@ func TestOrphanNameRejectsTraversal(t *testing.T) {
 
 func TestListOrphansShowsActiveAndTrashed(t *testing.T) {
 	use(t.TempDir())
-	deposerFichier(t, "a.png", 2*time.Hour)
-	deposerFichier(t, "b.png", 2*time.Hour)
+	deposerFichier(t, "a.png", 25*time.Hour)
+	deposerFichier(t, "b.png", 25*time.Hour)
 	trashOrphan("b.png")
 	valeurObtenue := listOrphans()
 	if len(valeurObtenue) != 2 {
@@ -131,11 +131,37 @@ func TestListOrphansShowsActiveAndTrashed(t *testing.T) {
 
 func TestOrphanTrashRefusesSymlinkedTrashDir(t *testing.T) {
 	use(t.TempDir())
-	deposerFichier(t, nomFichier, 2*time.Hour)
+	deposerFichier(t, nomFichier, 25*time.Hour)
 	dehors := t.TempDir()
 	os.Symlink(dehors, orphanTrashDir())
 	trashOrphan(nomFichier)
 	if existe(filepath.Join(dehors, nomFichier)) {
 		t.Fatal("fichier déplacé hors du dossier de confiance")
+	}
+}
+
+func TestSweepKeepsFileYoungerThanAttachGraceEvenWithoutEnvGrace(t *testing.T) {
+	use(t.TempDir())
+	t.Setenv("GLD_GRACE", "0")
+	chemin := deposerFichier(t, nomFichier, 2*time.Hour)
+	_, mis, _, _ := sweepAttachments()
+	if mis != 0 || !existe(chemin) {
+		t.Fatal("brouillon de moins de 24 h mis à la corbeille")
+	}
+}
+
+func TestAgePurgeKeepsRestoredFile(t *testing.T) {
+	use(t.TempDir())
+	restaure := deposerFichier(t, nomFichier, 20*24*time.Hour)
+	saveOwners(map[string]string{nomFichier: ownerKept})
+	deposerFichier(t, "autre.png", 20*24*time.Hour)
+	if _, erreur := saveBlob([]byte("x"), ".png", ""); erreur != nil {
+		t.Fatal(erreur)
+	}
+	if !existe(restaure) {
+		t.Fatal("fichier restauré effacé par la purge de 14 jours")
+	}
+	if existe(filepath.Join(imagesDir(), "autre.png")) {
+		t.Fatal("fichier ordinaire de plus de 14 jours gardé")
 	}
 }

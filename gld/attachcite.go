@@ -27,7 +27,7 @@ func sessionOfTranscript(path string) string {
 // attachmentCitations : nom d'un fichier déposé → ids des sessions dont un transcript le cite.
 func attachmentCitations() map[string][]string {
 	citations := map[string][]string{}
-	filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+	visit := func(path string, entry fs.DirEntry, err error) error {
 		if err != nil || entry.IsDir() || !strings.HasSuffix(path, ".jsonl") {
 			return nil
 		}
@@ -44,6 +44,9 @@ func attachmentCitations() map[string][]string {
 			}
 		})
 		return nil
-	})
+	}
+	// les sessions en corbeille citent encore leurs fichiers : les restaurer ne doit pas les retrouver absents
+	filepath.WalkDir(root, visit)
+	filepath.WalkDir(sessionTrashDir(), visit)
 	return citations
 }

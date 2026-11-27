@@ -95,8 +95,9 @@ func saveBlob(content []byte, ext, sessionID string) (string, error) {
 		return "", mkdirErr
 	}
 	if entries, listErr := readDirTrusted(dir); listErr == nil {
+		owners, _ := loadOwners()
 		for _, entry := range entries {
-			if fileInfo, infoErr := entry.Info(); infoErr == nil && fileInfo.Mode().IsRegular() && entry.Name() != ownersFile && time.Since(fileInfo.ModTime()) > imgKeep {
+			if fileInfo, infoErr := entry.Info(); infoErr == nil && fileInfo.Mode().IsRegular() && entry.Name() != ownersFile && owners[entry.Name()] != ownerKept && time.Since(fileInfo.ModTime()) > imgKeep {
 				rRemove(cfgDir(), filepath.Join(dir, entry.Name()))
 			}
 		}
