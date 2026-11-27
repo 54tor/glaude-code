@@ -96,7 +96,7 @@ func saveBlob(content []byte, ext, sessionID string) (string, error) {
 	}
 	if entries, listErr := readDirTrusted(dir); listErr == nil {
 		for _, entry := range entries {
-			if fileInfo, infoErr := entry.Info(); infoErr == nil && fileInfo.Mode().IsRegular() && time.Since(fileInfo.ModTime()) > imgKeep {
+			if fileInfo, infoErr := entry.Info(); infoErr == nil && fileInfo.Mode().IsRegular() && entry.Name() != ownersFile && time.Since(fileInfo.ModTime()) > imgKeep {
 				rRemove(cfgDir(), filepath.Join(dir, entry.Name()))
 			}
 		}
@@ -144,12 +144,22 @@ func dropIndexedFiles(sessionIDs []string) {
 		return
 	}
 	changed := false
+	var citations map[string][]string
 	for name, owner := range owners {
-		if idRe.MatchString(owner) && slices.Contains(sessionIDs, owner) {
-			rRemove(cfgDir(), filepath.Join(imagesDir(), name))
-			delete(owners, name)
-			changed = true
+		if !idRe.MatchString(owner) || !slices.Contains(sessionIDs, owner) {
+			continue
 		}
+		if citations == nil {
+			citations = attachmentCitations()
+		}
+		survivors := slices.DeleteFunc(slices.Clone(citations[name]), func(sessionID string) bool { return slices.Contains(sessionIDs, sessionID) })
+		changed = true
+		if len(survivors) > 0 {
+			owners[name] = survivors[0] // une autre session cite encore ce fichier
+			continue
+		}
+		rRemove(cfgDir(), filepath.Join(imagesDir(), name))
+		delete(owners, name)
 	}
 	if changed {
 		saveOwners(owners)

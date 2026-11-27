@@ -80,6 +80,8 @@
   "srv.admin.reauthRequise": "réauthentification requise : mot de passe et code de second facteur récent",
   "srv.admin.soiMeme": "un administrateur ne peut pas désactiver son propre compte",
   "srv.attachowners.indexIllisible": "index des pièces jointes illisible : rien n'est modifié",
+  "srv.attachtrash.existeDeja": "un fichier de ce nom existe déjà",
+  "srv.attachtrash.nomInvalide": "nom de fichier invalide",
   "srv.auth.baseInutilisable": "base des comptes inutilisable : service refusé (détail dans le journal de gld).",
   "srv.auth.cleRefusee": "clé de sécurité refusée",
   "srv.auth.codeInvalide": "code invalide",

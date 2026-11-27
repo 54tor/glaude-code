@@ -61,3 +61,20 @@ func TestSaveOwnersRefusesSymlinkedImagesDir(t *testing.T) {
 		}
 	}
 }
+
+func TestDropSessionFilesKeepsFileCitedByAnotherSession(t *testing.T) {
+	use(t.TempDir())
+	os.MkdirAll(imagesDir(), 0o700)
+	fichier := filepath.Join(imagesDir(), nomFichier)
+	os.WriteFile(fichier, []byte("x"), 0o600)
+	saveOwners(map[string]string{nomFichier: sessionA})
+	ecrireTranscript(t, filepath.Join(root, "p", sessionB+".jsonl"), ligneCitant(nomFichier))
+	dropSessionFiles([]string{sessionA})
+	if _, erreur := os.Stat(fichier); erreur != nil {
+		t.Fatal("fichier cité par une autre session supprimé")
+	}
+	valeurObtenue, _ := loadOwners()
+	if valeurObtenue[nomFichier] != sessionB {
+		t.Fatalf("attendu %s, obtenu %v", sessionB, valeurObtenue)
+	}
+}

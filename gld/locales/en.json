@@ -80,6 +80,8 @@
   "srv.admin.reauthRequise": "re-authentication required: password and a recent second-factor code",
   "srv.admin.soiMeme": "an administrator cannot disable their own account",
   "srv.attachowners.indexIllisible": "attachment index unreadable: nothing was changed",
+  "srv.attachtrash.existeDeja": "a file with this name already exists",
+  "srv.attachtrash.nomInvalide": "invalid file name",
   "srv.auth.baseInutilisable": "accounts database unusable: service refused (details in the gld log).",
   "srv.auth.cleRefusee": "security key rejected",
   "srv.auth.codeInvalide": "invalid code",

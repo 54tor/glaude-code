@@ -158,6 +158,7 @@ func main() {
 		go queueLoop(shutdownContext, queueSt)
 	}
 	go expireTrashLoop(trashExpireEvery)
+	go attachSweepLoop(trashExpireEvery)
 	go emptyProjectsLoop(emptyProjectsEvery)
 	go syncProjectDirs()
 	go func() { _, _ = projectMcpStates(workDir()) }() // état MCP déjà prêt à la première ouverture de page
