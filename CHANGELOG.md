@@ -6,6 +6,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ### Ajouté
 - Échec d'une poussée : le rapport (remote, code de retour, sortie de git et du hook) est écrit automatiquement dans la session qui l'a lancée, ouverte, fermée ou déjà à la corbeille (restaurée puis reprise). Le bouton « Envoyer à Claude » du toast reste disponible pour une autre session.
+- Pièces jointes sans session : gld retrouve en tâche de fond la session qui les cite, les efface avec elle, met les autres à la corbeille (30 jours) et les liste dans un écran dédié (barre latérale) avec restauration et vidage.
 
 ### Corrigé
 - Pièces jointes envoyées depuis le champ de message d'une session : elles sont rattachées à cette session et effacées avec elle, au lieu de rester sur disque jusqu'à la purge de 14 jours.
