@@ -4,6 +4,9 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ## [Non publié]
 
+### Corrigé
+- Session tmux remontée dans l'historique (mode copie) : gld la ramène en bas avant de lire l'écran ou d'envoyer des touches, donc une question en attente est détectée et la réponse arrive dans la session.
+
 ## [0.18.1] - 2026-11-26
 
 ### Corrigé
